@@ -55,7 +55,7 @@ public class TileOxygenVent extends TileInventoriedRFConsumerTank implements IBl
     private boolean hasFluid;
     private boolean soundInit;
     private boolean allowTrace;
-    private boolean lock;
+    private boolean blockUpdated;
     private int numScrubbers;
     private List<TileCO2Scrubber> scrubbers;
     private int radius = 0;
@@ -103,23 +103,7 @@ public class TileOxygenVent extends TileInventoriedRFConsumerTank implements IBl
 
     @Override
     public void onAdjacentBlockUpdated() {
-
-        if (isSealed)
-            activateAdjBlocks();
-        scrubbers.clear();
-        TileEntity[] tiles = new TileEntity[6];
-        tiles[0] = world.getTileEntity(pos.add(1, 0, 0));
-        tiles[1] = world.getTileEntity(pos.add(-1, 0, 0));
-        tiles[2] = world.getTileEntity(pos.add(0, 1, 0));
-        tiles[3] = world.getTileEntity(pos.add(0, -1, 0));
-        tiles[4] = world.getTileEntity(pos.add(0, 0, 1));
-        tiles[5] = world.getTileEntity(pos.add(0, 0, -1));
-
-        lock = true;
-        for (TileEntity tile : tiles) {
-            if (tile instanceof TileCO2Scrubber && world.getBlockState(tile.getPos()).getBlock() == AdvancedRocketryBlocks.blockCO2Scrubber)
-                scrubbers.add((TileCO2Scrubber) tile);
-        }
+        blockUpdated = true; // the performFunction will take it from here
     }
 
     private void activateAdjBlocks() {
@@ -186,6 +170,28 @@ public class TileOxygenVent extends TileInventoriedRFConsumerTank implements IBl
     @Override
     public void performFunction() {
 
+
+        if (blockUpdated) { // this was moved from onAdjacentBlockUpdated(); to prevent crash
+            if (isSealed)
+                activateAdjBlocks();
+            scrubbers.clear();
+            TileEntity[] tiles = new TileEntity[6];
+            tiles[0] = world.getTileEntity(pos.add(1, 0, 0));
+            tiles[1] = world.getTileEntity(pos.add(-1, 0, 0));
+            tiles[2] = world.getTileEntity(pos.add(0, 1, 0));
+            tiles[3] = world.getTileEntity(pos.add(0, -1, 0));
+            tiles[4] = world.getTileEntity(pos.add(0, 0, 1));
+            tiles[5] = world.getTileEntity(pos.add(0, 0, -1));
+
+
+            for (TileEntity tile : tiles) {
+                if (tile instanceof TileCO2Scrubber && world.getBlockState(tile.getPos()).getBlock() == AdvancedRocketryBlocks.blockCO2Scrubber)
+                    scrubbers.add((TileCO2Scrubber) tile);
+            }
+            blockUpdated = false;
+        }
+
+
         /* NB: canPerformFunction returns false and must return true for performFunction to execute
          * if there is no O2 handler, this is why we can safely call AtmosphereHandler.getOxygenHandler
          * and not have to worry about an NPE being thrown
@@ -232,8 +238,7 @@ public class TileOxygenVent extends TileInventoriedRFConsumerTank implements IBl
                 }
             }
 
-            //Lock the vent while the scrubbers do their block updates
-            if (isSealed && !lock) {
+            if (isSealed) {
 
                 //If scrubbers exist and the config allows then use the cartridge
                 if (ARConfiguration.getCurrentConfig().scrubberRequiresCartrige) {
@@ -266,8 +271,7 @@ public class TileOxygenVent extends TileInventoriedRFConsumerTank implements IBl
 
                     hasFluid = false;
                 }
-            } else
-                lock = false;
+            }
 
         }
     }
