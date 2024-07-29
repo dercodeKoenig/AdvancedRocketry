@@ -8,6 +8,7 @@ entity.rocket.name=Ракета
 
 tile.landingPad.name=Посадочная площадка
 tile.serviceStation.name=Станция техобслуживания
+tile.servicemonitor.name=Монитор состояния
 tile.seat.name=Сиденье
 tile.pad.name=Стартовая площадка
 tile.structuretower.name=Структурная башня

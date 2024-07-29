@@ -1,0 +1,16 @@
+{
+    "forge_marker": 1,
+    "defaults": {
+        "transform": "forge:default-block",
+        "model": "minecraft:orientable",
+        "textures": {
+            "top": "libvulpes:blocks/machinegeneric",
+            "front": "advancedrocketry:blocks/servicemachine",
+            "side": "libvulpes:blocks/machinegeneric"
+        }
+    },
+    "variants": {
+        "normal": [{}],
+        "inventory" : [{}]
+    }
+}

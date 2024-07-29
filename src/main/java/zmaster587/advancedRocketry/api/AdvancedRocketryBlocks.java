@@ -107,4 +107,5 @@ public class AdvancedRocketryBlocks {
     public static Block blockSolarArray;
     public static Block blockSolarArrayPanel;
     public static Block blockRocketFire;
+    public static Block blockServiceMonitor;
 }

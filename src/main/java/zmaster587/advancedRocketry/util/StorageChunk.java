@@ -66,9 +66,14 @@ public class StorageChunk implements IBlockAccess, IStorageChunk, IWeighted, IBr
     private ArrayList<TileEntity> liquidTiles;
     private Entity entity;
     private float weight;
+    private boolean hasServiceMonitor;
 
     public Block[][][] getblocks() {
         return blocks;
+    }
+
+    public boolean hasServiceMonitor() {
+        return hasServiceMonitor;
     }
 
     public StorageChunk() {
@@ -222,6 +227,10 @@ public class StorageChunk implements IBlockAccess, IStorageChunk, IWeighted, IBr
                             drillPower += ((IMiningDrill) block).getMiningSpeed(world, currBlockPos);
                         }
 
+                        if (block.getUnlocalizedName().contains("servicemonitor")) {
+                            hasServiceMonitor = true;
+                        }
+
                         TileEntity tile = world.getTileEntity(currBlockPos);
                         if (tile instanceof TileSatelliteHatch) {
                             if (ARConfiguration.getCurrentConfig().advancedWeightSystem) {
@@ -320,6 +329,10 @@ public class StorageChunk implements IBlockAccess, IStorageChunk, IWeighted, IBr
                     ret.blocks[x - actualMinX][y - actualMinY][z - actualMinZ] = state.getBlock();
                     ret.metas[x - actualMinX][y - actualMinY][z - actualMinZ] = (short) state.getBlock().getMetaFromState(state);
 
+                    if (state.getBlock() == AdvancedRocketryBlocks.blockServiceMonitor) {
+                        ret.hasServiceMonitor = true;
+                    }
+
                     TileEntity entity = world.getTileEntity(pos);
                     if (entity != null) {
                         NBTTagCompound nbt = new NBTTagCompound();
@@ -361,14 +374,10 @@ public class StorageChunk implements IBlockAccess, IStorageChunk, IWeighted, IBr
     public static StorageChunk cutWorldBB(World worldObj, AxisAlignedBB bb) {
         StorageChunk chunk = StorageChunk.copyWorldBB(worldObj, bb);
 
-        float weight = 0;
-
         for (int x = (int) bb.minX; x <= bb.maxX; x++) {
             for (int z = (int) bb.minZ; z <= bb.maxZ; z++) {
                 for (int y = (int) bb.minY; y <= bb.maxY; y++) {
                     BlockPos pos = new BlockPos(x, y, z);
-
-                    weight += WeightEngine.INSTANCE.getWeight(worldObj, pos);
 
                     //Workaround for dupe
                     TileEntity tile = worldObj.getTileEntity(pos);
@@ -383,8 +392,6 @@ public class StorageChunk implements IBlockAccess, IStorageChunk, IWeighted, IBr
                 }
             }
         }
-
-        chunk.weight = (int) weight;
 
         //Carpenter's block's dupe
         for (Entity entity : worldObj.getEntitiesWithinAABB(EntityItem.class, bb.grow(5, 5, 5))) {
@@ -463,85 +470,6 @@ public class StorageChunk implements IBlockAccess, IStorageChunk, IWeighted, IBr
 
         blocks[x][y][z] = state.getBlock();
         metas[x][y][z] = (short) state.getBlock().getMetaFromState(state);
-    }
-
-    //TODO: optimize the F*** out of this
-    public void writeToNBT(NBTTagCompound nbt) {
-
-        if (world.isRemote) return; //client has no business writing here
-
-        nbt.setInteger("xSize", sizeX);
-        nbt.setInteger("ySize", sizeY);
-        nbt.setInteger("zSize", sizeZ);
-        nbt.setFloat("weight", weight);
-
-        Iterator<TileEntity> tileEntityIterator = tileEntities.iterator();
-        NBTTagList tileList = new NBTTagList();
-        while (tileEntityIterator.hasNext()) {
-            TileEntity tile = tileEntityIterator.next();
-            try {
-                NBTTagCompound tileNbt = new NBTTagCompound();
-                tile.writeToNBT(tileNbt);
-                tileList.appendTag(tileNbt);
-            } catch (RuntimeException e) {
-                AdvancedRocketry.logger.warn("A tile entity has thrown an error: " + tile.getClass().getCanonicalName());
-                blocks[tile.getPos().getX()][tile.getPos().getY()][tile.getPos().getZ()] = Blocks.AIR;
-                metas[tile.getPos().getX()][tile.getPos().getY()][tile.getPos().getZ()] = 0;
-                tileEntityIterator.remove();
-            }
-        }
-
-        int[] blockId = new int[sizeX * sizeY * sizeZ];
-        int[] metasId = new int[sizeX * sizeY * sizeZ];
-        for (int x = 0; x < sizeX; x++) {
-            for (int y = 0; y < sizeY; y++) {
-                for (int z = 0; z < sizeZ; z++) {
-                    blockId[z + (sizeZ * y) + (sizeZ * sizeY * x)] = Block.getIdFromBlock(blocks[x][y][z]);
-                    metasId[z + (sizeZ * y) + (sizeZ * sizeY * x)] = metas[x][y][z];
-                }
-            }
-        }
-
-        NBTTagIntArray idList = new NBTTagIntArray(blockId);
-        NBTTagIntArray metaList = new NBTTagIntArray(metasId);
-
-        nbt.setTag("idList", idList);
-        nbt.setTag("metaList", metaList);
-        nbt.setTag("tiles", tileList);
-
-
-		/*for(int x = 0; x < sizeX; x++) {
-			for(int y = 0; y < sizeY; y++) {
-				for(int z = 0; z < sizeZ; z++) {
-
-					idList.appendTag(new NBTTagInt(Block.getIdFromBlock(blocks[x][y][z])));
-					metaList.appendTag(new NBTTagInt(metas[x][y][z]));
-
-					//NBTTagCompound tag = new NBTTagCompound();
-					tag.setInteger("block", Block.getIdFromBlock(blocks[x][y][z]));
-					tag.setShort("meta", metas[x][y][z]);
-
-					NBTTagCompound tileNbtData = null;
-
-					for(TileEntity tile : tileEntities) {
-						NBTTagCompound tileNbt = new NBTTagCompound();
-
-						tile.writeToNBT(tileNbt);
-
-						if(tileNbt.getInteger("x") == x && tileNbt.getInteger("y") == y && tileNbt.getInteger("z") == z){
-							tileNbtData = tileNbt;
-							break;
-						}
-					}
-
-					if(tileNbtData != null)
-						tag.setTag("tile", tileNbtData);
-
-					nbt.setTag(String.format("%d.%d.%d", x,y,z), tag);
-				}
-
-			}
-		}*/
     }
 
     public void rotateBy(EnumFacing dir) {
@@ -645,6 +573,86 @@ public class StorageChunk implements IBlockAccess, IStorageChunk, IWeighted, IBr
         return out;
     }
 
+    //TODO: optimize the F*** out of this
+    public void writeToNBT(NBTTagCompound nbt) {
+
+        if (world.isRemote) return; //client has no business writing here
+
+        nbt.setInteger("xSize", sizeX);
+        nbt.setInteger("ySize", sizeY);
+        nbt.setInteger("zSize", sizeZ);
+        nbt.setFloat("weight", weight);
+        nbt.setBoolean("hasServiceMonitor", hasServiceMonitor);
+
+        Iterator<TileEntity> tileEntityIterator = tileEntities.iterator();
+        NBTTagList tileList = new NBTTagList();
+        while (tileEntityIterator.hasNext()) {
+            TileEntity tile = tileEntityIterator.next();
+            try {
+                NBTTagCompound tileNbt = new NBTTagCompound();
+                tile.writeToNBT(tileNbt);
+                tileList.appendTag(tileNbt);
+            } catch (RuntimeException e) {
+                AdvancedRocketry.logger.warn("A tile entity has thrown an error: " + tile.getClass().getCanonicalName());
+                blocks[tile.getPos().getX()][tile.getPos().getY()][tile.getPos().getZ()] = Blocks.AIR;
+                metas[tile.getPos().getX()][tile.getPos().getY()][tile.getPos().getZ()] = 0;
+                tileEntityIterator.remove();
+            }
+        }
+
+        int[] blockId = new int[sizeX * sizeY * sizeZ];
+        int[] metasId = new int[sizeX * sizeY * sizeZ];
+        for (int x = 0; x < sizeX; x++) {
+            for (int y = 0; y < sizeY; y++) {
+                for (int z = 0; z < sizeZ; z++) {
+                    blockId[z + (sizeZ * y) + (sizeZ * sizeY * x)] = Block.getIdFromBlock(blocks[x][y][z]);
+                    metasId[z + (sizeZ * y) + (sizeZ * sizeY * x)] = metas[x][y][z];
+                }
+            }
+        }
+
+        NBTTagIntArray idList = new NBTTagIntArray(blockId);
+        NBTTagIntArray metaList = new NBTTagIntArray(metasId);
+
+        nbt.setTag("idList", idList);
+        nbt.setTag("metaList", metaList);
+        nbt.setTag("tiles", tileList);
+
+
+		/*for(int x = 0; x < sizeX; x++) {
+			for(int y = 0; y < sizeY; y++) {
+				for(int z = 0; z < sizeZ; z++) {
+
+					idList.appendTag(new NBTTagInt(Block.getIdFromBlock(blocks[x][y][z])));
+					metaList.appendTag(new NBTTagInt(metas[x][y][z]));
+
+					//NBTTagCompound tag = new NBTTagCompound();
+					tag.setInteger("block", Block.getIdFromBlock(blocks[x][y][z]));
+					tag.setShort("meta", metas[x][y][z]);
+
+					NBTTagCompound tileNbtData = null;
+
+					for(TileEntity tile : tileEntities) {
+						NBTTagCompound tileNbt = new NBTTagCompound();
+
+						tile.writeToNBT(tileNbt);
+
+						if(tileNbt.getInteger("x") == x && tileNbt.getInteger("y") == y && tileNbt.getInteger("z") == z){
+							tileNbtData = tileNbt;
+							break;
+						}
+					}
+
+					if(tileNbtData != null)
+						tag.setTag("tile", tileNbtData);
+
+					nbt.setTag(String.format("%d.%d.%d", x,y,z), tag);
+				}
+
+			}
+		}*/
+    }
+
     public void readFromNBT(NBTTagCompound nbt) {
 
         //System.out.println("read from nbt");
@@ -653,6 +661,7 @@ public class StorageChunk implements IBlockAccess, IStorageChunk, IWeighted, IBr
         sizeY = nbt.getInteger("ySize");
         sizeZ = nbt.getInteger("zSize");
         weight = nbt.getFloat("weight");
+        hasServiceMonitor = nbt.getBoolean("hasServiceMonitor");
 
         blocks = new Block[sizeX][sizeY][sizeZ];
         metas = new short[sizeX][sizeY][sizeZ];
@@ -1060,10 +1069,11 @@ public class StorageChunk implements IBlockAccess, IStorageChunk, IWeighted, IBr
                 tileIterator.remove();
             }
         }
+
+        buffer.writeBoolean(hasServiceMonitor);
     }
 
     public void readFromNetwork(ByteBuf in) {
-
         //System.out.println("read from network");
 
         finalized = false;
@@ -1114,6 +1124,9 @@ public class StorageChunk implements IBlockAccess, IStorageChunk, IWeighted, IBr
                 e.printStackTrace();
             }
         }
+
+        hasServiceMonitor = buffer.readBoolean();
+
         //We are now ready to render
         this.chunk.generateSkylightMap();
         finalized = true;

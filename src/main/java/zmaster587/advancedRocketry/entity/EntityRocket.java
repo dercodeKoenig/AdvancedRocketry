@@ -2197,15 +2197,19 @@ public class EntityRocket extends EntityRocketBase implements INetworkEntity, IM
             // Broken parts
             // TODO Add check for the service monitor
 
-            List<ModuleBase> serviceMonitorList = new ArrayList<>();
-            int ii = 0;
-            for (TileBrokenPart part : storage.getBrokenBlocks()) {
-                serviceMonitorList.add(new ModuleBrokenPart((ii % 5) * 18, (ii / 5) * 18, part.getDrop(), world));
-                ii++;
-            }
+            if (storage.hasServiceMonitor()) {
+                List<ModuleBase> serviceMonitorList = new ArrayList<>();
 
-            modules.add(new ModuleContainerPanYOnly(8 + 80, 17, serviceMonitorList, new ArrayList<>(), null, 50, 45));
-            modules.add(new ModuleText(80, 5, LibVulpes.proxy.getLocalizedString("msg.serviceStation.destroyProb") + ": " + this.storage.getBreakingProbability(), 0x000000));
+                int ii = 0;
+                for (TileBrokenPart part : storage.getBrokenBlocks()) {
+                    serviceMonitorList.add(new ModuleBrokenPart((ii % 5) * 18, (ii / 5) * 18, part.getDrop(), world));
+                    ii++;
+                }
+
+                modules.add(new ModuleContainerPanYOnly(8 + 80, 17, serviceMonitorList, new ArrayList<>(), null, 50, 45));
+                modules.add(new ModuleText(80, 5, LibVulpes.proxy.getLocalizedString("msg.serviceStation.destroyProb")
+                        + ": " + (int)(this.storage.getBreakingProbability() * 100) + "%", 0x000000));
+            }
 
             //TODO DEBUG tiles!
             //Render TEs in a pan-able list y-axis only
