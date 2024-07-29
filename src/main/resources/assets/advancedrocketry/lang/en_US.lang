@@ -426,8 +426,8 @@ msg.itemplanetidchip.artifacts=Artifacts:
 msg.vent.trace=Oxygen Trace
 
 msg.serviceStation.destroyProbNA=Destroy probability: N/A
-msg.serviceStation.destroyProb=Destroy probability:
-msg.serviceStation.serviceProgress=Service progress:
+msg.serviceStation.destroyProb=Destroy probability
+msg.serviceStation.serviceProgress=Service progress
 msg.serviceStation.serviceProgressNA=Service progress: N/A
 msg.serviceStation.wornMotorsText=Engines
 msg.serviceStation.wornSeatsText=Seats

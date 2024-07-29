@@ -58,6 +58,7 @@ import zmaster587.advancedRocketry.dimension.DimensionProperties;
 import zmaster587.advancedRocketry.event.PlanetEventHandler;
 import zmaster587.advancedRocketry.inventory.IPlanetDefiner;
 import zmaster587.advancedRocketry.inventory.TextureResources;
+import zmaster587.advancedRocketry.inventory.modules.ModuleBrokenPart;
 import zmaster587.advancedRocketry.inventory.modules.ModulePlanetSelector;
 import zmaster587.advancedRocketry.inventory.modules.ModuleStellarBackground;
 import zmaster587.advancedRocketry.item.ItemAsteroidChip;
@@ -68,6 +69,7 @@ import zmaster587.advancedRocketry.mission.MissionOreMining;
 import zmaster587.advancedRocketry.network.PacketSatellite;
 import zmaster587.advancedRocketry.stations.SpaceObjectManager;
 import zmaster587.advancedRocketry.stations.SpaceStationObject;
+import zmaster587.advancedRocketry.tile.TileBrokenPart;
 import zmaster587.advancedRocketry.tile.TileGuidanceComputer;
 import zmaster587.advancedRocketry.tile.TileRocketAssemblingMachine;
 import zmaster587.advancedRocketry.tile.hatch.TileSatelliteHatch;
@@ -2192,6 +2194,19 @@ public class EntityRocket extends EntityRocketBase implements INetworkEntity, IM
                 modules.add(new ModuleImage(173, 168, new IconResource(98, 168, 78, 3, CommonResources.genericBackground)));
             }
 
+            // Broken parts
+            // TODO Add check for the service monitor
+
+            List<ModuleBase> serviceMonitorList = new ArrayList<>();
+            int ii = 0;
+            for (TileBrokenPart part : storage.getBrokenBlocks()) {
+                serviceMonitorList.add(new ModuleBrokenPart((ii % 5) * 18, (ii / 5) * 18, part.getDrop(), world));
+                ii++;
+            }
+
+            modules.add(new ModuleContainerPanYOnly(8 + 80, 17, serviceMonitorList, new ArrayList<>(), null, 50, 45));
+            modules.add(new ModuleText(80, 5, LibVulpes.proxy.getLocalizedString("msg.serviceStation.destroyProb") + ": " + this.storage.getBreakingProbability(), 0x000000));
+
             //TODO DEBUG tiles!
             //Render TEs in a pan-able list y-axis only
             List<TileEntity> tiles = storage.getGUITiles();
@@ -2200,12 +2215,12 @@ public class EntityRocket extends EntityRocketBase implements INetworkEntity, IM
                 TileEntity tile = tiles.get(i);
                 IBlockState state = storage.getBlockState(tile.getPos());
                 try {
-                    panModules.add(new ModuleSlotButton(18 * (i % 9), 18 * (i / 9), i + tilebuttonOffset, this, new ItemStack(state.getBlock(), 1, state.getBlock().getMetaFromState(state)), world));
+                    panModules.add(new ModuleSlotButton(18 * (i % 4), 18 * (i / 4), i + tilebuttonOffset, this, new ItemStack(state.getBlock(), 1, state.getBlock().getMetaFromState(state)), world));
                 } catch (NullPointerException e) {
 
                 }
             }
-            modules.add(new ModuleContainerPanYOnly(8, 17, panModules, new LinkedList<>(), null, 171, 40, 0, 0));
+            modules.add(new ModuleContainerPanYOnly(8, 17, panModules, new LinkedList<>(), null, 65, 45, 0, 0));
 
             //Fuel
             modules.add(new ModuleProgress(192, 7, 0, new ProgressBarImage(2, 173, 12, 71, 17, 6, 3, 69, 1, 1, EnumFacing.UP, TextureResources.rocketHud), this));

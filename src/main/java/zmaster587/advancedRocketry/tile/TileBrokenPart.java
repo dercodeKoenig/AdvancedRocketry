@@ -1,6 +1,8 @@
 package zmaster587.advancedRocketry.tile;
 
+import net.minecraft.item.ItemStack;
 import net.minecraft.nbt.NBTTagCompound;
+import zmaster587.advancedRocketry.util.IBrokenPartBlock;
 
 import javax.annotation.Nonnull;
 import java.util.Random;
@@ -70,6 +72,10 @@ public class TileBrokenPart extends TileEntitySyncable {
     @Override
     public boolean canRenderBreaking() {
         return true;
+    }
+
+    public ItemStack getDrop() {
+        return ((IBrokenPartBlock) this.getBlockType()).getDropItem(world.getBlockState(pos), world, this);
     }
 
     @Nonnull

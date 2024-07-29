@@ -269,8 +269,8 @@ msg.monitoringStation.link=Вы подключили частотный связ
 msg.monitoringStation.progress=Прогресс:
 
 msg.serviceStation.destroyProbNA=Вероятность разрушения: Н/Д
-msg.serviceStation.destroyProb=Вероятность разрушения:
-msg.serviceStation.serviceProgress=Прогресс обслуживания:
+msg.serviceStation.destroyProb=Вероятность разрушения
+msg.serviceStation.serviceProgress=Прогресс обслуживания
 msg.serviceStation.serviceProgressNA=Прогресс обслуживания: Н/Д
 msg.serviceStation.wornMotorsText=Двигатели
 msg.serviceStation.wornSeatsText=Сиденья
