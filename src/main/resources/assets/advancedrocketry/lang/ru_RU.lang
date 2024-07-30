@@ -401,6 +401,8 @@ msg.itemsatellite.empty=Пустое шасси
 msg.itemsatellite.weight=Масса спутника:
 msg.itemsatellite.noweight=Ошибка в подсчёте массы
 
+msg.brokenstage.text=Стадия повреждений
+
 msg.itemsatchip.id=ID:
 msg.itemsatchip.planet=Планета:
 msg.itemsatchip.planetunk=Планета: Неизвестно

@@ -431,7 +431,7 @@ public class TileRocketServiceStation extends TileEntityRFConsumer implements IM
     private void updateText() {
         if (linkedRocket != null) {
             if (!(linkedRocket instanceof EntityRocket)) {
-                System.out.println("Huh, error....");
+//                System.out.println("Huh, error....");
                 destroyProbText.setText(LibVulpes.proxy.getLocalizedString("msg.serviceStation.destroyProbNA"));
                 return;
             }

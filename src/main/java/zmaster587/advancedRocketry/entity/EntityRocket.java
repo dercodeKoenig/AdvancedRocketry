@@ -2202,7 +2202,7 @@ public class EntityRocket extends EntityRocketBase implements INetworkEntity, IM
 
                 int ii = 0;
                 for (TileBrokenPart part : storage.getBrokenBlocks()) {
-                    serviceMonitorList.add(new ModuleBrokenPart((ii % 5) * 18, (ii / 5) * 18, part.getDrop(), world));
+                    serviceMonitorList.add(new ModuleBrokenPart((ii % 5) * 18, (ii / 5) * 18, part.getDrop()));
                     ii++;
                 }
 

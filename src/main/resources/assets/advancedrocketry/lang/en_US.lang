@@ -447,6 +447,8 @@ msg.itemsatellite.empty=Empty Chassis
 msg.itemsatellite.weight=Chassis weight:
 msg.itemsatellite.noweight=Error in weight calculation
 
+msg.brokenstage.text=Destruction stage
+
 msg.itemsatchip.id=ID: 
 msg.itemsatchip.planet=Planet: 
 msg.itemsatchip.planetunk=Planet: Unknown
