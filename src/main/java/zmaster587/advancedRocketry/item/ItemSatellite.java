@@ -66,6 +66,7 @@ public class ItemSatellite extends ItemIdWithName {
             SatelliteProperties properties = SatelliteRegistry.getSatelliteProperties(stack);
 
             int dataStorage, powerGeneration, powerStorage;
+            float weight;
 
             list.add(getName(stack));
             list.add("ID: " + properties.getId());
@@ -90,6 +91,12 @@ public class ItemSatellite extends ItemIdWithName {
                 else
                     list.add(ChatFormatting.YELLOW + LibVulpes.proxy.getLocalizedString("msg.itemsatellite.nodata"));
             }
+
+            if ((weight = properties.getWeight()) > 0)
+                list.add(LibVulpes.proxy.getLocalizedString("msg.itemsatellite.weight") + weight);
+            else
+                list.add(ChatFormatting.YELLOW + LibVulpes.proxy.getLocalizedString("msg.itemsatellite.noweight"));
+
         } else {
             list.add(ChatFormatting.RED + LibVulpes.proxy.getLocalizedString("msg.itemsatellite.empty"));
         }

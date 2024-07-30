@@ -14,6 +14,7 @@ import zmaster587.advancedRocketry.api.satellite.SatelliteProperties;
 import zmaster587.advancedRocketry.dimension.DimensionManager;
 import zmaster587.advancedRocketry.inventory.TextureResources;
 import zmaster587.advancedRocketry.item.*;
+import zmaster587.advancedRocketry.util.WeightEngine;
 import zmaster587.libVulpes.LibVulpes;
 import zmaster587.libVulpes.client.util.ProgressBarImage;
 import zmaster587.libVulpes.inventory.modules.*;
@@ -97,6 +98,7 @@ public class TileSatelliteBuilder extends TileMultiPowerConsumer implements IMod
     public void assembleSatellite() {
         //Basic properties of the satellite
         int powerStorage = 0, powerGeneration = 0, maxData = 0;
+        float weight = 0;
 
         //Get the primary function from slot 0
         String satType = SatelliteRegistry.getSatelliteProperty(getStackInSlot(primaryFunctionSlot)).getSatelliteType();
@@ -114,11 +116,13 @@ public class TileSatelliteBuilder extends TileMultiPowerConsumer implements IMod
                     if (SatelliteRegistry.getSatelliteProperty(stack).getPropertyFlag() == SatelliteProperties.Property.DATA.getFlag())
                         maxData += SatelliteRegistry.getSatelliteProperty(getStackInSlot(currentSlotIndex)).getMaxDataStorage();
                 }
+
+                weight += WeightEngine.INSTANCE.getWeight(stack);
             }
 
             //Set final satellite properties
             //720 here is the base power buffer, so the satellite has SOMETHING to run on
-            SatelliteProperties properties = new SatelliteProperties(powerGeneration, powerStorage + 720, satType, maxData);
+            SatelliteProperties properties = new SatelliteProperties(powerGeneration, powerStorage + 720, satType, maxData, weight);
             properties.setId(DimensionManager.getInstance().getNextSatelliteId());
 
             //Create the output item

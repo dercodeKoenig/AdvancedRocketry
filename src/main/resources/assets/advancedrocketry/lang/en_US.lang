@@ -444,6 +444,9 @@ msg.itemsatellite.microwavestatus=Collecting Power
 msg.itemsatellite.data=Data Storage: 
 msg.itemsatellite.nodata=No Data Storage!
 msg.itemsatellite.empty=Empty Chassis
+msg.itemsatellite.weight=Chassis weight:
+msg.itemsatellite.noweight=Error in weight calculation
+
 msg.itemsatchip.id=ID: 
 msg.itemsatchip.planet=Planet: 
 msg.itemsatchip.planetunk=Planet: Unknown

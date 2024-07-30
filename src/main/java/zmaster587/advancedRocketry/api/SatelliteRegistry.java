@@ -137,7 +137,7 @@ public class SatelliteRegistry {
 
             if (nbt != null) {
                 if (stack.getItem() instanceof ItemSatellite) {
-                    SatelliteProperties properties = new SatelliteProperties(nbt.getInteger("powerGeneration"), nbt.getInteger("powerStorage"), nbt.getString("dataType"), nbt.getInteger("maxData"));
+                    SatelliteProperties properties = new SatelliteProperties(nbt.getInteger("powerGeneration"), nbt.getInteger("powerStorage"), nbt.getString("dataType"), nbt.getInteger("maxData"), nbt.getFloat("weight"));
                     properties.setId(SatelliteRegistry.getSatelliteId(stack));
                     return properties;
                 }

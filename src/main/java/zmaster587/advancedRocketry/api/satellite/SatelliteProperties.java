@@ -9,17 +9,20 @@ public class SatelliteProperties implements IWeighted {
     private int powerGeneration, powerStorage, maxData;
     private long id;
     private String satType;
+    private float weight;
+
     public SatelliteProperties() {
         satType = null;
         id = -1;
     }
 
-    public SatelliteProperties(int powerGeneration, int powerStorage, String satType, int maxData) {
+    public SatelliteProperties(int powerGeneration, int powerStorage, String satType, int maxData, float weight) {
         this();
         this.powerGeneration = powerGeneration;
         this.powerStorage = powerStorage;
         this.satType = satType;
         this.maxData = maxData;
+        this.weight = weight;
     }
 
     /**
@@ -79,7 +82,7 @@ public class SatelliteProperties implements IWeighted {
     }
 
     public float getWeight() {
-        return 50 + getPowerStorage() * 0.1F + getPowerGeneration() * 0.2F + getMaxDataStorage() * 0.01F;
+        return this.weight;
     }
 
     /**
@@ -136,6 +139,7 @@ public class SatelliteProperties implements IWeighted {
         nbt.setString("dataType", satType);
         nbt.setLong("satId", id);
         nbt.setInteger("maxData", maxData);
+        nbt.setFloat("weight", weight);
     }
 
     public void readFromNBT(NBTTagCompound nbt) {
@@ -144,6 +148,7 @@ public class SatelliteProperties implements IWeighted {
         satType = nbt.getString("dataType");
         id = nbt.getLong("satId");
         maxData = nbt.getInteger("maxData");
+        weight = nbt.getFloat("weight");
     }
 
     public enum Property {

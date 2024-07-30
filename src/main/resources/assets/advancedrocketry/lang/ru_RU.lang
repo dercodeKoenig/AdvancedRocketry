@@ -398,6 +398,9 @@ msg.itemsatellite.nopwrgen=Энергия не генерируется!
 msg.itemsatellite.data=Хранилище данных:
 msg.itemsatellite.nodata=Нет хранилища данных!
 msg.itemsatellite.empty=Пустое шасси
+msg.itemsatellite.weight=Масса спутника:
+msg.itemsatellite.noweight=Ошибка в подсчёте массы
+
 msg.itemsatchip.id=ID:
 msg.itemsatchip.planet=Планета:
 msg.itemsatchip.planetunk=Планета: Неизвестно
