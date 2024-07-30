@@ -21,6 +21,7 @@ output
 # other
 eclipse
 run
+run-server
 refresh.bat
 AdvancedRocketry.txt
 changelog.html
