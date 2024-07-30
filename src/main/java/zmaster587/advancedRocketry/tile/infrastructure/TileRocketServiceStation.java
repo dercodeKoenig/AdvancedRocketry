@@ -504,7 +504,7 @@ public class TileRocketServiceStation extends TileEntityRFConsumer implements IM
         if (world.isRemote)
             if (id == 0) {
                 if (!(linkedRocket instanceof EntityRocket)) {
-                    System.out.println("Huh, error....");
+//                    System.out.println("Huh, error....");
                     return 0;
                 }
                 return initialPartToRepairCount - partsToRepair.size() - (int) Arrays.stream(partsProcessing).filter(Objects::nonNull).count();
