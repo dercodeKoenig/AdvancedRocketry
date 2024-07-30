@@ -1,42 +1,28 @@
 package zmaster587.advancedRocketry.satellite;
+
 import net.minecraft.block.BlockLiquid;
-import net.minecraft.init.Blocks;
-import net.minecraft.network.play.server.SPacketChangeGameState;
-import net.minecraft.server.MinecraftServer;
 import net.minecraft.entity.player.EntityPlayer;
-import net.minecraft.entity.player.EntityPlayerMP;
+import net.minecraft.init.Blocks;
 import net.minecraft.item.ItemStack;
 import net.minecraft.nbt.NBTTagCompound;
-import net.minecraft.nbt.NBTTagIntArray;
 import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.text.ITextComponent;
-import net.minecraft.util.text.TextComponentString;
 import net.minecraft.world.World;
-import net.minecraft.world.biome.Biome;
-import net.minecraft.world.chunk.Chunk;
-import net.minecraftforge.fluids.IFluidBlock;
-import net.minecraftforge.fluids.capability.wrappers.FluidBlockWrapper;
-import net.minecraftforge.fml.common.FMLCommonHandler;
-import zmaster587.advancedRocketry.AdvancedRocketry;
-import zmaster587.advancedRocketry.api.AdvancedRocketryBiomes;
 import zmaster587.advancedRocketry.api.satellite.SatelliteBase;
 import zmaster587.advancedRocketry.api.satellite.SatelliteProperties;
 import zmaster587.advancedRocketry.dimension.DimensionManager;
-import zmaster587.advancedRocketry.item.ItemBiomeChanger;
 import zmaster587.advancedRocketry.item.ItemWeatherController;
 import zmaster587.advancedRocketry.network.PacketAirParticle;
 import zmaster587.advancedRocketry.network.PacketFluidParticle;
-import zmaster587.advancedRocketry.util.BiomeHandler;
 import zmaster587.libVulpes.api.IUniversalEnergy;
 import zmaster587.libVulpes.network.PacketHandler;
 import zmaster587.libVulpes.util.HashedBlockPosition;
 
 import javax.annotation.Nonnull;
-import java.util.*;
-import java.util.logging.Logger;
+import java.util.ArrayList;
+import java.util.LinkedList;
+import java.util.List;
 
 import static org.apache.commons.lang3.RandomUtils.nextInt;
-import static zmaster587.advancedRocketry.AdvancedRocketry.logger;
 
 public class SatelliteWeatherController extends SatelliteBase {
 
@@ -123,7 +109,7 @@ public class SatelliteWeatherController extends SatelliteBase {
             if (mode_id == 1) {
                 //BlockPos new_block = viable_positions.remove(0);
                 BlockPos new_block = viable_positions.remove(nextInt(0, listsize));
-                DimensionManager.getInstance().getDimensionProperties(getDimensionId()).add_water_locked_pos(new HashedBlockPosition(new_block));
+                DimensionManager.getInstance().getDimensionProperties(getDimensionId()).addWaterLockedPos(new HashedBlockPosition(new_block));
                 if (world.getBlockState(new_block).getBlock() == Blocks.WATER || world.getBlockState(new_block).getBlock() == Blocks.FLOWING_WATER) {
                     world.setBlockState(new_block, Blocks.AIR.getDefaultState());
                     world.notifyBlockUpdate(new_block, world.getBlockState(new_block), world.getBlockState(new_block), 3);

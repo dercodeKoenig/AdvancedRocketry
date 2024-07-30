@@ -1,54 +1,42 @@
 package zmaster587.advancedRocketry.tile.satellite;
 
 import io.netty.buffer.ByteBuf;
-import net.minecraft.client.Minecraft;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
 import net.minecraft.nbt.NBTTagCompound;
-import net.minecraft.network.NetworkManager;
-import net.minecraft.network.play.server.SPacketUpdateTileEntity;
 import net.minecraft.util.EnumFacing;
 import net.minecraft.util.math.BlockPos;
-import net.minecraft.world.WorldServer;
 import net.minecraft.world.biome.BiomeProvider;
-import net.minecraft.world.chunk.Chunk;
 import net.minecraftforge.fml.relauncher.Side;
-import zmaster587.advancedRocketry.api.*;
-import zmaster587.advancedRocketry.api.DataStorage.DataType;
+import zmaster587.advancedRocketry.api.ARConfiguration;
+import zmaster587.advancedRocketry.api.AdvancedRocketryBlocks;
+import zmaster587.advancedRocketry.api.AdvancedRocketryItems;
+import zmaster587.advancedRocketry.api.SatelliteRegistry;
 import zmaster587.advancedRocketry.api.satellite.SatelliteBase;
 import zmaster587.advancedRocketry.dimension.DimensionManager;
 import zmaster587.advancedRocketry.dimension.DimensionProperties;
-import zmaster587.advancedRocketry.inventory.modules.ModuleData;
 import zmaster587.advancedRocketry.inventory.modules.ModuleSatellite;
 import zmaster587.advancedRocketry.item.ItemBiomeChanger;
-import zmaster587.advancedRocketry.item.ItemData;
 import zmaster587.advancedRocketry.item.ItemSatelliteIdentificationChip;
 import zmaster587.advancedRocketry.satellite.SatelliteBiomeChanger;
-import zmaster587.advancedRocketry.satellite.SatelliteData;
 import zmaster587.advancedRocketry.util.BiomeHandler;
-import zmaster587.advancedRocketry.util.IDataInventory;
-import zmaster587.advancedRocketry.util.PlanetaryTravelHelper;
 import zmaster587.advancedRocketry.util.TerraformingHelper;
 import zmaster587.advancedRocketry.world.ChunkManagerPlanet;
-import zmaster587.advancedRocketry.world.provider.WorldProviderPlanet;
 import zmaster587.libVulpes.LibVulpes;
 import zmaster587.libVulpes.api.IUniversalEnergy;
-import zmaster587.libVulpes.inventory.TextureResources;
 import zmaster587.libVulpes.inventory.modules.*;
 import zmaster587.libVulpes.network.PacketHandler;
 import zmaster587.libVulpes.network.PacketMachine;
 import zmaster587.libVulpes.tile.TileInventoriedRFConsumer;
-import zmaster587.libVulpes.util.HashedBlockPosition;
 import zmaster587.libVulpes.util.INetworkMachine;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
+import java.math.BigDecimal;
 import java.math.RoundingMode;
-import java.util.Collection;
 import java.util.LinkedList;
 import java.util.List;
-import java.math.BigDecimal;
 
 
 
@@ -183,14 +171,14 @@ public class TileTerraformingTerminal extends TileInventoriedRFConsumer implemen
                                 try {
 
 
-                                    TerraformingHelper t = DimensionProperties.proxylists.gethelper(world.provider.getDimension());
+                                    TerraformingHelper t = DimensionProperties.proxylists.getHelper(world.provider.getDimension());
 
                                     if (t == null) {
-                                        DimensionManager.getInstance().getDimensionProperties(world.provider.getDimension()).load_terraforming_helper(false);
-                                        t = DimensionProperties.proxylists.gethelper(world.provider.getDimension());
+                                        DimensionManager.getInstance().getDimensionProperties(world.provider.getDimension()).loadTerraformingHelper(false);
+                                        t = DimensionProperties.proxylists.getHelper(world.provider.getDimension());
                                     }
                                     BiomeProvider chunkmgr = t.chunkMgrTerraformed;
-                                    BlockPos next_block_pos = t.get_next_position(false);
+                                    BlockPos next_block_pos = t.getNextPosition(false);
 
                                     if (next_block_pos != null) { // it is null when there is everything terraformed
                                         battery.extractEnergy(powerrequired, false);

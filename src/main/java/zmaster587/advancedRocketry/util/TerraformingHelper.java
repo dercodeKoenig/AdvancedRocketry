@@ -1,17 +1,14 @@
 package zmaster587.advancedRocketry.util;
 
-import net.minecraft.block.Block;
 import net.minecraft.block.state.IBlockState;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.ChunkPos;
 import net.minecraft.util.math.Vec3i;
 import net.minecraft.world.World;
-import net.minecraft.world.biome.Biome;
 import net.minecraft.world.biome.BiomeProvider;
-import net.minecraft.world.chunk.Chunk;
 import net.minecraft.world.chunk.ChunkPrimer;
 import net.minecraftforge.common.BiomeManager;
-import org.lwjgl.Sys;
+import zmaster587.advancedRocketry.AdvancedRocketry;
 import zmaster587.advancedRocketry.dimension.DimensionManager;
 import zmaster587.advancedRocketry.dimension.DimensionProperties;
 import zmaster587.advancedRocketry.world.ChunkManagerPlanet;
@@ -21,7 +18,7 @@ import java.util.*;
 
 import static org.apache.commons.lang3.RandomUtils.nextInt;
 
-enum TerraformingType{
+enum TerraformingType {
     ALLOWED, BORDER, PROTECTED
 }
 
@@ -33,7 +30,7 @@ public class TerraformingHelper {
     public ChunkProviderPlanet generator;
     private DimensionProperties props;
 
-    private Map<ChunkPos, chunkdata> chunkDataMap = new HashMap<>();
+    private final Map<ChunkPos, chunkdata> chunkDataMap = new HashMap<>();
 
 
     // A block is placed in queue if (OR)
@@ -48,26 +45,25 @@ public class TerraformingHelper {
     // - When a protecting Block has been removed and chunk status is re-calculated
     //   add every chunk that was PROTECTED and no longer is PROTECTED to the queue for terraforming.
     //   doesn't matter if it is type ALLOWED or type BORDER
-    private List<Vec3i> terraformingqueue;
+    private final List<Vec3i> terraformingQueue;
 
     int safe_zone_radius = 3; // radius for protected zone
     int border_zone = 3; // border zone size
 
 
-    public TerraformingHelper(int dimension, List<BiomeManager.BiomeEntry> biomes, HashSet<ChunkPos> generated_chunks){
+    public TerraformingHelper(int dimension, List<BiomeManager.BiomeEntry> biomes, Set<ChunkPos> generated_chunks) {
         this.dimId = dimension;
         this.props = DimensionManager.getInstance().getDimensionProperties(dimension);
         this.biomeList = biomes;
         this.world = net.minecraftforge.common.DimensionManager.getWorld(dimId);
         this.chunkMgrTerraformed = new ChunkManagerPlanet(world, world.getWorldInfo().getGeneratorOptions(), biomeList);
-        this.terraformingqueue = new ArrayList<>();
-        chunkDataMap = new HashMap<>();
+        this.terraformingQueue = new ArrayList<>();
         generator = new ChunkProviderPlanet(world, world.getSeed(), world.getWorldInfo().isMapFeaturesEnabled(), world.getWorldInfo().getGeneratorOptions());
 
-        for (ChunkPos i:generated_chunks){
-            chunkdata data = new chunkdata(i.x,i.z,null, world, this);
+        for (ChunkPos i : generated_chunks) {
+            chunkdata data = new chunkdata(i.x, i.z, null, world, this);
             data.chunk_fully_generated = true;
-            chunkDataMap.put(new ChunkPos(data.x,data.z), data);
+            chunkDataMap.put(new ChunkPos(data.x, data.z), data);
         }
         recalculate_chunk_status();
     }
@@ -75,19 +71,19 @@ public class TerraformingHelper {
     //0 = no
     //1 = yes
     // -1 = never (if it includes a type.PROTECTED chunk
-    public int can_populate(int x, int z){
-        chunkdata currentchunk = getChunkFromList(x,z);
-        chunkdata currentchunkx1 = getChunkFromList(x+1,z);
-        chunkdata currentchunkz1 = getChunkFromList(x,z+1);
-        chunkdata currentchunkx1z1 = getChunkFromList(x+1,z+1);
+    public int can_populate(int x, int z) {
+        chunkdata currentchunk = getChunkFromList(x, z);
+        chunkdata currentchunkx1 = getChunkFromList(x + 1, z);
+        chunkdata currentchunkz1 = getChunkFromList(x, z + 1);
+        chunkdata currentchunkx1z1 = getChunkFromList(x + 1, z + 1);
 
-        if (currentchunk != null && currentchunkz1 != null && currentchunkx1 != null && currentchunkx1z1 != null){
+        if (currentchunk != null && currentchunkz1 != null && currentchunkx1 != null && currentchunkx1z1 != null) {
 
-            if (currentchunk.type == TerraformingType.PROTECTED || currentchunkz1.type == TerraformingType.PROTECTED ||currentchunkx1.type == TerraformingType.PROTECTED ||currentchunkx1z1.type == TerraformingType.PROTECTED)
+            if (currentchunk.type == TerraformingType.PROTECTED || currentchunkz1.type == TerraformingType.PROTECTED || currentchunkx1.type == TerraformingType.PROTECTED || currentchunkx1z1.type == TerraformingType.PROTECTED)
                 return -1; // chunks contain a protected chunk
 
             if (currentchunkz1.terrain_fully_generated && currentchunkx1.terrain_fully_generated && currentchunkx1z1.terrain_fully_generated && currentchunk.terrain_fully_generated)
-                    return 1;
+                return 1;
         }
         return 0;
     }
@@ -95,17 +91,18 @@ public class TerraformingHelper {
     /*
     used to add BORDER type block positions to queue for updating again
      */
-    public void register_height_change_actual(BlockPos pos){
+    public void register_height_change_actual(BlockPos pos) {
         ChunkPos cpos = getChunkPosFromBlockPos(pos);
-        chunkdata data= getChunkFromList(cpos.x,cpos.z);
-        if (data !=null  && data.type == TerraformingType.BORDER)
-            add_position_to_queue(pos);
+        chunkdata data = getChunkFromList(cpos.x, cpos.z);
+        if (data != null && data.type == TerraformingType.BORDER)
+            addPositionToQueue(pos);
     }
-    public void register_height_change(BlockPos pos){
-        register_height_change_actual(pos.add(1,0,0));
-        register_height_change_actual(pos.add(-1,0,0));
-        register_height_change_actual(pos.add(0,0,1));
-        register_height_change_actual(pos.add(0,0,-1));
+
+    public void register_height_change(BlockPos pos) {
+        register_height_change_actual(pos.add(1, 0, 0));
+        register_height_change_actual(pos.add(-1, 0, 0));
+        register_height_change_actual(pos.add(0, 0, 1));
+        register_height_change_actual(pos.add(0, 0, -1));
     }
 
 
@@ -119,7 +116,7 @@ public class TerraformingHelper {
         for (int x = -1; x <= 1; x++) {
             for (int z = -1; z <= 1; z++) {
                 chunkdata data = getChunkFromList(px + x, pz + z);
-                if (data == null)continue;
+                if (data == null) continue;
                 if (data != null && !data.terrain_fully_generated && data.type == TerraformingType.BORDER) {
                     int chunkposxlow = data.x * 16;
                     int chunkposzlow = data.z * 16;
@@ -127,7 +124,7 @@ public class TerraformingHelper {
                     int chunkposzhigh = chunkposzlow + 16;
 
 
-                    for(Vec3i p : terraformingqueue){
+                    for (Vec3i p : terraformingQueue) {
                         if (p.getX() >= chunkposxlow && p.getX() < chunkposxhigh) {
                             if (p.getZ() >= chunkposzlow && p.getZ() < chunkposzhigh) {
                                 return;
@@ -157,17 +154,18 @@ public class TerraformingHelper {
             }
         }
     }
-    public void check_can_decorate(int px, int pz){
+
+    public void check_can_decorate(int px, int pz) {
         // for every chunk next to this one, check if it can decorate (except for if it is already decorated)
         for (int x = -1; x <= 1; x++) {
             for (int z = -1; z <= 1; z++) {
-                if (getChunkFromList(px+x,pz+z) != null && !getChunkFromList(px+x,pz+z).chunk_fully_generated){
-                    if (can_populate(px+x,pz+z) != 0){
+                if (getChunkFromList(px + x, pz + z) != null && !getChunkFromList(px + x, pz + z).chunk_fully_generated) {
+                    if (can_populate(px + x, pz + z) != 0) {
                         //re-add all position to queue for decoration
-                        System.out.println("chunk can populate now: "+(px+x)+":"+(pz+z));
+                        System.out.println("chunk can populate now: " + (px + x) + ":" + (pz + z));
                         for (int bx = 0; bx < 16; bx++) {
                             for (int bz = 0; bz < 16; bz++) {
-                                add_position_to_queue_at_front(new BlockPos((px+x)*16+bx, 0, (pz+z)*16+bz));
+                                addPositionToQueueAtFront(new BlockPos((px + x) * 16 + bx, 0, (pz + z) * 16 + bz));
                             }
                         }
                     }
@@ -176,16 +174,16 @@ public class TerraformingHelper {
         }
 
     }
+
     public ChunkPos getChunkPosFromBlockPos(BlockPos pos) {
         return new ChunkPos(pos.getX() >> 4, pos.getZ() >> 4);
     }
 
 
-
     public TerraformingType get_chunk_type(int x, int z) {
-
         TerraformingType type = TerraformingType.ALLOWED;
-        for (BlockPos i : DimensionProperties.proxylists.getProtectingBlocksForDimension(props.getId())) {
+
+        for (BlockPos i : AdvancedRocketry.proxy.terraformingList.getProtectingBlocksForDimension(props.getId())) {
             //System.out.println("found protecting block at "+i.getX()+":"+i.getY()+":"+i.getZ());
             ChunkPos cpos = getChunkPosFromBlockPos(i);
             int dx = cpos.x - x;
@@ -221,67 +219,63 @@ public class TerraformingHelper {
     }
 
 
-
-
-
-    public chunkdata getChunkFromList(int x, int z){
-        ChunkPos key = new ChunkPos(x,z);
+    public chunkdata getChunkFromList(int x, int z) {
+        ChunkPos key = new ChunkPos(x, z);
         return chunkDataMap.get(key);
     }
 
 
-
-    public synchronized void add_position_to_queue(BlockPos p){
+    public synchronized void addPositionToQueue(BlockPos p) {
         //System.out.println("add position: "+p.getX()+":"+p.getZ());
-        if (p == null){
+        if (p == null) {
             System.out.print("ERROR POSITION IS NULL");
             return;
         }
-        terraformingqueue.add(new Vec3i(p.getX(),p.getY(),p.getZ()));
+        terraformingQueue.add(new Vec3i(p.getX(), p.getY(), p.getZ()));
     }
-    public synchronized void add_position_to_queue_at_front(BlockPos p){
-        //System.out.println("add position: "+p.getX()+":"+p.getZ());
-        if (p == null){
+
+    public synchronized void addPositionToQueueAtFront(BlockPos p) {
+        if (p == null) {
             System.out.print("ERROR POSITION IS NULL");
             return;
         }
         int insertionIndex;
-        insertionIndex = new Random().nextInt(Math.min(terraformingqueue.size(), 1000));
+        insertionIndex = new Random().nextInt(Math.min(terraformingQueue.size(), 1000));
 
-        terraformingqueue.add(insertionIndex, new Vec3i(p.getX(),p.getY(),p.getZ()));
+        terraformingQueue.add(insertionIndex, new Vec3i(p.getX(), p.getY(), p.getZ()));
     }
 
 
-    public synchronized BlockPos get_next_position(boolean random){
-        if (terraformingqueue.isEmpty())
+    public synchronized BlockPos getNextPosition(boolean random) {
+        if (terraformingQueue.isEmpty())
             return null;
         int index = 0;
         if (random)
-            index = nextInt(0,terraformingqueue.size());
+            index = nextInt(0, terraformingQueue.size());
 
-        Vec3i pos = terraformingqueue.remove(index);
+        Vec3i pos = terraformingQueue.remove(index);
         return new BlockPos(pos);
     }
 
-    public IBlockState[] getBlocksAt(int x, int z){
-        ChunkPos cpos = getChunkPosFromBlockPos(new BlockPos(x,0,z));
-        chunkdata data = getChunkFromList(cpos.x,cpos.z);
-        if (data == null){
-            System.out.println("generate new chunk: "+cpos.x+":"+cpos.z);
+    public IBlockState[] getBlocksAt(int x, int z) {
+        ChunkPos cpos = getChunkPosFromBlockPos(new BlockPos(x, 0, z));
+        chunkdata data = getChunkFromList(cpos.x, cpos.z);
+        if (data == null) {
+            System.out.println("generate new chunk: " + cpos.x + ":" + cpos.z);
             ChunkPrimer primer = generator.getChunkPrimer(cpos.x, cpos.z, chunkMgrTerraformed);
 
             IBlockState[][][] blockStates = new IBlockState[16][16][256];
             for (int px = 0; px < 16; px++) {
                 for (int pz = 0; pz < 16; pz++) {
                     for (int py = 0; py < 256; py++) {
-                        blockStates[px][pz][py] = primer.getBlockState(px,py,pz);
+                        blockStates[px][pz][py] = primer.getBlockState(px, py, pz);
                     }
                 }
             }
 
-            data = new chunkdata(cpos.x,cpos.z, blockStates, world, this);
-            chunkDataMap.put(new ChunkPos(data.x,data.z),data);
-            data.type = get_chunk_type(data.x,data.z);
+            data = new chunkdata(cpos.x, cpos.z, blockStates, world, this);
+            chunkDataMap.put(new ChunkPos(data.x, data.z), data);
+            data.type = get_chunk_type(data.x, data.z);
 
         }
         int chunkx = ((x % 16) + 16) % 16;
@@ -295,7 +289,7 @@ public class TerraformingHelper {
 
 
     public void setChunkFullyGenerated(int x, int z) {
-        getChunkFromList(x,z).chunk_fully_generated = true;
-        DimensionProperties.proxylists.getChunksFullyTerraformed(props.getId()).add(new ChunkPos(x,z));
+        getChunkFromList(x, z).chunk_fully_generated = true;
+        AdvancedRocketry.proxy.terraformingList.getChunksFullyTerraformed(props.getId()).add(new ChunkPos(x, z));
     }
 }

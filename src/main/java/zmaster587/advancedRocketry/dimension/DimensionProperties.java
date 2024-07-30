@@ -2,22 +2,17 @@ package zmaster587.advancedRocketry.dimension;
 
 import net.minecraft.block.Block;
 import net.minecraft.block.state.IBlockState;
-import net.minecraft.init.Biomes;
 import net.minecraft.init.Blocks;
-import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
 import net.minecraft.nbt.*;
-import net.minecraft.server.MinecraftServer;
 import net.minecraft.util.ResourceLocation;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.ChunkPos;
 import net.minecraft.util.math.MathHelper;
 import net.minecraft.util.math.Vec3d;
 import net.minecraft.world.World;
-import net.minecraft.world.WorldServer;
 import net.minecraft.world.biome.Biome;
 import net.minecraft.world.biome.Biome.TempCategory;
-import net.minecraft.world.biome.BiomeProvider;
 import net.minecraft.world.chunk.Chunk;
 import net.minecraftforge.common.BiomeDictionary;
 import net.minecraftforge.common.BiomeManager;
@@ -25,11 +20,7 @@ import net.minecraftforge.common.BiomeManager.BiomeEntry;
 import net.minecraftforge.common.util.Constants.NBT;
 import net.minecraftforge.fluids.Fluid;
 import net.minecraftforge.fluids.FluidRegistry;
-import net.minecraftforge.fml.common.FMLCommonHandler;
-import net.minecraftforge.fml.common.SidedProxy;
-import net.minecraftforge.fml.relauncher.Side;
 import org.apache.commons.lang3.ArrayUtils;
-import org.lwjgl.Sys;
 import zmaster587.advancedRocketry.AdvancedRocketry;
 import zmaster587.advancedRocketry.api.*;
 import zmaster587.advancedRocketry.api.atmosphere.AtmosphereRegister;
@@ -37,21 +28,12 @@ import zmaster587.advancedRocketry.api.dimension.IDimensionProperties;
 import zmaster587.advancedRocketry.api.dimension.solar.StellarBody;
 import zmaster587.advancedRocketry.api.satellite.SatelliteBase;
 import zmaster587.advancedRocketry.atmosphere.AtmosphereType;
-import zmaster587.advancedRocketry.common.CommonProxy;
-import zmaster587.advancedRocketry.fuckin_bs_integrated_server_and_client_variable_sharing_crap_fix_fuckit_Im_in_rage.Afuckinginterface;
-import zmaster587.advancedRocketry.fuckin_bs_integrated_server_and_client_variable_sharing_crap_fix_fuckit_Im_in_rage.serverlists;
 import zmaster587.advancedRocketry.inventory.TextureResources;
-import zmaster587.advancedRocketry.item.ItemBiomeChanger;
-import zmaster587.advancedRocketry.item.ItemSatelliteIdentificationChip;
 import zmaster587.advancedRocketry.network.PacketDimInfo;
 import zmaster587.advancedRocketry.network.PacketSatellite;
-import zmaster587.advancedRocketry.satellite.SatelliteBiomeChanger;
-import zmaster587.advancedRocketry.satellite.SatelliteWeatherController;
 import zmaster587.advancedRocketry.stations.SpaceObjectManager;
+import zmaster587.advancedRocketry.terraforming.TerraformingList;
 import zmaster587.advancedRocketry.util.*;
-import zmaster587.advancedRocketry.world.ChunkManagerPlanet;
-import zmaster587.advancedRocketry.world.provider.WorldProviderPlanet;
-import zmaster587.libVulpes.api.IUniversalEnergy;
 import zmaster587.libVulpes.network.PacketHandler;
 import zmaster587.libVulpes.util.HashedBlockPosition;
 import zmaster587.libVulpes.util.VulpineMath;
@@ -59,8 +41,6 @@ import zmaster587.libVulpes.util.ZUtils;
 
 import java.util.*;
 import java.util.Map.Entry;
-
-import static org.apache.commons.lang3.RandomUtils.nextInt;
 
 
 public class DimensionProperties implements Cloneable, IDimensionProperties {
@@ -157,14 +137,6 @@ public class DimensionProperties implements Cloneable, IDimensionProperties {
     private int generatorType;
     //public int target_sea_level;
 
-
-
-
-    @SidedProxy(serverSide = "zmaster587.advancedRocketry.fuckin_bs_integrated_server_and_client_variable_sharing_crap_fix_fuckit_Im_in_rage.serverlists", clientSide = "zmaster587.advancedRocketry.fuckin_bs_integrated_server_and_client_variable_sharing_crap_fix_fuckit_Im_in_rage.clientlists")
-    public static Afuckinginterface proxylists;
-
-
-
     public List<ChunkPos> terraformingChunksAlreadyAdded;
 
     //class
@@ -234,30 +206,32 @@ public class DimensionProperties implements Cloneable, IDimensionProperties {
         //this.chunkMgrTerraformed = new ChunkManagerPlanet(net.minecraftforge.common.DimensionManager.getWorld(id), net.minecraftforge.common.DimensionManager.getWorld(getId()).getWorldInfo().getGeneratorOptions(), getTerraformedBiomes());
     }
 
-    public void load_terraforming_helper(boolean reset) {
+    public void loadTerraformingHelper(boolean reset) {
         if (!net.minecraftforge.common.DimensionManager.getWorld(getId()).isRemote) {
 
-            if (!proxylists.isinitialized(getId())){
-                proxylists.initdim(getId());
+            TerraformingList proxylists = AdvancedRocketry.proxy.terraformingList;
+
+            if (!proxylists.isInitialized(getId())) {
+                proxylists.initDim(getId());
             }
 
             getAverageTemp();
             getViableBiomes(false);
             if (reset) {
-               proxylists.getChunksFullyTerraformed(getId()).clear();
+                proxylists.getChunksFullyTerraformed(getId()).clear();
                 terraformingChunksAlreadyAdded.clear();
             }
 
-            System.out.println("load helper with protecting blocks: " + proxylists.getProtectingBlocksForDimension(getId()).size() + " (" + reset + ")");
+//            System.out.println("load helper with protecting blocks: " + proxylists.getProtectingBlocksForDimension(getId()).size() + " (" + reset + ")");
 
-            proxylists.sethelper(getId(), new TerraformingHelper(getId(), getBiomesEntries(getViableBiomes(false)), proxylists.getChunksFullyTerraformed(getId())));
+            proxylists.setHelper(getId(), new TerraformingHelper(getId(), getBiomesEntries(getViableBiomes(false)), proxylists.getChunksFullyTerraformed(getId())));
 
-            System.out.println("num biomes: "+ getViableBiomes(false).size());
+//            System.out.println("num biomes: "+ getViableBiomes(false).size());
 
             Collection<Chunk> list = (net.minecraftforge.common.DimensionManager.getWorld(getId())).getChunkProvider().getLoadedChunks();
             if (!list.isEmpty()) {
                 for (Chunk chunk : list) {
-                    add_chunk_to_terraforming_list(chunk);
+                    addChunkToTerraformingList(chunk);
                 }
             }
         }
@@ -265,35 +239,39 @@ public class DimensionProperties implements Cloneable, IDimensionProperties {
     }
 
     public void registerProtectingBlock(BlockPos p) {
-        boolean already_registered = false;
+        TerraformingList proxylists = AdvancedRocketry.proxy.terraformingList;
+
+        boolean registered = false;
         for (BlockPos i : proxylists.getProtectingBlocksForDimension(getId())) {
             if (i.equals(p)) {
-                already_registered = true;
+                registered = true;
                 break;
             }
         }
         //System.out.println("register protecting block called");
-        if (!already_registered) {
+        if (!registered) {
             proxylists.getProtectingBlocksForDimension(getId()).add(p);
             //System.out.println("block registered");
-            if (proxylists.gethelper(getId()) != null) {
-                proxylists.gethelper(getId()).recalculate_chunk_status();
+            if (proxylists.getHelper(getId()) != null) {
+                proxylists.getHelper(getId()).recalculate_chunk_status();
             }
         }
     }
 
     public void unregisterProtectingBlock(BlockPos p) {
+        TerraformingList proxylists = AdvancedRocketry.proxy.terraformingList;
+
         for (BlockPos i : proxylists.getProtectingBlocksForDimension(getId())) {
             if (i.equals(p)) {
                 proxylists.getProtectingBlocksForDimension(getId()).remove(i);
-                if (proxylists.gethelper(getId()) != null)
-                    proxylists.gethelper(getId()).recalculate_chunk_status();
+                if (proxylists.getHelper(getId()) != null)
+                    proxylists.getHelper(getId()).recalculate_chunk_status();
                 break;
             }
         }
     }
 
-    public void add_block_to_terraforming_queue(BlockPos p) {
+    public void addBlockToTerraformingQueue(BlockPos p) {
         //boolean is_there = false;
         //for (BlockPos i : terraformingHelper.terraformingqueue) {
         //    if (i.equals(p)) {
@@ -301,38 +279,34 @@ public class DimensionProperties implements Cloneable, IDimensionProperties {
         //    }
         //}
         //if (!is_there)
-        proxylists.gethelper(getId()).add_position_to_queue(p);
+        AdvancedRocketry.proxy.terraformingList.getHelper(getId()).addPositionToQueue(p);
     }
 
-    public void add_chunk_to_terraforming_list(Chunk chunk) {
+    public void addChunkToTerraformingList(Chunk chunk) {
+        TerraformingList proxylists = AdvancedRocketry.proxy.terraformingList;
 
-        if (proxylists.gethelper(getId()) != null) {
-
-            boolean chunk_was_already_done = proxylists.getChunksFullyTerraformed(getId()).contains(new ChunkPos(chunk.x,chunk.z));; // do not add a chunk if it is already fully terraformed
-            if (chunk_was_already_done)
+        if (proxylists.getHelper(getId()) != null) {
+            if (proxylists.getChunksFullyTerraformed(getId()).contains(new ChunkPos(chunk.x, chunk.z))) // do not add a chunk if it is already fully terraformed
                 return;
 
             //System.out.println("add chunk to terraforming list: "+chunk.x+":"+chunk.z);
 
-            chunkdata current_chunk = proxylists.gethelper(getId()).getChunkFromList(chunk.x, chunk.z);
+            chunkdata current_chunk = proxylists.getHelper(getId()).getChunkFromList(chunk.x, chunk.z);
             if (current_chunk == null || !current_chunk.chunk_fully_generated) {
 
-                boolean chunk_was_already_added = false; // do not add a chunk twice, the helper will manage it once it is added
+                // do not add a chunk twice, the helper will manage it once it is added
                 for (ChunkPos i : terraformingChunksAlreadyAdded) {
                     if (chunk.x == i.x && chunk.z == i.z) {
-                        chunk_was_already_added = true;
-                        break;
+                        return;
                     }
                 }
-                if (chunk_was_already_added)
-                    return;
 
                 for (int x = 0; x < 16; x++) {
                     for (int z = 0; z < 16; z++) {
-                        if (current_chunk == null || !current_chunk.fully_generated[x][z])
+                        if (current_chunk == null || !current_chunk.fully_generated[x][z]) {
                             // if a position in the chunk is already fully generated, skip
-                            add_block_to_terraforming_queue(new BlockPos(chunk.x * 16 + x, 0, chunk.z * 16 + z));
-
+                            addBlockToTerraformingQueue(new BlockPos(chunk.x * 16 + x, 0, chunk.z * 16 + z));
+                        }
                     }
                 }
             }
@@ -377,10 +351,10 @@ public class DimensionProperties implements Cloneable, IDimensionProperties {
         this.tickingSatellites = props.tickingSatellites;
     }
 
-
     @Override
     public Object clone() {
         try {
+            // TODO What?)
             return super.clone();
         } catch (CloneNotSupportedException e) {
             return null;
@@ -784,7 +758,7 @@ public class DimensionProperties implements Cloneable, IDimensionProperties {
         int prevAtm = this.atmosphereDensity;
         this.atmosphereDensity = atmosphereDensity;
 
-        load_terraforming_helper(true);
+        loadTerraformingHelper(true);
 
 
         PacketHandler.sendToAll(new PacketDimInfo(getId(), this));
@@ -1034,7 +1008,6 @@ public class DimensionProperties implements Cloneable, IDimensionProperties {
      * Tick satellites as needed
      */
     public void tick() {
-
         Iterator<SatelliteBase> iterator = tickingSatellites.values().iterator();
 
         while (iterator.hasNext()) {
@@ -1064,7 +1037,7 @@ public class DimensionProperties implements Cloneable, IDimensionProperties {
 
     }
 
-    public void add_water_locked_pos(HashedBlockPosition pos) {
+    public void addWaterLockedPos(HashedBlockPosition pos) {
         for (watersourcelocked i : water_source_locked_positions) {
             if (i.pos.equals(pos)) {
                 i.reset_timer();
@@ -1638,7 +1611,6 @@ public class DimensionProperties implements Cloneable, IDimensionProperties {
     }
 
 
-
     private void writeTechnicalNBT(NBTTagCompound nbt) {
         NBTTagList list;
         if (!beaconLocations.isEmpty()) {
@@ -1661,26 +1633,27 @@ public class DimensionProperties implements Cloneable, IDimensionProperties {
                 allSatelliteNBT.setTag(entry.getKey().toString(), satelliteNBT);
             }
             nbt.setTag("satallites", allSatelliteNBT);
-        }   }
+        }
+    }
 
     //terraforming data
-    public void read_terraforming_data(NBTTagCompound nbt){
+    public void readTerraformingData(NBTTagCompound nbt) {
+        TerraformingList proxylists = AdvancedRocketry.proxy.terraformingList;
 
-        int dimid =getId();
-        if (!proxylists.isinitialized(dimid)){
-            proxylists.initdim(dimid);
+        int dimid = getId();
+        if (!proxylists.isInitialized(dimid)) {
+            proxylists.initDim(dimid);
         }
 
         if (nbt.hasKey("fullyGeneratedChunks")) {
-
             NBTTagList list = nbt.getTagList("fullyGeneratedChunks", NBT.TAG_COMPOUND);
             if (!list.hasNoTags())
-                proxylists.setChunksFullyTerraformed(dimid, new HashSet<ChunkPos>());
+                proxylists.setChunksFullyTerraformed(dimid, new HashSet<>());
             for (NBTBase entry : list) {
                 assert entry instanceof NBTTagCompound;
                 int x = ((NBTTagCompound) entry).getInteger("x");
                 int z = ((NBTTagCompound) entry).getInteger("z");
-                System.out.println("Chunk fully terraformed: " + x + ":" + z);
+//                System.out.println("Chunk fully terraformed: " + x + ":" + z);
 
                 boolean chunk_was_already_done = false;
                 for (ChunkPos i : proxylists.getChunksFullyTerraformed(dimid)) {
@@ -1691,12 +1664,11 @@ public class DimensionProperties implements Cloneable, IDimensionProperties {
                 }
                 if (!chunk_was_already_done)
                     proxylists.getChunksFullyTerraformed(dimid).add(new ChunkPos(x, z));
-                else System.out.println("Chunk is already in list: " + x + ":" + z);
+//                else System.out.println("Chunk is already in list: " + x + ":" + z);
             }
         }
 
         if (nbt.hasKey("terraformingProtectedBlocks")) {
-
             NBTTagList list = nbt.getTagList("terraformingProtectedBlocks", NBT.TAG_COMPOUND);
             if (!list.hasNoTags())
                 proxylists.setProtectingBlocksForDimension(dimid, new ArrayList<>());
@@ -1706,38 +1678,42 @@ public class DimensionProperties implements Cloneable, IDimensionProperties {
                 int z = ((NBTTagCompound) entry).getInteger("z");
                 int y = ((NBTTagCompound) entry).getInteger("y");
                 proxylists.getProtectingBlocksForDimension(dimid).add(new BlockPos(x, y, z));
-                System.out.println("read protecting block at " + x + ":" + y + ":" + z + " - - " + proxylists.getProtectingBlocksForDimension(dimid).size());
+//                System.out.println("read protecting block at " + x + ":" + y + ":" + z + " - - " + proxylists.getProtectingBlocksForDimension(dimid).size());
             }
         }
     }
-    public void write_terraforming_data(NBTTagCompound nbt) {
+
+    public void writeTerraformingData(NBTTagCompound nbt) {
         // write terraforming data
 
+        TerraformingList proxylists = AdvancedRocketry.proxy.terraformingList;
+
         int dimid = getId();
-        if (!proxylists.isinitialized(dimid)){
+        if (!proxylists.isInitialized(dimid)) {
             return;
         }
-            NBTTagList list = new NBTTagList();
-            for (ChunkPos pos : proxylists.getChunksFullyTerraformed(dimid)) {
-                NBTTagCompound entry = new NBTTagCompound();
-                entry.setInteger("x", pos.x);
-                entry.setInteger("z", pos.z);
-                list.appendTag(entry);
-            }
-            nbt.setTag("fullyGeneratedChunks", list);
+        NBTTagList list = new NBTTagList();
+        for (ChunkPos pos : proxylists.getChunksFullyTerraformed(dimid)) {
+            NBTTagCompound entry = new NBTTagCompound();
+            entry.setInteger("x", pos.x);
+            entry.setInteger("z", pos.z);
+            list.appendTag(entry);
+        }
+        nbt.setTag("fullyGeneratedChunks", list);
 
-            list = new NBTTagList();
-            for (BlockPos pos : proxylists.getProtectingBlocksForDimension(dimid)) {
-                NBTTagCompound entry = new NBTTagCompound();
-                entry.setInteger("x", pos.getX());
-                entry.setInteger("y", pos.getY());
-                entry.setInteger("z", pos.getZ());
-                list.appendTag(entry);
-            }
-            nbt.setTag("terraformingProtectedBlocks", list);
+        list = new NBTTagList();
+        for (BlockPos pos : proxylists.getProtectingBlocksForDimension(dimid)) {
+            NBTTagCompound entry = new NBTTagCompound();
+            entry.setInteger("x", pos.getX());
+            entry.setInteger("y", pos.getY());
+            entry.setInteger("z", pos.getZ());
+            list.appendTag(entry);
+        }
+        nbt.setTag("terraformingProtectedBlocks", list);
 
 
     }
+
     public void writeToNBT(NBTTagCompound nbt) {
         NBTTagList list;
 
@@ -1898,7 +1874,6 @@ public class DimensionProperties implements Cloneable, IDimensionProperties {
             nbt.setString("fillBlock", Block.REGISTRY.getNameForObject(fillerBlock.getBlock()).toString());
             nbt.setInteger("fillBlockMeta", fillerBlock.getBlock().getMetaFromState(fillerBlock));
         }
-
 
 
         writeTechnicalNBT(nbt);

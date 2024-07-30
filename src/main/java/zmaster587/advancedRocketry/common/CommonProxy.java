@@ -11,11 +11,13 @@ import zmaster587.advancedRocketry.api.ARConfiguration;
 import zmaster587.advancedRocketry.api.stations.ISpaceObject;
 import zmaster587.advancedRocketry.network.PacketLaserGun;
 import zmaster587.advancedRocketry.network.PacketStationUpdate;
+import zmaster587.advancedRocketry.terraforming.TerraformingList;
 import zmaster587.libVulpes.network.PacketHandler;
 
 public class CommonProxy {
 
     private static final zmaster587.advancedRocketry.dimension.DimensionManager dimensionManagerServer = new zmaster587.advancedRocketry.dimension.DimensionManager();
+    public final TerraformingList terraformingList = new TerraformingList();
 
     public void registerRenderers() {
 

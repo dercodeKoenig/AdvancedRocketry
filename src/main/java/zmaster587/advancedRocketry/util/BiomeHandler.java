@@ -1,38 +1,22 @@
 package zmaster587.advancedRocketry.util;
 
 import net.minecraft.block.*;
-import net.minecraft.block.material.Material;
 import net.minecraft.block.state.IBlockState;
-import net.minecraft.init.Biomes;
 import net.minecraft.init.Blocks;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.ChunkPos;
 import net.minecraft.world.World;
 import net.minecraft.world.biome.Biome;
 import net.minecraft.world.biome.BiomeDecorator;
-import net.minecraft.world.biome.BiomeProvider;
 import net.minecraft.world.chunk.Chunk;
-import net.minecraft.world.chunk.ChunkPrimer;
-import net.minecraft.world.gen.ChunkGeneratorOverworld;
-import net.minecraft.world.gen.feature.WorldGenAbstractTree;
 import net.minecraftforge.common.BiomeDictionary;
-import net.minecraftforge.fml.common.Loader;
-import org.lwjgl.Sys;
-import zmaster587.advancedRocketry.api.IPlanetaryProvider;
-import zmaster587.advancedRocketry.api.dimension.IDimensionProperties;
 import zmaster587.advancedRocketry.dimension.DimensionManager;
 import zmaster587.advancedRocketry.dimension.DimensionProperties;
 import zmaster587.advancedRocketry.network.PacketBiomeIDChange;
-import zmaster587.advancedRocketry.world.ChunkProviderPlanet;
-import zmaster587.advancedRocketry.world.provider.WorldProviderPlanet;
 import zmaster587.libVulpes.network.PacketHandler;
 import zmaster587.libVulpes.util.HashedBlockPosition;
 
-import java.lang.reflect.Field;
-import java.util.*;
-
-import static zmaster587.advancedRocketry.util.AstronomicalBodyHelper.getAverageTemperature;
-import static zmaster587.advancedRocketry.util.AstronomicalBodyHelper.getOrbitalPeriod;
+import java.util.Random;
 
 
 public class BiomeHandler {
@@ -88,19 +72,19 @@ public class BiomeHandler {
         startTime = System.currentTimeMillis();
         DimensionProperties props = DimensionManager.getInstance().getDimensionProperties(dimId);
 
-        ChunkPos cpos = DimensionProperties.proxylists.gethelper(props.getId()).getChunkPosFromBlockPos(pos);
+        ChunkPos cpos = DimensionProperties.proxylists.getHelper(props.getId()).getChunkPosFromBlockPos(pos);
 
 
-        IBlockState[] target_blocks = DimensionProperties.proxylists.gethelper(props.getId()).getBlocksAt(pos.getX(), pos.getZ());
-        chunkdata data = DimensionProperties.proxylists.gethelper(props.getId()).getChunkFromList(cpos.x, cpos.z);
+        IBlockState[] target_blocks = DimensionProperties.proxylists.getHelper(props.getId()).getBlocksAt(pos.getX(), pos.getZ());
+        chunkdata data = DimensionProperties.proxylists.getHelper(props.getId()).getChunkFromList(cpos.x, cpos.z);
         //System.out.println("d1"+(System.currentTimeMillis()-startTime));
         //startTime = System.currentTimeMillis();
 
         if (data.type == TerraformingType.PROTECTED){
             //System.out.println("working protected");
             decorate_simple(world, biomeId,old_biome, pos);
-            DimensionProperties.proxylists.gethelper(props.getId()).getChunkFromList(cpos.x, cpos.z).set_position_fully_generated(inchunkx,inchunkz);
-            DimensionProperties.proxylists.gethelper(props.getId()).register_height_change(pos); // it does not really changetheheight but it will notify the border to update
+            DimensionProperties.proxylists.getHelper(props.getId()).getChunkFromList(cpos.x, cpos.z).set_position_fully_generated(inchunkx,inchunkz);
+            DimensionProperties.proxylists.getHelper(props.getId()).register_height_change(pos); // it does not really changetheheight but it will notify the border to update
         }
         else if (data.type == TerraformingType.ALLOWED) {
             //System.out.println("working full");
@@ -120,10 +104,10 @@ public class BiomeHandler {
                 // or make it like this: every time a single position is fully generated, check every chunk 3x3 around it and see if you can populate them
                 // use the chunk list again - replace spiral mod  with global mode that scatters the chunks to make it a little more random. every new load it will start from its starting position again
                 if (get_height_blocks_only(world, pos) == get_height_blocks_only(target_blocks)) {
-                    DimensionProperties.proxylists.gethelper(props.getId()).getChunkFromList(cpos.x, cpos.z).set_position_fully_generated(inchunkx, inchunkz);
+                    DimensionProperties.proxylists.getHelper(props.getId()).getChunkFromList(cpos.x, cpos.z).set_position_fully_generated(inchunkx, inchunkz);
                 } else {
-                    DimensionProperties.proxylists.gethelper(props.getId()).add_position_to_queue(pos);
-                    DimensionProperties.proxylists.gethelper(props.getId()).register_height_change(pos);
+                    DimensionProperties.proxylists.getHelper(props.getId()).add_position_to_queue(pos);
+                    DimensionProperties.proxylists.getHelper(props.getId()).register_height_change(pos);
                 }
 
             }
@@ -189,21 +173,21 @@ public class BiomeHandler {
 
                 int new_height = get_height_blocks_only(world, pos);
                 if (prev_height != new_height) {
-                    DimensionProperties.proxylists.gethelper(props.getId()).register_height_change(pos);
-                    DimensionProperties.proxylists.gethelper(props.getId()).add_position_to_queue(pos);
+                    DimensionProperties.proxylists.getHelper(props.getId()).register_height_change(pos);
+                    DimensionProperties.proxylists.getHelper(props.getId()).add_position_to_queue(pos);
                 } else {
-                    DimensionProperties.proxylists.gethelper(props.getId()).check_next_border_chunk_fully_generated(cpos.x, cpos.z); // maybe this was the last border block in queue? if yes, its terrain is done!
+                    DimensionProperties.proxylists.getHelper(props.getId()).check_next_border_chunk_fully_generated(cpos.x, cpos.z); // maybe this was the last border block in queue? if yes, its terrain is done!
                 }
             }
-            else DimensionProperties.proxylists.gethelper(props.getId()).check_next_border_chunk_fully_generated(cpos.x, cpos.z); // maybe this was the last border block in queue? if yes, its terrain is done!
+            else DimensionProperties.proxylists.getHelper(props.getId()).check_next_border_chunk_fully_generated(cpos.x, cpos.z); // maybe this was the last border block in queue? if yes, its terrain is done!
 
 
         }
 
-        int can_populate = DimensionProperties.proxylists.gethelper(props.getId()).can_populate(cpos.x, cpos.z);
+        int can_populate = DimensionProperties.proxylists.getHelper(props.getId()).can_populate(cpos.x, cpos.z);
         if (can_populate == -1){
             //because it can never be populated, it is considered "done with population"
-            DimensionProperties.proxylists.gethelper(props.getId()).getChunkFromList(cpos.x, cpos.z).set_position_decorated(inchunkx, inchunkz);
+            DimensionProperties.proxylists.getHelper(props.getId()).getChunkFromList(cpos.x, cpos.z).set_position_decorated(inchunkx, inchunkz);
         }
         if (can_populate == 1) {
 
@@ -211,13 +195,13 @@ public class BiomeHandler {
             // we shift the actual tree generation by 8 blocks so that it overlaps with the chunks next to it
             // can_populate() ensures that the chunks next to it are ready for decoration
 
-            if (!DimensionProperties.proxylists.gethelper(props.getId()).getChunkFromList(cpos.x,cpos.z).fully_decorated[inchunkx][inchunkz]) {
+            if (!DimensionProperties.proxylists.getHelper(props.getId()).getChunkFromList(cpos.x,cpos.z).fully_decorated[inchunkx][inchunkz]) {
                 //System.out.println("decorate block");
                 int treegen = biomeId.decorator.treesPerChunk;
                 if (world.rand.nextInt(16 * 16) < treegen)
                     biomeId.getRandomTreeFeature(world.rand).generate(world, world.rand, world.getHeight(pos.add(8, 0, 8)));
 
-                DimensionProperties.proxylists.gethelper(props.getId()).getChunkFromList(cpos.x, cpos.z).set_position_decorated(inchunkx, inchunkz);
+                DimensionProperties.proxylists.getHelper(props.getId()).getChunkFromList(cpos.x, cpos.z).set_position_decorated(inchunkx, inchunkz);
             }
         }
     }
