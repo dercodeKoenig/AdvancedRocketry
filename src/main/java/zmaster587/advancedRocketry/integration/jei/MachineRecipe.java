@@ -87,7 +87,7 @@ public class MachineRecipe implements IRecipeWrapper {
         FontRenderer fontRendererObj = minecraft.fontRenderer;
         fontRendererObj.drawString(powerString, 0, 55, Color.black.getRGB());
 
-        String timeString = String.format("Time: %d s", time / 20);
+        String timeString = String.format("Time: %d t", time);
         fontRendererObj.drawString(timeString, recipeWidth - 55, 55, Color.black.getRGB());
 
     }
