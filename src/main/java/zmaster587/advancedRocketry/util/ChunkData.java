@@ -2,9 +2,8 @@ package zmaster587.advancedRocketry.util;
 
 import net.minecraft.block.state.IBlockState;
 import net.minecraft.world.World;
-import org.lwjgl.Sys;
 
-public class chunkdata {
+public class ChunkData {
     public int x;
     public int z;
     public TerraformingType type;
@@ -33,7 +32,7 @@ public class chunkdata {
     World world; // used to call populate after decoration is finished
     TerraformingHelper helper;
 
-    public chunkdata(int x, int z, IBlockState[][][] blockStates, World world, TerraformingHelper helper) {
+    public ChunkData(int x, int z, IBlockState[][][] blockStates, World world, TerraformingHelper helper) {
         this.x = x;
         this.world = world;
         this.helper = helper;

@@ -30,7 +30,7 @@ public class TerraformingHelper {
     public ChunkProviderPlanet generator;
     private DimensionProperties props;
 
-    private final Map<ChunkPos, chunkdata> chunkDataMap = new HashMap<>();
+    private final Map<ChunkPos, ChunkData> chunkDataMap = new HashMap<>();
 
 
     // A block is placed in queue if (OR)
@@ -61,7 +61,7 @@ public class TerraformingHelper {
         generator = new ChunkProviderPlanet(world, world.getSeed(), world.getWorldInfo().isMapFeaturesEnabled(), world.getWorldInfo().getGeneratorOptions());
 
         for (ChunkPos i : generated_chunks) {
-            chunkdata data = new chunkdata(i.x, i.z, null, world, this);
+            ChunkData data = new ChunkData(i.x, i.z, null, world, this);
             data.chunk_fully_generated = true;
             chunkDataMap.put(new ChunkPos(data.x, data.z), data);
         }
@@ -72,10 +72,10 @@ public class TerraformingHelper {
     //1 = yes
     // -1 = never (if it includes a type.PROTECTED chunk
     public int can_populate(int x, int z) {
-        chunkdata currentchunk = getChunkFromList(x, z);
-        chunkdata currentchunkx1 = getChunkFromList(x + 1, z);
-        chunkdata currentchunkz1 = getChunkFromList(x, z + 1);
-        chunkdata currentchunkx1z1 = getChunkFromList(x + 1, z + 1);
+        ChunkData currentchunk = getChunkFromList(x, z);
+        ChunkData currentchunkx1 = getChunkFromList(x + 1, z);
+        ChunkData currentchunkz1 = getChunkFromList(x, z + 1);
+        ChunkData currentchunkx1z1 = getChunkFromList(x + 1, z + 1);
 
         if (currentchunk != null && currentchunkz1 != null && currentchunkx1 != null && currentchunkx1z1 != null) {
 
@@ -93,7 +93,7 @@ public class TerraformingHelper {
      */
     public void register_height_change_actual(BlockPos pos) {
         ChunkPos cpos = getChunkPosFromBlockPos(pos);
-        chunkdata data = getChunkFromList(cpos.x, cpos.z);
+        ChunkData data = getChunkFromList(cpos.x, cpos.z);
         if (data != null && data.type == TerraformingType.BORDER)
             addPositionToQueue(pos);
     }
@@ -115,7 +115,7 @@ public class TerraformingHelper {
 
         for (int x = -1; x <= 1; x++) {
             for (int z = -1; z <= 1; z++) {
-                chunkdata data = getChunkFromList(px + x, pz + z);
+                ChunkData data = getChunkFromList(px + x, pz + z);
                 if (data == null) continue;
                 if (data != null && !data.terrain_fully_generated && data.type == TerraformingType.BORDER) {
                     int chunkposxlow = data.x * 16;
@@ -135,7 +135,7 @@ public class TerraformingHelper {
 
                     for (int x2 = -1; x2 <= 1; x2++) {
                         for (int z2 = -1; z2 <= 1; z2++) {
-                            chunkdata data2 = getChunkFromList(px + x + x2, pz + z + z2);
+                            ChunkData data2 = getChunkFromList(px + x + x2, pz + z + z2);
                             if (data2 == null) return;
                             if (data2.type == TerraformingType.ALLOWED) {
                                 if (!data2.terrain_fully_generated) {
@@ -198,13 +198,13 @@ public class TerraformingHelper {
     }
 
     public void recalculate_chunk_status() {
-        Iterator<Map.Entry<ChunkPos, chunkdata>> iterator = chunkDataMap.entrySet().iterator();
+        Iterator<Map.Entry<ChunkPos, ChunkData>> iterator = chunkDataMap.entrySet().iterator();
 
         while (iterator.hasNext()) {
 
-            Map.Entry<ChunkPos, chunkdata> entry = iterator.next();
+            Map.Entry<ChunkPos, ChunkData> entry = iterator.next();
 
-            chunkdata data = entry.getValue();
+            ChunkData data = entry.getValue();
 
             TerraformingType prevtype = data.type;
 
@@ -219,7 +219,7 @@ public class TerraformingHelper {
     }
 
 
-    public chunkdata getChunkFromList(int x, int z) {
+    public ChunkData getChunkFromList(int x, int z) {
         ChunkPos key = new ChunkPos(x, z);
         return chunkDataMap.get(key);
     }
@@ -259,7 +259,7 @@ public class TerraformingHelper {
 
     public IBlockState[] getBlocksAt(int x, int z) {
         ChunkPos cpos = getChunkPosFromBlockPos(new BlockPos(x, 0, z));
-        chunkdata data = getChunkFromList(cpos.x, cpos.z);
+        ChunkData data = getChunkFromList(cpos.x, cpos.z);
         if (data == null) {
             System.out.println("generate new chunk: " + cpos.x + ":" + cpos.z);
             ChunkPrimer primer = generator.getChunkPrimer(cpos.x, cpos.z, chunkMgrTerraformed);
@@ -273,7 +273,7 @@ public class TerraformingHelper {
                 }
             }
 
-            data = new chunkdata(cpos.x, cpos.z, blockStates, world, this);
+            data = new ChunkData(cpos.x, cpos.z, blockStates, world, this);
             chunkDataMap.put(new ChunkPos(data.x, data.z), data);
             data.type = get_chunk_type(data.x, data.z);
 

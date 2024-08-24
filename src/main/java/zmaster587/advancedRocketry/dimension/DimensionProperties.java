@@ -291,7 +291,7 @@ public class DimensionProperties implements Cloneable, IDimensionProperties {
 
             //System.out.println("add chunk to terraforming list: "+chunk.x+":"+chunk.z);
 
-            chunkdata current_chunk = proxylists.getHelper(getId()).getChunkFromList(chunk.x, chunk.z);
+            ChunkData current_chunk = proxylists.getHelper(getId()).getChunkFromList(chunk.x, chunk.z);
             if (current_chunk == null || !current_chunk.chunk_fully_generated) {
 
                 // do not add a chunk twice, the helper will manage it once it is added
