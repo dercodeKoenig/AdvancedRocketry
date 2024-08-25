@@ -923,8 +923,6 @@ public class EntityRocket extends EntityRocketBase implements INetworkEntity, IM
             for (Entity riddenByEntity : getPassengers()) {
                 if (riddenByEntity instanceof EntityPlayer) {
                     EntityPlayer player = (EntityPlayer) riddenByEntity;
-
-
                     PacketHandler.sendToPlayer(new PacketEntity(this, (byte) PacketType.FORCEMOUNT.ordinal()), player);
                 }
             }
@@ -980,7 +978,6 @@ public class EntityRocket extends EntityRocketBase implements INetworkEntity, IM
 
                     if (distanceSq < properties.getRenderSizeSolarView() * properties.getRenderSizeSolarView() * 8) {
                         this.spacePosition.world = (DimensionProperties) properties;
-
 
                         //Radius to put the player
                         double radius = -properties.getRenderSizePlanetView() * 16;
