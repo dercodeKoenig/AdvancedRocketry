@@ -239,7 +239,7 @@ public class TileRocketAssemblingMachine extends TileEntityRFConsumer implements
         return totalProgress > 0;
     }
 
-    public void scanRocket(World world, BlockPos pos2, AxisAlignedBB bb) {
+    public AxisAlignedBB scanRocket(World world, BlockPos pos2, AxisAlignedBB bb) {
         int thrustMonopropellant = 0;
         int thrustBipropellant = 0;
         int thrustNuclearNozzleLimit = 0;
@@ -337,7 +337,7 @@ public class TileRocketAssemblingMachine extends TileEntityRFConsumer implements
                                     monopropellantfuelUse += ((IRocketEngine) block).getFuelConsumptionRate(world, xCurr, yCurr, zCurr);
                                     thrustMonopropellant += ((IRocketEngine) block).getThrust(world, currBlockPos);
                                 }
-                                stats.addEngineLocation(x+0.5f, yCurr - actualMinY+0.5f, z+0.5f);
+                                stats.addEngineLocation(x + 0.5f, yCurr - actualMinY + 0.5f, z + 0.5f);
                             }
 
                             if (block instanceof IFuelTank) {
@@ -429,6 +429,8 @@ public class TileRocketAssemblingMachine extends TileEntityRFConsumer implements
             else
                 status = ErrorCodes.SUCCESS;
         }
+
+        return new AxisAlignedBB(actualMinX, actualMinY, actualMinZ, actualMaxX, actualMaxY, actualMaxZ);
     }
 
     private void removeReplaceableBlocks(AxisAlignedBB bb) {
@@ -455,8 +457,8 @@ public class TileRocketAssemblingMachine extends TileEntityRFConsumer implements
 
         if (bbCache == null || world.isRemote)
             return;
-        //Need to scan again b/c something may have changed
-        scanRocket(world, pos, bbCache);
+        // Need to scan again b/c something may have changed
+        AxisAlignedBB rocketBB = scanRocket(world, pos, bbCache);
 
         if (status != ErrorCodes.SUCCESS)
             return;
@@ -471,7 +473,10 @@ public class TileRocketAssemblingMachine extends TileEntityRFConsumer implements
             return;
         }
 
-        EntityRocket rocket = new EntityRocket(world, storageChunk, stats.copy(), bbCache.minX + (bbCache.maxX - bbCache.minX) / 2f + .5f, this.getPos().getY(), bbCache.minZ + (bbCache.maxZ - bbCache.minZ) / 2f + .5f);
+        EntityRocket rocket = new EntityRocket(world, storageChunk, stats.copy(),
+                rocketBB.minX + (rocketBB.maxX - rocketBB.minX) / 2f + .5f,
+                this.getPos().getY(),
+                rocketBB.minZ + (rocketBB.maxZ - rocketBB.minZ) / 2f + .5f);
 
         world.spawnEntity(rocket);
         NBTTagCompound nbtdata = new NBTTagCompound();
@@ -934,7 +939,7 @@ public class TileRocketAssemblingMachine extends TileEntityRFConsumer implements
         if (tile instanceof IInfrastructure) {
             HashedBlockPosition pos = new HashedBlockPosition(tile.getPos());
 
-            if (pos.getDistance(new HashedBlockPosition(this.pos)) > maxlinkDistance){
+            if (pos.getDistance(new HashedBlockPosition(this.pos)) > maxlinkDistance) {
                 if (!world.isRemote)
                     player.sendMessage(new TextComponentTranslation("the machine is too far away to be linked"));
                 return false;
