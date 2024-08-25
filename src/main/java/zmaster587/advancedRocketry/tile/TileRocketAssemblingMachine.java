@@ -357,7 +357,7 @@ public class TileRocketAssemblingMachine extends TileEntityRFConsumer implements
                             }
 
                             if (block instanceof BlockSeat && world.getBlockState(abovePos).getBlock().isPassable(world, abovePos)) {
-                                stats.addPassengerSeat((int) (x), yCurr - actualMinY, (int) (z));
+                                stats.addPassengerSeat((int) Math.floor(x), yCurr - actualMinY, (int) Math.floor(z));
                             }
 
                             if (block instanceof IMiningDrill) {

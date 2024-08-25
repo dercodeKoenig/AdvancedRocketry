@@ -599,6 +599,8 @@ public class EntityRocket extends EntityRocketBase implements INetworkEntity, IM
                             if (!connectedInfrastructure.contains(tile)) {
                                 linkInfrastructure(infrastructure);
 
+                                // TODO Translate
+
                                 if (!world.isRemote) {
                                     player.sendMessage(new TextComponentString("Linked successfully"));
                                 }
@@ -763,11 +765,10 @@ public class EntityRocket extends EntityRocketBase implements INetworkEntity, IM
                     atmosphere = handler.getAtmosphereType(this);
 
                 if (Minecraft.getMinecraft().gameSettings.particleSetting < 1 && world.getTotalWorldTime() % 10 == 0 && (engineNum < 8 || ((world.getTotalWorldTime() / 10) % Math.max((stats.getEngineLocations().size() / 8), 1)) == (engineNum / 8)) && (handler == null || (atmosphere != null && atmosphere.allowsCombustion())))
-                    AdvancedRocketry.proxy.spawnParticle("rocketSmoke", world, this.posX + vec.x, this.posY + vec.y - 0.75, this.posZ + vec.z, 0, 0, 0);
+                    AdvancedRocketry.proxy.spawnParticle("rocketSmoke", world, this.posX + vec.x, this.posY + vec.y - 0.75, this.posZ + vec.z, 0, -0.5, 0);
 
                 for (int i = 0; i < 4; i++) {
-                    AdvancedRocketry.proxy.spawnParticle("rocketFlame", world, this.posX + vec.x, this.posY + vec.y - 0.75, this.posZ + vec.z, (this.rand.nextFloat() - 0.5f) / 8f, -.75, (this.rand.nextFloat() - 0.5f) / 8f);
-
+                    AdvancedRocketry.proxy.spawnParticle("rocketFlame", world, this.posX + vec.x, this.posY + vec.y - 0.75, this.posZ + vec.z, (this.rand.nextFloat() - 0.5f) / 8f, -0.75, (this.rand.nextFloat() - 0.5f) / 8f);
                 }
             }
         }
@@ -2159,18 +2160,18 @@ public class EntityRocket extends EntityRocketBase implements INetworkEntity, IM
                 //Conditional b/c for some reason client/server positions do not match
                 float xOffset = this.storage.getSizeX() % 2 == 0 ? 0.5f : 0f;
                 float zOffset = this.storage.getSizeZ() % 2 == 0 ? 0.5f : 0f;
-                float halfy = storage.getSizeY() / 2f;
-                float halfx = storage.getSizeX() / 2f;
-                float halfz = storage.getSizeZ() / 2f;
+//                float halfy = storage.getSizeY() / 2f;
+//                float halfx = storage.getSizeX() / 2f;
+//                float halfz = storage.getSizeZ() / 2f;
 
-                double xPos = seatPos.x + xOffset - halfx+0.5;
-                double yPos = seatPos.y - 0.5f - halfy-0.5f;
-                double zPos = seatPos.z + zOffset - halfz+0.5;
+                double xPos = seatPos.x + xOffset;
+                double yPos = seatPos.y - 0.5f - 0.5f;
+                double zPos = seatPos.z + zOffset;
                 float angle = (float) (getRCSRotateProgress() * 0.9f * Math.PI / 180f);
 
                 double yNew = (yPos) * MathHelper.cos(angle) + (-zPos - 0.5) * MathHelper.sin(angle);
                 double zNew = zPos * MathHelper.cos(angle) + (yPos + 1) * MathHelper.sin(angle);
-                yPos = yNew + this.posY + halfy;
+                yPos = yNew + this.posY;
                 zPos = zNew;
 
                 //Now do yaw
@@ -2179,7 +2180,6 @@ public class EntityRocket extends EntityRocketBase implements INetworkEntity, IM
                 zNew = zPos * MathHelper.cos(yawAngle) + (xPos) * MathHelper.sin(yawAngle);
                 xPos = this.posX + xNew;
                 zPos = this.posZ + zNew;
-
 
                 entity.setPosition(xPos, yPos, zPos);
             } catch (IndexOutOfBoundsException e) {
