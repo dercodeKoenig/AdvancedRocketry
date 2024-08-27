@@ -22,7 +22,7 @@ import java.util.Random;
 
 public class BiomeHandler {
 
-    public static void decorate_simple(World world, Biome biomeId, Biome old_biome, BlockPos pos) {
+    public static void decorateSimple(World world, Biome biomeId, Biome old_biome, BlockPos pos) {
 
         BlockPos yy = world.getHeight(pos);
         while (!world.getBlockState(yy.down()).isOpaqueCube() && yy.getY() > 0)
@@ -82,7 +82,7 @@ public class BiomeHandler {
         switch (data.type) {
             case PROTECTED:
                 //System.out.println("working protected");
-                decorate_simple(world, biomeId, old_biome, pos);
+                decorateSimple(world, biomeId, old_biome, pos);
                 helper.getChunkFromList(cpos.x, cpos.z).set_position_fully_generated(inchunkx, inchunkz);
                 helper.register_height_change(pos); // it does not really changetheheight but it will notify the border to update
                 break;
@@ -216,7 +216,7 @@ public class BiomeHandler {
 
         //for biome remote use, only change top block and do simple decoration
         if (was_biome_remote) {
-            decorate_simple(world, biomeId, old_biome, pos);
+            decorateSimple(world, biomeId, old_biome, pos);
         }
 
         if (!was_biome_remote) { // heavy terraforming here...
