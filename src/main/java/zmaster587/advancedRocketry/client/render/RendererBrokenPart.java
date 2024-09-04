@@ -1,5 +1,6 @@
 package zmaster587.advancedRocketry.client.render;
 
+import net.minecraft.block.state.IBlockState;
 import net.minecraft.client.renderer.GlStateManager;
 import net.minecraft.client.renderer.tileentity.TileEntitySpecialRenderer;
 import net.minecraft.util.EnumFacing;
@@ -23,14 +24,15 @@ public class RendererBrokenPart extends TileEntitySpecialRenderer<TileBrokenPart
             GlStateManager.translate((float) x, (float) y, (float) z);
 
             if (tile.getBlockType() instanceof BlockFullyRotatable) {
-                EnumFacing facing = tile.getWorld().getBlockState(tile.getPos()).getValue(BlockFullyRotatable.FACING);
+                IBlockState state = tile.getWorld().getBlockState(tile.getPos());
+                EnumFacing facing = state.getBlock().getActualState(state, tile.getWorld(), tile.getPos()).getValue(BlockFullyRotatable.FACING);
                 Vec3i dir = facing.getDirectionVec();
                 GlStateManager.translate(0.5F, 0.5F, 0.5F);
                 if (dir.getY() > 0) {
                     GlStateManager.rotate(180.0F, 1.0F, 0.0F, 0.0F);
                 }
                 if (dir.getX() != 0) {
-                    GlStateManager.rotate(90.0F, 0.0F, 0.0F, dir.getX());
+                    GlStateManager.rotate(90.0F, 0.0F, 0.0F, -dir.getX());
                 }
                 if (dir.getZ() != 0) {
                     GlStateManager.rotate(90.0F, dir.getZ(), 0.0F, 0.0F);
