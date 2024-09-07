@@ -24,6 +24,7 @@ import net.minecraftforge.client.event.ModelRegistryEvent;
 import net.minecraftforge.common.BiomeDictionary;
 import net.minecraftforge.common.ForgeChunkManager;
 import net.minecraftforge.common.MinecraftForge;
+import net.minecraftforge.common.capabilities.CapabilityManager;
 import net.minecraftforge.common.config.Configuration;
 import net.minecraftforge.event.RegistryEvent;
 import net.minecraftforge.fluids.Fluid;
@@ -68,8 +69,12 @@ import zmaster587.advancedRocketry.dimension.DimensionProperties.Temps;
 import zmaster587.advancedRocketry.enchant.EnchantmentSpaceBreathing;
 import zmaster587.advancedRocketry.entity.*;
 import zmaster587.advancedRocketry.event.CableTickHandler;
+import zmaster587.advancedRocketry.event.CapabilityEventHandler;
 import zmaster587.advancedRocketry.event.PlanetEventHandler;
 import zmaster587.advancedRocketry.event.WorldEvents;
+import zmaster587.advancedRocketry.heat.DefaultHeatContainer;
+import zmaster587.advancedRocketry.heat.HeatContainerStorage;
+import zmaster587.advancedRocketry.heat.IHeatContainer;
 import zmaster587.advancedRocketry.integration.CompatibilityMgr;
 import zmaster587.advancedRocketry.integration.GalacticCraftHandler;
 import zmaster587.advancedRocketry.item.*;
@@ -1035,6 +1040,7 @@ public class AdvancedRocketry {
     public void postInit(FMLPostInitializationEvent event) {
 
         CapabilitySpaceArmor.register();
+        CapabilityManager.INSTANCE.register(IHeatContainer.class, new HeatContainerStorage(), DefaultHeatContainer.class);
         //Need to raise the Max Entity Radius to allow player interaction with rockets
         World.MAX_ENTITY_RADIUS = 20;
 
@@ -1086,6 +1092,8 @@ public class AdvancedRocketry {
 
         InputSyncHandler inputSync = new InputSyncHandler();
         MinecraftForge.EVENT_BUS.register(inputSync);
+
+        MinecraftForge.EVENT_BUS.register(new CapabilityEventHandler());
 
         MinecraftForge.EVENT_BUS.register(new MapGenLander());
         AdvancedRocketryAPI.gravityManager = new GravityHandler();

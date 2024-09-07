@@ -5,9 +5,13 @@ import net.minecraft.nbt.NBTTagList;
 import net.minecraft.tileentity.TileEntity;
 import net.minecraft.util.EnumFacing;
 import net.minecraft.util.EnumFacing.AxisDirection;
+import net.minecraft.util.ITickable;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.World;
 import net.minecraftforge.common.DimensionManager;
+import net.minecraftforge.common.capabilities.Capability;
+import net.minecraftforge.common.capabilities.CapabilityDispatcher;
+import net.minecraftforge.common.capabilities.ICapabilitySerializable;
 import net.minecraftforge.common.util.Constants.NBT;
 import net.minecraftforge.fml.common.FMLCommonHandler;
 import net.minecraftforge.fml.relauncher.Side;
@@ -32,10 +36,13 @@ import zmaster587.libVulpes.network.PacketHandler;
 import zmaster587.libVulpes.util.HashedBlockPosition;
 
 import javax.annotation.Nonnull;
+import javax.annotation.Nullable;
 import java.util.*;
 import java.util.Map.Entry;
 
-public class SpaceStationObject implements ISpaceObject, IPlanetDefiner {
+import static zmaster587.advancedRocketry.event.CapabilityEventHandler.gatherCapabilities;
+
+public class SpaceStationObject implements ISpaceObject, IPlanetDefiner, ITickable, ICapabilitySerializable<NBTTagCompound> {
     private final int MAX_FUEL = 10000;
     public boolean hasWarpCores = false;
     public int targetOrbitalDistance;
@@ -59,6 +66,9 @@ public class SpaceStationObject implements ISpaceObject, IPlanetDefiner {
     private double[] angularVelocity;
     private long lastTimeModification = 0;
     private DimensionProperties properties;
+    private final CapabilityDispatcher capabilities;
+    private int basicHeatDissipation;
+    private List<TileEntity> tileEntities;
 
     public SpaceStationObject() {
         properties = (DimensionProperties) zmaster587.advancedRocketry.dimension.DimensionManager.defaultSpaceDimensionProperties.clone();
@@ -75,6 +85,30 @@ public class SpaceStationObject implements ISpaceObject, IPlanetDefiner {
         knownPlanetList = new HashSet<>();
         angularVelocity = new double[3];
         rotation = new double[3];
+        capabilities = gatherCapabilities(SpaceStationObject.class, this);
+    }
+
+    @Override
+    public boolean hasCapability(Capability<?> capability, @Nullable EnumFacing facing) {
+        return capabilities != null && capabilities.hasCapability(capability, facing);
+    }
+
+    @Override
+    @Nullable
+    public <T> T getCapability(net.minecraftforge.common.capabilities.Capability<T> capability, @Nullable net.minecraft.util.EnumFacing facing) {
+        return capabilities == null ? null : capabilities.getCapability(capability, facing);
+    }
+
+    @Override
+    public void deserializeNBT(NBTTagCompound nbt) {
+        this.readFromNbt(nbt);
+    }
+
+    @Override
+    public NBTTagCompound serializeNBT() {
+        NBTTagCompound ret = new NBTTagCompound();
+        this.writeToNbt(ret);
+        return ret;
     }
 
     public long getExpireTime() {
@@ -849,5 +883,15 @@ public class SpaceStationObject implements ISpaceObject, IPlanetDefiner {
     @Override
     public boolean isStarKnown(StellarBody body) {
         return true;
+    }
+
+    private int ticksHandled;
+
+    @Override
+    public void update() {
+        if (ticksHandled++ == 20) {
+            ticksHandled = 0;
+
+        }
     }
 }
