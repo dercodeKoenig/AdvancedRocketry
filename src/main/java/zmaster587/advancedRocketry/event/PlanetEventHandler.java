@@ -292,7 +292,7 @@ public class PlanetEventHandler {
         if (!event.getWorld().isRemote && provider.getDimension() == ARConfiguration.getCurrentConfig().spaceDimId) {
             ISpaceObject spaceObj = SpaceObjectManager.getSpaceManager().getSpaceStationFromBlockCoords(event.getPos());
 
-            spaceObj.addBlock(state);
+            spaceObj.removeBlock(state);
             TileEntity te = event.getWorld().getTileEntity(event.getPos());
             if (te != null) {
                 spaceObj.removeTileEntity(te);

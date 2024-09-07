@@ -8,7 +8,6 @@ import net.minecraft.entity.Entity;
 import net.minecraft.tileentity.TileEntity;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.World;
-import zmaster587.advancedRocketry.util.IHeatHandler;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
@@ -47,7 +46,10 @@ public enum HeatHandler {
         try (Reader r = new FileReader(file)) {
             Gson GSON = new GsonBuilder().disableHtmlEscaping().create();
             JsonObject root = GSON.fromJson(r, JsonObject.class);
-            blockHeat.putAll(GSON.fromJson(root.getAsJsonObject("individual"), HashMap.class));
+            Map<String, Double> read = GSON.fromJson(root, HashMap.class);
+            for (Map.Entry<String, Double> entry : read.entrySet()) {
+                blockHeat.put(entry.getKey(), entry.getValue().intValue());
+            }
         } catch (Exception e) {
             e.printStackTrace();
         }

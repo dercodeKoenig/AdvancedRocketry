@@ -837,6 +837,7 @@ public class SpaceStationObject implements ISpaceObject, IPlanetDefiner, IHeatab
         }
         nbt.setTag("dockingPositons", list);
 
+        nbt.setInteger("basicHeatGeneration", basicHeatGeneration);
         NBTHelper.writeCollection("tileEntityPoses", nbt, this.tileEntities, te -> NBTHelper.writeBlockPos(te.getPos()));
     }
 
@@ -914,7 +915,10 @@ public class SpaceStationObject implements ISpaceObject, IPlanetDefiner, IHeatab
             dockingPoints.put(pos, str);
         }
 
-        tileEntityPoses = NBTHelper.readCollection("tileEntityPoses", nbt, ArrayList::new, NBTHelper::readBlockPos);
+        if (nbt.hasKey("tileEntityPoses")) {
+            basicHeatGeneration = nbt.getInteger("basicHeatGeneration");
+            tileEntityPoses = NBTHelper.readCollection("tileEntityPoses", nbt, ArrayList::new, NBTHelper::readBlockPos);
+        }
     }
 
     /**
