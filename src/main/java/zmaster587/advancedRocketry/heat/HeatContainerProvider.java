@@ -10,10 +10,10 @@ import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 
 @SuppressWarnings("ConstantConditions")
-public class HeatContainerCapability implements ICapabilitySerializable<NBTBase> {
+public class HeatContainerProvider implements ICapabilitySerializable<NBTBase> {
 
     @CapabilityInject(IHeatContainer.class)
-    private static final Capability<IHeatContainer> HEAT_CAP = null;
+    public static final Capability<IHeatContainer> HEAT_CAP = null;
 
     private final IHeatContainer instance = HEAT_CAP.getDefaultInstance();
 

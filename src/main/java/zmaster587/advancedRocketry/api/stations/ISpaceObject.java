@@ -1,11 +1,15 @@
 package zmaster587.advancedRocketry.api.stations;
 
+import net.minecraft.block.state.IBlockState;
 import net.minecraft.nbt.NBTTagCompound;
+import net.minecraft.tileentity.TileEntity;
 import net.minecraft.util.EnumFacing;
+import net.minecraft.util.ITickable;
 import zmaster587.advancedRocketry.api.dimension.IDimensionProperties;
+import zmaster587.advancedRocketry.heat.IHeatDissipator;
 import zmaster587.libVulpes.util.HashedBlockPosition;
 
-public interface ISpaceObject {
+public interface ISpaceObject extends ITickable {
 
     /**
      * @return id of the space object (NOT the DIMID)
@@ -133,6 +137,18 @@ public interface ISpaceObject {
      * @param z
      */
     void removeLandingPad(int x, int z);
+
+    void addTileEntity(TileEntity te);
+
+    void addHeatDissipator(IHeatDissipator dissipator);
+
+    void addBlock(IBlockState state);
+
+    void removeTileEntity(TileEntity te);
+
+    void removeHeatDissipator(IHeatDissipator dissipator);
+
+    void removeBlock(IBlockState state);
 
     /**
      * @param posX

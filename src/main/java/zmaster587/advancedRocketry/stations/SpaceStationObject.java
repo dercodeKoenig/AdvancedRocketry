@@ -1,11 +1,11 @@
 package zmaster587.advancedRocketry.stations;
 
+import net.minecraft.block.state.IBlockState;
 import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.nbt.NBTTagList;
 import net.minecraft.tileentity.TileEntity;
 import net.minecraft.util.EnumFacing;
 import net.minecraft.util.EnumFacing.AxisDirection;
-import net.minecraft.util.ITickable;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.World;
 import net.minecraftforge.common.DimensionManager;
@@ -24,6 +24,7 @@ import zmaster587.advancedRocketry.api.dimension.solar.StellarBody;
 import zmaster587.advancedRocketry.api.stations.ISpaceObject;
 import zmaster587.advancedRocketry.api.stations.IStorageChunk;
 import zmaster587.advancedRocketry.dimension.DimensionProperties;
+import zmaster587.advancedRocketry.heat.*;
 import zmaster587.advancedRocketry.inventory.IPlanetDefiner;
 import zmaster587.advancedRocketry.network.PacketSpaceStationInfo;
 import zmaster587.advancedRocketry.network.PacketStationUpdate;
@@ -42,7 +43,7 @@ import java.util.Map.Entry;
 
 import static zmaster587.advancedRocketry.event.CapabilityEventHandler.gatherCapabilities;
 
-public class SpaceStationObject implements ISpaceObject, IPlanetDefiner, ITickable, ICapabilitySerializable<NBTTagCompound> {
+public class SpaceStationObject implements ISpaceObject, IPlanetDefiner, IHeatable, ICapabilitySerializable<NBTTagCompound> {
     private final int MAX_FUEL = 10000;
     public boolean hasWarpCores = false;
     public int targetOrbitalDistance;
@@ -67,8 +68,11 @@ public class SpaceStationObject implements ISpaceObject, IPlanetDefiner, ITickab
     private long lastTimeModification = 0;
     private DimensionProperties properties;
     private final CapabilityDispatcher capabilities;
-    private int basicHeatDissipation;
-    private List<TileEntity> tileEntities;
+    private int basicHeatGeneration;
+    private final List<TileEntity> tileEntities = new ArrayList<>();
+    private final List<IHeatDissipator> heatDissipators = new ArrayList<>();
+
+    private int ticksHandled;
 
     public SpaceStationObject() {
         properties = (DimensionProperties) zmaster587.advancedRocketry.dimension.DimensionManager.defaultSpaceDimensionProperties.clone();
@@ -109,6 +113,33 @@ public class SpaceStationObject implements ISpaceObject, IPlanetDefiner, ITickab
         NBTTagCompound ret = new NBTTagCompound();
         this.writeToNbt(ret);
         return ret;
+    }
+
+    @Override
+    public void update() {
+        if (ticksHandled++ == 20) {
+            ticksHandled = 0;
+
+            int heatBalance = basicHeatGeneration;
+            for (TileEntity te : tileEntities) {
+                heatBalance += HeatHandler.INSTANCE.getHeat(te);
+            }
+            for (IHeatDissipator dissipator : heatDissipators) {
+                heatBalance -= dissipator.getDissipationPerSecond();
+            }
+            IHeatContainer heatContainer = this.getCapability(HeatContainerProvider.HEAT_CAP, null);
+            if (heatContainer == null) {
+                System.out.println("HEAT_CAP was not injected into the space station!!");
+                return;
+            }
+
+            heatContainer.addHeat(heatBalance);
+            System.out.println("Heat: " + heatContainer.getCurrentHeat() + ", max heat: " + heatContainer.getMaxHeat());
+
+            if (heatContainer.getCurrentHeat() > heatContainer.getMaxHeat()) {
+                System.out.println("Too much heat!");
+            }
+        }
     }
 
     public long getExpireTime() {
@@ -366,6 +397,36 @@ public class SpaceStationObject implements ISpaceObject, IPlanetDefiner, ITickab
         warpCoreLocation.remove(position);
         if (warpCoreLocation.size() == 0)
             hasWarpCores = false;
+    }
+
+    @Override
+    public void addTileEntity(TileEntity te) {
+        tileEntities.add(te);
+    }
+
+    @Override
+    public void addHeatDissipator(IHeatDissipator dissipator) {
+        heatDissipators.add(dissipator);
+    }
+
+    @Override
+    public void addBlock(IBlockState state) {
+        basicHeatGeneration += HeatHandler.INSTANCE.getHeat(state);
+    }
+
+    @Override
+    public void removeTileEntity(TileEntity te) {
+        tileEntities.remove(te);
+    }
+
+    @Override
+    public void removeHeatDissipator(IHeatDissipator dissipator) {
+        heatDissipators.remove(dissipator);
+    }
+
+    @Override
+    public void removeBlock(IBlockState state) {
+        basicHeatGeneration -= HeatHandler.INSTANCE.getHeat(state);
     }
 
     public List<HashedBlockPosition> getWarpCoreLocations() {
@@ -855,8 +916,6 @@ public class SpaceStationObject implements ISpaceObject, IPlanetDefiner, ITickab
 
     /**
      * True if the spawn location for this space object is not the default one assigned to it
-     *
-     * @return
      */
     @Override
     public boolean hasCustomSpawnLocation() {
@@ -877,21 +936,13 @@ public class SpaceStationObject implements ISpaceObject, IPlanetDefiner, ITickab
 
     @Override
     public boolean isPlanetKnown(IDimensionProperties properties) {
-        return !ARConfiguration.getCurrentConfig().planetsMustBeDiscovered || knownPlanetList.contains(properties.getId()) || zmaster587.advancedRocketry.dimension.DimensionManager.getInstance().knownPlanets.contains(properties.getId());
+        return !ARConfiguration.getCurrentConfig().planetsMustBeDiscovered
+                || knownPlanetList.contains(properties.getId())
+                || zmaster587.advancedRocketry.dimension.DimensionManager.getInstance().knownPlanets.contains(properties.getId());
     }
 
     @Override
     public boolean isStarKnown(StellarBody body) {
         return true;
-    }
-
-    private int ticksHandled;
-
-    @Override
-    public void update() {
-        if (ticksHandled++ == 20) {
-            ticksHandled = 0;
-
-        }
     }
 }

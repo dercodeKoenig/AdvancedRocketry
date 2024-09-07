@@ -298,6 +298,11 @@ public class SpaceObjectManager implements ISpaceObjectManager {
             return;
 
         long worldTime = DimensionManager.getWorld(ARConfiguration.getCurrentConfig().spaceDimId).getTotalWorldTime();
+
+        for (ISpaceObject spaceObject : stationLocations.values()) {
+            spaceObject.update();
+        }
+
         //Assuming server
         //If no dim undergoing transition then nextTransitionTick = -1
         if ((nextStationTransitionTick != -1 && worldTime >= nextStationTransitionTick && spaceStationOrbitMap.get(WARPDIMID) != null) || (nextStationTransitionTick == -1 && spaceStationOrbitMap.get(WARPDIMID) != null && !spaceStationOrbitMap.get(WARPDIMID).isEmpty())) {
@@ -312,7 +317,6 @@ public class SpaceObjectManager implements ISpaceObjectManager {
 
             nextStationTransitionTick = newNextTransitionTick;
         }
-
     }
 
     public void onServerStopped() {

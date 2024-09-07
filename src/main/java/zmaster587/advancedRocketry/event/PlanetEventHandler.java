@@ -1,6 +1,5 @@
 package zmaster587.advancedRocketry.event;
 
-import net.minecraft.block.BlockLiquid;
 import net.minecraft.block.BlockTorch;
 import net.minecraft.block.material.Material;
 import net.minecraft.block.state.IBlockState;
@@ -17,15 +16,13 @@ import net.minecraft.init.Items;
 import net.minecraft.inventory.EntityEquipmentSlot;
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
+import net.minecraft.tileentity.TileEntity;
 import net.minecraft.util.EnumFacing;
-import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Vec3d;
-import net.minecraft.util.text.ITextComponent;
 import net.minecraft.util.text.TextComponentString;
 import net.minecraft.world.World;
 import net.minecraft.world.WorldProvider;
 import net.minecraft.world.WorldServer;
-import net.minecraft.world.chunk.Chunk;
 import net.minecraftforge.client.event.EntityViewRenderEvent.FogColors;
 import net.minecraftforge.client.event.EntityViewRenderEvent.RenderFogEvent;
 import net.minecraftforge.event.entity.living.LivingEvent.LivingUpdateEvent;
@@ -34,7 +31,6 @@ import net.minecraftforge.event.entity.living.LivingSpawnEvent;
 import net.minecraftforge.event.entity.player.PlayerInteractEvent.RightClickBlock;
 import net.minecraftforge.event.entity.player.PlayerSleepInBedEvent;
 import net.minecraftforge.event.terraingen.OreGenEvent;
-import net.minecraftforge.event.terraingen.PopulateChunkEvent;
 import net.minecraftforge.event.world.BlockEvent;
 import net.minecraftforge.event.world.BlockEvent.PlaceEvent;
 import net.minecraftforge.event.world.ChunkEvent;
@@ -61,16 +57,15 @@ import zmaster587.advancedRocketry.dimension.DimensionManager;
 import zmaster587.advancedRocketry.dimension.DimensionProperties;
 import zmaster587.advancedRocketry.dimension.watersourcelocked;
 import zmaster587.advancedRocketry.entity.EntityRocket;
+import zmaster587.advancedRocketry.heat.IHeatDissipator;
 import zmaster587.advancedRocketry.network.PacketConfigSync;
 import zmaster587.advancedRocketry.network.PacketDimInfo;
 import zmaster587.advancedRocketry.network.PacketSpaceStationInfo;
 import zmaster587.advancedRocketry.network.PacketStellarInfo;
 import zmaster587.advancedRocketry.stations.SpaceObjectManager;
 import zmaster587.advancedRocketry.stations.SpaceStationObject;
-import zmaster587.advancedRocketry.util.BiomeHandler;
 import zmaster587.advancedRocketry.util.SpawnListEntryNBT;
 import zmaster587.advancedRocketry.util.TransitionEntity;
-import zmaster587.advancedRocketry.world.ChunkManagerPlanet;
 import zmaster587.advancedRocketry.world.provider.WorldProviderPlanet;
 import zmaster587.advancedRocketry.world.util.TeleporterNoPortal;
 import zmaster587.libVulpes.LibVulpes;
@@ -79,7 +74,9 @@ import zmaster587.libVulpes.network.PacketHandler;
 import zmaster587.libVulpes.util.HashedBlockPosition;
 
 import javax.annotation.Nonnull;
-import java.util.*;
+import java.util.Iterator;
+import java.util.LinkedList;
+import java.util.List;
 
 public class PlanetEventHandler {
 
@@ -263,6 +260,7 @@ public class PlanetEventHandler {
     public void blockPlacedEvent(@Nonnull PlaceEvent event) {
         WorldProvider provider = event.getWorld().provider;
         AtmosphereHandler atmhandler = AtmosphereHandler.getOxygenHandler(provider.getDimension());
+        IBlockState state = event.getPlacedBlock();
 
         if (!event.getWorld().isRemote && AtmosphereHandler.getOxygenHandler(provider.getDimension()) != null && atmhandler != null &&
                 !atmhandler.getAtmosphereType(event.getPos()).allowsCombustion()) {
@@ -273,6 +271,44 @@ public class PlanetEventHandler {
             } else if (zmaster587.advancedRocketry.api.ARConfiguration.getCurrentConfig().torchBlocks.contains(event.getPlacedBlock().getBlock())) {
                 event.setResult(Result.DENY);
                 event.setCanceled(true);
+            }
+        }
+
+        if (!event.getWorld().isRemote && provider.getDimension() == ARConfiguration.getCurrentConfig().spaceDimId) {
+            ISpaceObject spaceObj = SpaceObjectManager.getSpaceManager().getSpaceStationFromBlockCoords(event.getPos());
+
+            spaceObj.addBlock(state);
+            TileEntity te = event.getWorld().getTileEntity(event.getPos());
+            if (te != null) {
+                spaceObj.addTileEntity(te);
+                if (te instanceof IHeatDissipator) {
+                    spaceObj.addHeatDissipator((IHeatDissipator) te);
+                }
+            }
+            if (state.getBlock() instanceof IHeatDissipator) {
+                spaceObj.addHeatDissipator((IHeatDissipator) state.getBlock());
+            }
+        }
+    }
+
+    @SubscribeEvent
+    public void blockRemovedEvent(@Nonnull BlockEvent.BreakEvent event) {
+        WorldProvider provider = event.getWorld().provider;
+        IBlockState state = event.getState();
+
+        if (!event.getWorld().isRemote && provider.getDimension() == ARConfiguration.getCurrentConfig().spaceDimId) {
+            ISpaceObject spaceObj = SpaceObjectManager.getSpaceManager().getSpaceStationFromBlockCoords(event.getPos());
+
+            spaceObj.addBlock(state);
+            TileEntity te = event.getWorld().getTileEntity(event.getPos());
+            if (te != null) {
+                spaceObj.removeTileEntity(te);
+                if (te instanceof IHeatDissipator) {
+                    spaceObj.removeHeatDissipator((IHeatDissipator) te);
+                }
+            }
+            if (state.getBlock() instanceof IHeatDissipator) {
+                spaceObj.removeHeatDissipator((IHeatDissipator) state.getBlock());
             }
         }
     }
