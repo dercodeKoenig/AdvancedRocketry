@@ -32,6 +32,7 @@ import zmaster587.advancedRocketry.network.PacketStationUpdate.Type;
 import zmaster587.advancedRocketry.tile.station.TileDockingPort;
 import zmaster587.advancedRocketry.util.SpacePosition;
 import zmaster587.advancedRocketry.util.StationLandingLocation;
+import zmaster587.advancedRocketry.util.nbt.NBTHelper;
 import zmaster587.libVulpes.block.BlockFullyRotatable;
 import zmaster587.libVulpes.network.PacketHandler;
 import zmaster587.libVulpes.util.HashedBlockPosition;
@@ -40,6 +41,7 @@ import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 import java.util.*;
 import java.util.Map.Entry;
+import java.util.stream.Collectors;
 
 import static zmaster587.advancedRocketry.event.CapabilityEventHandler.gatherCapabilities;
 
@@ -69,8 +71,8 @@ public class SpaceStationObject implements ISpaceObject, IPlanetDefiner, IHeatab
     private DimensionProperties properties;
     private final CapabilityDispatcher capabilities;
     private int basicHeatGeneration;
-    private final List<TileEntity> tileEntities = new ArrayList<>();
-    private final List<IHeatDissipator> heatDissipators = new ArrayList<>();
+    private List<TileEntity> tileEntities = new ArrayList<>();
+    private List<BlockPos> tileEntityPoses = new ArrayList<>();
 
     private int ticksHandled;
 
@@ -120,12 +122,18 @@ public class SpaceStationObject implements ISpaceObject, IPlanetDefiner, IHeatab
         if (ticksHandled++ == 20) {
             ticksHandled = 0;
 
+            if (tileEntities == null) {
+                World world = FMLCommonHandler.instance().getMinecraftServerInstance().getWorld(ARConfiguration.getCurrentConfig().spaceDimId);
+                tileEntities = tileEntityPoses.stream().map(world::getTileEntity).collect(Collectors.toList());
+            }
+
             int heatBalance = basicHeatGeneration;
             for (TileEntity te : tileEntities) {
+                if (te instanceof IHeatDissipator) {
+                    heatBalance -= ((IHeatDissipator) te).getDissipationPerSecond();
+                    continue;
+                }
                 heatBalance += HeatHandler.INSTANCE.getHeat(te);
-            }
-            for (IHeatDissipator dissipator : heatDissipators) {
-                heatBalance -= dissipator.getDissipationPerSecond();
             }
             IHeatContainer heatContainer = this.getCapability(HeatContainerProvider.HEAT_CAP, null);
             if (heatContainer == null) {
@@ -405,11 +413,6 @@ public class SpaceStationObject implements ISpaceObject, IPlanetDefiner, IHeatab
     }
 
     @Override
-    public void addHeatDissipator(IHeatDissipator dissipator) {
-        heatDissipators.add(dissipator);
-    }
-
-    @Override
     public void addBlock(IBlockState state) {
         basicHeatGeneration += HeatHandler.INSTANCE.getHeat(state);
     }
@@ -417,11 +420,6 @@ public class SpaceStationObject implements ISpaceObject, IPlanetDefiner, IHeatab
     @Override
     public void removeTileEntity(TileEntity te) {
         tileEntities.remove(te);
-    }
-
-    @Override
-    public void removeHeatDissipator(IHeatDissipator dissipator) {
-        heatDissipators.remove(dissipator);
     }
 
     @Override
@@ -767,6 +765,7 @@ public class SpaceStationObject implements ISpaceObject, IPlanetDefiner, IHeatab
     @Override
     public void writeToNbt(NBTTagCompound nbt) {
         properties.writeToNBT(nbt);
+
         nbt.setInteger("id", getId());
         nbt.setInteger("launchposX", launchPosX);
         nbt.setInteger("launchposY", launchPosZ);
@@ -837,6 +836,8 @@ public class SpaceStationObject implements ISpaceObject, IPlanetDefiner, IHeatab
             list.appendTag(tag);
         }
         nbt.setTag("dockingPositons", list);
+
+        NBTHelper.writeCollection("tileEntityPoses", nbt, this.tileEntities, te -> NBTHelper.writeBlockPos(te.getPos()));
     }
 
     @Override
@@ -912,6 +913,8 @@ public class SpaceStationObject implements ISpaceObject, IPlanetDefiner, IHeatab
             String str = tag.getString("id");
             dockingPoints.put(pos, str);
         }
+
+        tileEntityPoses = NBTHelper.readCollection("tileEntityPoses", nbt, ArrayList::new, NBTHelper::readBlockPos);
     }
 
     /**

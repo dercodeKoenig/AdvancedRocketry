@@ -57,7 +57,6 @@ import zmaster587.advancedRocketry.dimension.DimensionManager;
 import zmaster587.advancedRocketry.dimension.DimensionProperties;
 import zmaster587.advancedRocketry.dimension.watersourcelocked;
 import zmaster587.advancedRocketry.entity.EntityRocket;
-import zmaster587.advancedRocketry.heat.IHeatDissipator;
 import zmaster587.advancedRocketry.network.PacketConfigSync;
 import zmaster587.advancedRocketry.network.PacketDimInfo;
 import zmaster587.advancedRocketry.network.PacketSpaceStationInfo;
@@ -281,12 +280,6 @@ public class PlanetEventHandler {
             TileEntity te = event.getWorld().getTileEntity(event.getPos());
             if (te != null) {
                 spaceObj.addTileEntity(te);
-                if (te instanceof IHeatDissipator) {
-                    spaceObj.addHeatDissipator((IHeatDissipator) te);
-                }
-            }
-            if (state.getBlock() instanceof IHeatDissipator) {
-                spaceObj.addHeatDissipator((IHeatDissipator) state.getBlock());
             }
         }
     }
@@ -303,12 +296,6 @@ public class PlanetEventHandler {
             TileEntity te = event.getWorld().getTileEntity(event.getPos());
             if (te != null) {
                 spaceObj.removeTileEntity(te);
-                if (te instanceof IHeatDissipator) {
-                    spaceObj.removeHeatDissipator((IHeatDissipator) te);
-                }
-            }
-            if (state.getBlock() instanceof IHeatDissipator) {
-                spaceObj.removeHeatDissipator((IHeatDissipator) state.getBlock());
             }
         }
     }

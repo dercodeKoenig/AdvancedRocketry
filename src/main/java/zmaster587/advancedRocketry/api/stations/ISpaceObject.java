@@ -6,7 +6,6 @@ import net.minecraft.tileentity.TileEntity;
 import net.minecraft.util.EnumFacing;
 import net.minecraft.util.ITickable;
 import zmaster587.advancedRocketry.api.dimension.IDimensionProperties;
-import zmaster587.advancedRocketry.heat.IHeatDissipator;
 import zmaster587.libVulpes.util.HashedBlockPosition;
 
 public interface ISpaceObject extends ITickable {
@@ -140,13 +139,9 @@ public interface ISpaceObject extends ITickable {
 
     void addTileEntity(TileEntity te);
 
-    void addHeatDissipator(IHeatDissipator dissipator);
-
     void addBlock(IBlockState state);
 
     void removeTileEntity(TileEntity te);
-
-    void removeHeatDissipator(IHeatDissipator dissipator);
 
     void removeBlock(IBlockState state);
 
