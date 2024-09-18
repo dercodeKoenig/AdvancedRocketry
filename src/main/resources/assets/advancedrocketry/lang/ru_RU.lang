@@ -109,6 +109,7 @@ tile.pipeSeal.name=Заглушка для трубы
 tile.spaceElevatorController.name=Космический лифт
 tile.beacon.name=Маяк
 tile.thermiteTorch.name=Термитный факел
+tile.heatdissipator.name=Теплорассеиватель
 
 tile.Dilithium.name=Руда дилития
 

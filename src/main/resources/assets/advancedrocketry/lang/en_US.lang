@@ -136,6 +136,7 @@ tile.basalt.name=Basalt
 tile.landingfloat.name=Landing Float
 tile.solararray.name=Solar Array
 tile.solararraypanel.name=Solar Array Panel
+tile.heatdissipator.name=Heat dissipator
 
 item.lens.0.name=Basic Lens
 item.wafer.0.name=Silicon Wafer

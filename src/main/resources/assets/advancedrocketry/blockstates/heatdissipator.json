@@ -1,0 +1,22 @@
+{
+    "forge_marker": 1,
+    "defaults": {
+        "transform": "forge:default-block",
+        "model": "minecraft:cube_all",
+        "textures": {
+            "all": "advancedrocketry:blocks/heatdissipator"
+        }
+    },
+    "variants": {
+        "facing=west,state=true": [{}],
+        "facing=east,state=true": [{}],
+        "facing=north,state=true": [{}],
+        "facing=south,state=true": [{}],
+        "facing=west,state=false": [{}],
+        "facing=east,state=false": [{}],
+        "facing=north,state=false": [{}],
+        "facing=south,state=false": [{}],
+        "normal": [{}],
+        "inventory": [{}]
+    }
+}
