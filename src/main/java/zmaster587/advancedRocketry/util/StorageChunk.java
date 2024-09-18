@@ -130,7 +130,10 @@ public class StorageChunk implements IBlockAccess, IStorageChunk, IWeighted, IBr
         for (int x = 0; x < this.sizeX; x++) {
             for (int y = 0; y < this.sizeY; y++) {
                 for (int z = 0; z < this.sizeZ; z++) {
-                    this.weight += WeightEngine.INSTANCE.getWeight(null, this.blocks[x][y][z]);
+                    Block block = this.blocks[x][y][z];
+                    if (block != null) {
+                        this.weight += WeightEngine.INSTANCE.getWeight(null, block);
+                    }
                 }
             }
         }
@@ -167,7 +170,8 @@ public class StorageChunk implements IBlockAccess, IStorageChunk, IWeighted, IBr
         int fuelCapacityNuclearWorkingFluid = 0;
 
         float drillPower = 0f;
-        stats.reset();
+        //stats.reset_no_fuel();
+        stats.reset_no_fuel();// Oh Quarter... you can not keep adding engine and seat locations every launch
 
         float weight = 0;
 
@@ -220,7 +224,7 @@ public class StorageChunk implements IBlockAccess, IStorageChunk, IWeighted, IBr
                         }
 
                         if (block instanceof BlockSeat && world.getBlockState(abovePos).getBlock().isPassable(world, abovePos)) {
-                            stats.addPassengerSeat(xCurr, yCurr, zCurr);
+                            stats.addPassengerSeat((int) (xCurr - (float) this.sizeX / 2 + 0.5f), yCurr, (int) (zCurr - (float) this.sizeZ / 2 + 0.5f));
                         }
 
                         if (block instanceof IMiningDrill) {
@@ -269,7 +273,7 @@ public class StorageChunk implements IBlockAccess, IStorageChunk, IWeighted, IBr
         stats.setFuelCapacity(FuelRegistry.FuelType.NUCLEAR_WORKING_FLUID, fuelCapacityNuclearWorkingFluid);
 
         //Non-fuel stats
-        stats.setWeight((int) weight);
+        stats.setWeight(weight);
         stats.setThrust(Math.max(Math.max(thrustMonopropellant, thrustBipropellant), thrustNuclearTotalLimit));
         stats.setDrillingPower(drillPower);
     }
@@ -1097,7 +1101,7 @@ public class StorageChunk implements IBlockAccess, IStorageChunk, IWeighted, IBr
                     this.metas[x][y][z] = buffer.readShort();
 
                     chunk.setBlockState(new BlockPos(x, y, z), this.blocks[x][y][z].getStateFromMeta(this.metas[x][y][z]));
-                    //world.checkLightFor(EnumSkyBlock.BLOCK,new BlockPos(x, y, z));
+                    world.checkLightFor(EnumSkyBlock.BLOCK,new BlockPos(x, y, z));
                 }
             }
         }

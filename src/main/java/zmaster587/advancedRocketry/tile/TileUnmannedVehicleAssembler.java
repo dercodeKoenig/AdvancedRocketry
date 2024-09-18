@@ -155,8 +155,8 @@ public class TileUnmannedVehicleAssembler extends TileRocketAssemblingMachine {
 
     //TODO get direction of rocket
     @Override
-    public void scanRocket(World world, BlockPos pos2, AxisAlignedBB bb) {
-
+    public AxisAlignedBB scanRocket(World world, BlockPos pos2, AxisAlignedBB bb) {
+        // TODO Refactor! Duplicated with TileRocketAssemblingMachine
         int thrustMonopropellant = 0;
         int thrustBipropellant = 0;
         int thrustNuclearNozzleLimit = 0;
@@ -321,11 +321,13 @@ public class TileUnmannedVehicleAssembler extends TileRocketAssemblingMachine {
             else
                 status = ErrorCodes.SUCCESS;
         }
+
+        return new AxisAlignedBB(actualMinX, actualMinY, actualMinZ, actualMaxX, actualMaxY, actualMaxZ);
     }
 
-    @Override
+
     public float getNeededFuel(@Nonnull FuelType fuelType) {
-        return getAcceleration(DimensionManager.getInstance().getDimensionProperties(world.provider.getDimension()).getGravitationalMultiplier()) > 0 ? stats.getFuelRate(fuelType) : 0;
+        return 1;
     }
 
     //No additional scanning is needed

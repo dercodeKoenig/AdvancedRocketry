@@ -1,0 +1,7 @@
+{
+    "variants": {
+        "default": { "model": "advancedrocketry:satelliteHatch" },
+        "inventory": { "model": "advancedrocketry:satelliteHatch" },
+        "normal": { "model": "advancedrocketry:satelliteHatch" }
+    }
+}

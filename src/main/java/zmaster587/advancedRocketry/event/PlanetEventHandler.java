@@ -186,10 +186,11 @@ public class PlanetEventHandler {
     //Handle gravity
     @SubscribeEvent
     public void playerTick(LivingUpdateEvent event) {
-
+/*
         if (event.getEntity().world.isRemote && event.getEntity().posY > 260 && event.getEntity().posY < 270 && event.getEntity().motionY < -.1) {
             RocketEventHandler.destroyOrbitalTextures(event.getEntity().world);
         }
+ */
         if (event.getEntity().isInWater()) {
             if (AtmosphereType.LOWOXYGEN.isImmune(event.getEntityLiving()))
                 event.getEntity().setAir(300);

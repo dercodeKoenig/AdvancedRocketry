@@ -23,6 +23,11 @@ public interface Afuckinginterface {
 
     public HashSet<ChunkPos> getChunksFullyTerraformed(int dim);
 
+
+    public void setChunksFullyBiomeChanged(int dim, HashSet<ChunkPos> lpos);
+
+    public HashSet<ChunkPos> getChunksFullyBiomeChanged(int dim);
+
     public void sethelper(int dim, TerraformingHelper helper);
 
     public TerraformingHelper gethelper(int dim);

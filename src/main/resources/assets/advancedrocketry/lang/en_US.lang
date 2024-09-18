@@ -16,7 +16,9 @@ entity.hovercraft.name=Hovercraft
 tile.landingPad.name=Landing Pad
 tile.seat.name=Seat
 tile.pad.name=Launch Pad
+tile.servicestation.name=Service station
 tile.servicemonitor.name=Service monitor
+tile.invhatch.name=Storage hatch
 tile.structuretower.name=Structure Tower
 tile.rocketAssembler.name=Rocket Assembling Machine
 tile.turf.name=Moon Turf
@@ -136,6 +138,7 @@ tile.basalt.name=Basalt
 tile.landingfloat.name=Landing Float
 tile.solararray.name=Solar Array
 tile.solararraypanel.name=Solar Array Panel
+tile.serviceStation.name=Service Station
 tile.heatdissipator.name=Heat dissipator
 tile.heatmonitor.name=Heat monitor
 
@@ -202,6 +205,7 @@ item.elevatorChip.name=Space Elevator Chip
 
 container.satellite=Satellite Bay
 container.monitoringstation=Monitoring Station
+container.invhatch=Storage hatch
 
 material.TitaniumAluminide.name=Titanium Aluminide
 material.TitaniumIridium.name=Titanium Iridium Alloy
@@ -441,7 +445,7 @@ msg.serviceStation.link=You program the linker with the service station at
 msg.heat.totalHeatNA=Total heat: N/A
 msg.heat.totalHeat=Total heat
 
-msg.itemsatellite.pwr=Power Storage: 
+msg.itemsatellite.pwr=Power Storage:
 msg.itemsatellite.nopwr=No Power Storage
 msg.itemsatellite.pwrgen=Power Generation: 
 msg.itemsatellite.nopwrgen=No Power Generation!

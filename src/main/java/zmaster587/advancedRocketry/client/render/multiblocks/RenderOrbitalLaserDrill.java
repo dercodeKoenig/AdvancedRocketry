@@ -73,15 +73,15 @@ public class RenderOrbitalLaserDrill extends TileEntitySpecialRenderer {
             for (float radius = 0.1F; radius < .5; radius += .1F) {
                 for (double i = 0; i < 2 * Math.PI; i += Math.PI) {
 
-                    buffer.pos(-x, -y - 100, -z).endVertex();
-                    buffer.pos(-x, -y - 100, -z).endVertex();
+                    buffer.pos(0, -y - 100,0).endVertex();
+                    buffer.pos(0, -y - 100, 0).endVertex();
                     buffer.pos(-(radius * Math.cos(i)) + 0.5F, 0, -(radius * Math.sin(i)) + 0.5F).endVertex();
                     buffer.pos((radius * Math.sin(i)) + 0.5F, 0, (radius * Math.cos(i)) + 0.5F).endVertex();
                 }
 
                 for (double i = 0; i < 2 * Math.PI; i += Math.PI) {
-                    buffer.pos(-x, -y - 100, -z).endVertex();
-                    buffer.pos(-x, -y - 100, -z).endVertex();
+                    buffer.pos(0, -y - 100, 0).endVertex();
+                    buffer.pos(0, -y - 100, 0).endVertex();
                     buffer.pos((radius * Math.sin(i)) + 0.5F, 0, -(radius * Math.cos(i)) + 0.5F).endVertex();
                     buffer.pos(-(radius * Math.cos(i)) + 0.5F, 0, (radius * Math.sin(i)) + 0.5F).endVertex();
                 }

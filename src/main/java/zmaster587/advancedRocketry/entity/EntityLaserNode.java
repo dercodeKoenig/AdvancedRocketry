@@ -5,12 +5,12 @@ import net.minecraft.entity.Entity;
 import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.util.DamageSource;
 import net.minecraft.util.SoundCategory;
-import net.minecraft.util.math.BlockPos;
+import net.minecraft.util.math.Vec3d;
+import net.minecraft.util.math.Vec3d;
 import net.minecraft.world.World;
 import net.minecraftforge.fml.relauncher.Side;
 import net.minecraftforge.fml.relauncher.SideOnly;
 import zmaster587.advancedRocketry.AdvancedRocketry;
-import zmaster587.advancedRocketry.api.AdvancedRocketryBlocks;
 import zmaster587.advancedRocketry.util.AudioRegistry;
 import zmaster587.libVulpes.LibVulpes;
 
@@ -22,11 +22,13 @@ public class EntityLaserNode extends Entity {
 
     // intentionally not saved, flag to determine if the entity controlling the laser is somehow disconnected
     boolean isValid = false;
+    private Vec3d poscorrection;
 
     public EntityLaserNode(World par1World) {
         super(par1World);
         ignoreFrustumCheck = true;
         noClip = true;
+        poscorrection = new Vec3d(0,0,0);
     }
 
     public EntityLaserNode(World world, double x, double y, double z) {
@@ -71,6 +73,16 @@ public class EntityLaserNode extends Entity {
             return;
         }
 
+        if (world.isRemote) {
+            double ct = 5;
+            double cx = poscorrection.x / ct;
+            double cy = poscorrection.y / ct;
+            double cz = poscorrection.z / ct;
+            poscorrection = poscorrection.subtract(cx, cy, cz);
+
+            this.setPosition(posX + cx, posY + cy, posZ + cz);
+
+        }
         super.onUpdate();
 
         if (this.world.isRemote) {
@@ -100,6 +112,19 @@ public class EntityLaserNode extends Entity {
         //double d1 = this.boundingBox.getAverageEdgeLength();
         //d1 *= 4096.0D * this.renderDistanceWeight;
         return par1 < 16777216D;
+    }
+
+
+
+    @Override
+    public void setPositionAndRotationDirect(double x, double y, double z, float yaw, float pitch, int posRotationIncrements, boolean teleport) {
+
+        Vec3d new_pos = new Vec3d(x, y, z);
+        poscorrection = new_pos.subtract(posX, posY, posZ);
+
+
+        //Vec3d new_pos = new Vec3d(x, y, z);
+        //poscorrection = new_pos.subtract(posX, posY, posZ);
     }
 
 

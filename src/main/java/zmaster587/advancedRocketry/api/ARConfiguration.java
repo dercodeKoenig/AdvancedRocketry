@@ -89,9 +89,9 @@ public class ARConfiguration {
     public boolean enableNausea = true;
     @ConfigProperty
     public boolean enableOxygen = true;
-    @ConfigProperty
+    @ConfigProperty(needsSync = true)
     public boolean launchingDestroysBlocks;
-    @ConfigProperty
+    @ConfigProperty(needsSync = true)
     public float buildSpeedMultiplier = 1f;
     @ConfigProperty
     public boolean generateCopper;
@@ -180,6 +180,10 @@ public class ARConfiguration {
     public float spaceLaserPowerMult;
     @ConfigProperty
     public float blockTankCapacity;
+    @ConfigProperty
+    public float blockEnergyHatchCapacityMultiplier;
+    @ConfigProperty
+    public float blockLiquidHatchCapacityMultiplier;
     @ConfigProperty
     public LinkedList<Integer> laserBlackListDims = new LinkedList<>();
     @ConfigProperty
@@ -276,6 +280,8 @@ public class ARConfiguration {
 
     @ConfigProperty
     public boolean advancedWeightSystem;
+    @ConfigProperty
+    public boolean advancedWeightSystemInventories;
 
     @ConfigProperty
     public boolean partsWearSystem;
@@ -356,6 +362,9 @@ public class ARConfiguration {
         arConfig.jetPackThrust = (float) config.get(Configuration.CATEGORY_GENERAL, "jetPackForce", 1.3, "Amount of force the jetpack provides with respect to gravity, 1 is the same acceleration as caused by Earth's gravity, 2 is 2x the acceleration caused by Earth's gravity, etc.  To make jetpack only work on low gravity planets, simply set it to a value less than 1").getDouble();
         arConfig.buildSpeedMultiplier = (float) config.get(Configuration.CATEGORY_GENERAL, "buildSpeedMultiplier", 1f, "Multiplier for the build speed of the Rocket Builder (0.5 is twice as fast 2 is half as fast").getDouble();
         arConfig.blockTankCapacity = (float) config.get(Configuration.CATEGORY_GENERAL, "blockTankCapacity", 1.0f, "Multiplier for the pressurized tank's (block) capacity", 0, Float.MAX_VALUE).getDouble();
+        arConfig.blockEnergyHatchCapacityMultiplier = (float) config.get(Configuration.CATEGORY_GENERAL, "blockEnergyHatchCapacityMultiplier", 1.0f, "Multiplier for the energy hatch capacity", 0, Float.MAX_VALUE).getDouble();
+        arConfig.blockLiquidHatchCapacityMultiplier = (float) config.get(Configuration.CATEGORY_GENERAL, "blockLiquidHatchCapacityMultiplier", 1.0f, "Multiplier for the liquid hatch (in/out) capacity", 0, Float.MAX_VALUE).getDouble();
+
         //Enriched Lava in the centrifuge
         arConfig.lavaCentrifugeOutputs = config.getStringList("lavaCentrifugeOutputs", Configuration.CATEGORY_GENERAL, new String[]{"nuggetCopper:100", "nuggetIron:100", "nuggetTin:100", "nuggetLead:100", "nuggetSilver:100", "nuggetGold:75", "nuggetDiamond:10", "nuggetUranium:10", "nuggetIridium:1"}, "Outputs and chances of objects from Enriched Lava in the Centrifuge.  Format: <oredictionaryEntry>:<weight>.  Larger weights are more frequent");
         arConfig.lavaCentrifugePower = config.getInt("lavaCentrifugePower", Configuration.CATEGORY_GENERAL, 10,0,999999,"The power per tick required to process enriched lava");
@@ -438,10 +447,10 @@ public class ARConfiguration {
         //Rockets
         arConfig.rocketRequireFuel = config.get(ROCKET, "rocketsRequireFuel", true, "Set to false if rockets should not require fuel to fly").getBoolean();
         arConfig.canBeFueledByHand = config.get(ROCKET, "canBeFueledByHand", true, "Set to false if rockets should not be able to be fueled by and and will require a fueling station").getBoolean();
-        liquidMonopropellant = config.get(ROCKET, "rocketFuels", new String[]{"rocketfuel;2"}, "List of fluid names for fluids that can be used as rocket monopropellants").getStringList();
-        liquidBipropellantFuel = config.get(ROCKET, "rocketBipropellants", new String[]{"hydrogen"}, "List of fluid names for fluids that can be used as rocket bipropellant fuels").getStringList();
-        liquidBipropellantOxidizer = config.get(ROCKET, "rocketOxidizers", new String[]{"oxygen"}, "List of fluid names for fluids that can be used as rocket bipropellant oxidizers").getStringList();
-        liquidNuclearWorkingFluid = config.get(ROCKET, "rocketNuclearWorkingFluids", new String[]{"hydrogen"}, "List of fluid names for fluids that can be used as rocket nuclear working fluids").getStringList();
+        liquidMonopropellant = config.get(ROCKET, "rocketFuels", new String[]{"rocketfuel;10"}, "List of fluid names for fluids that can be used as rocket monopropellants").getStringList();
+        liquidBipropellantFuel = config.get(ROCKET, "rocketBipropellants", new String[]{"hydrogen;10"}, "List of fluid names for fluids that can be used as rocket bipropellant fuels").getStringList();
+        liquidBipropellantOxidizer = config.get(ROCKET, "rocketOxidizers", new String[]{"oxygen;10"}, "List of fluid names for fluids that can be used as rocket bipropellant oxidizers").getStringList();
+        liquidNuclearWorkingFluid = config.get(ROCKET, "rocketNuclearWorkingFluids", new String[]{"hydrogen;10"}, "List of fluid names for fluids that can be used as rocket nuclear working fluids").getStringList();
         arConfig.rocketThrustMultiplier = config.get(ROCKET, "thrustMultiplier", 1f, "Multiplier for per-engine thrust").getDouble();
         arConfig.fuelCapacityMultiplier = config.get(ROCKET, "fuelCapacityMultiplier", 1f, "Multiplier for per-tank capacity").getDouble();
         arConfig.nuclearCoreThrustRatio = config.get(ROCKET, "nuclearCoreThrustRatio", 1.0, "The multiplier for the thrust of the nuclear core block. With default configuration, this value provides a (max) thrust of 1000 per core.").getDouble();
@@ -456,6 +465,7 @@ public class ARConfiguration {
         arConfig.launchingDestroysBlocks = config.get(ROCKET, "launchBlockDestruction", false, "If true rocket launches will kill plants, glass soil, turn rock into lava, and more").getBoolean();
         blackListRocketBlocksStr = config.getStringList("rocketBlockBlackList", ROCKET, new String[]{"minecraft:portal", "minecraft:bedrock", "minecraft:snow_layer", "minecraft:water", "minecraft:flowing_water", "minecraft:lava", "minecraft:flowing_lava", "minecraft:fire", "advancedrocketry:rocketfire"}, "Mod:Blockname  for example \"minecraft:chest\"");
         arConfig.advancedWeightSystem = config.get(ROCKET, "advancedWeightSystem", true, "Enables advanced weight system which computes rocket weight, including the handled inventories. Block weights are stores in weights.json").getBoolean();
+        arConfig.advancedWeightSystemInventories = config.get(ROCKET, "advancedWeightSystemInventories", true, "Enables advanced weight system for inventories - may not work with modded inventories (eg IE storage chests)").getBoolean();
         arConfig.partsWearSystem = config.get(ROCKET, "partsWearSystem", true, "Enables rocket parts wear subsystem. Every rocket start it has probability to explode based on parts' wear intensities").getBoolean();
         arConfig.increaseWearIntensityProb = config.get(ROCKET, "increaseWearIntensityProb", 0.025, "Every rocket usage every part has this probability to increase wear intensity").getDouble();
 

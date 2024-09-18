@@ -60,7 +60,7 @@ public class TileStationAssembler extends TileRocketAssemblingMachine implements
     }
 
     @Override
-    public void scanRocket(World world, BlockPos pos2, AxisAlignedBB bb) {
+    public AxisAlignedBB scanRocket(World world, BlockPos pos2, AxisAlignedBB bb) {
 
         int actualMinX = (int) bb.maxX,
                 actualMinY = (int) bb.maxY,
@@ -94,6 +94,8 @@ public class TileStationAssembler extends TileRocketAssemblingMachine implements
         }
 
         status = ErrorCodes.SUCCESS_STATION;
+
+        return new AxisAlignedBB(actualMinX, actualMinY, actualMinZ, actualMaxX, actualMaxY, actualMaxZ);
     }
 
 

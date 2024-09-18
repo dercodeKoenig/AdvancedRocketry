@@ -10,6 +10,6 @@ public class MaterialGeode extends Material {
     public MaterialGeode(MapColor p_i2116_1_) {
         super(p_i2116_1_);
         this.setRequiresTool();
+        this.setNoPushMobility();
     }
-
 }

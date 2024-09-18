@@ -48,6 +48,7 @@ public class TileRocketMonitoringStation extends TileEntity implements IModularI
     int rocketHeight;
     int velocity;
     int fuelLevel, maxFuelLevel;
+    int oxidizerFuelLevel;
 
     public TileRocketMonitoringStation() {
         mission = null;
@@ -243,6 +244,7 @@ public class TileRocketMonitoringStation extends TileEntity implements IModularI
         modules.add(new ModuleProgress(98, 4, 0, new IndicatorBarImage(2, 7, 12, 81, 17, 0, 6, 6, 1, 0, EnumFacing.UP, TextureResources.rocketHud), this));
         modules.add(new ModuleProgress(120, 14, 1, new IndicatorBarImage(2, 95, 12, 71, 17, 0, 6, 6, 1, 0, EnumFacing.UP, TextureResources.rocketHud), this));
         modules.add(new ModuleProgress(142, 14, 2, new ProgressBarImage(2, 173, 12, 71, 17, 6, 3, 69, 1, 1, EnumFacing.UP, TextureResources.rocketHud), this));
+        modules.add(new ModuleProgress(148, 14, 6, new ProgressBarImage(2, 173, 12, 71, 17, 75, 3, 69, 1, 1, EnumFacing.UP, TextureResources.rocketHud), this));
 
         //modules.add(redstoneControl);
         setMissionText();
@@ -319,6 +321,8 @@ public class TileRocketMonitoringStation extends TileEntity implements IModularI
             velocity = progress;
         else if (id == 2)
             fuelLevel = progress;
+        else if (id == 6)
+            oxidizerFuelLevel = progress;
     }
 
     @Override
@@ -333,15 +337,20 @@ public class TileRocketMonitoringStation extends TileEntity implements IModularI
                 return velocity;
             else if (id == 2)
                 return fuelLevel;
+            else if (id == 6)
+                return oxidizerFuelLevel;
 
         if (linkedRocket == null)
             return 0;
+
         if (id == 0)
             return (int) linkedRocket.posY;
         else if (id == 1)
             return (int) (linkedRocket.motionY * 100);
         else if (id == 2)
-            return (linkedRocket.getRocketFuelType() == FuelRegistry.FuelType.LIQUID_BIPROPELLANT) ? linkedRocket.getFuelAmount(linkedRocket.getRocketFuelType()) + linkedRocket.getFuelAmount(FuelRegistry.FuelType.LIQUID_OXIDIZER) : linkedRocket.getFuelAmount(linkedRocket.getRocketFuelType());
+            return  linkedRocket.getFuelAmount(linkedRocket.getRocketFuelType());
+        else if (id == 6)
+            return  linkedRocket.getFuelAmount(FuelRegistry.FuelType.LIQUID_OXIDIZER);
 
         return 0;
     }
@@ -351,21 +360,32 @@ public class TileRocketMonitoringStation extends TileEntity implements IModularI
         if (id == 0)
             return ARConfiguration.getCurrentConfig().orbit;
         else if (id == 1)
-            return 200;
+            return 1000;
         else if (id == 2)
             if (world.isRemote)
                 return maxFuelLevel;
             else if (linkedRocket == null)
                 return 0;
             else
-                return (linkedRocket.getRocketFuelType() == FuelRegistry.FuelType.LIQUID_BIPROPELLANT) ? linkedRocket.getFuelCapacity(linkedRocket.getRocketFuelType()) + linkedRocket.getFuelCapacity(FuelRegistry.FuelType.LIQUID_OXIDIZER) : linkedRocket.getFuelCapacity(linkedRocket.getRocketFuelType());
+                return linkedRocket.getFuelCapacity(linkedRocket.getRocketFuelType());
+
+        else if (id == 6)
+            if (world.isRemote)
+                return maxFuelLevel;
+            else if (linkedRocket == null)
+                return 0;
+            else
+                return linkedRocket.getFuelCapacity(FuelRegistry.FuelType.LIQUID_OXIDIZER);
+
+
+
         return 1;
     }
 
     @Override
     public void setTotalProgress(int id, int progress) {
         //Should only become an issue if configs are desynced or fuel
-        if (id == 2)
+        if (id == 2 || id == 6)
             maxFuelLevel = progress;
     }
 

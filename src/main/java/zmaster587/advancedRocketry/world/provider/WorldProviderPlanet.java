@@ -11,7 +11,6 @@ import net.minecraft.util.math.MathHelper;
 import net.minecraft.util.math.Vec3d;
 import net.minecraft.world.DimensionType;
 import net.minecraft.world.WorldProvider;
-import net.minecraft.world.biome.BiomeProvider;
 import net.minecraft.world.chunk.Chunk;
 import net.minecraft.world.gen.IChunkGenerator;
 import net.minecraft.world.storage.DerivedWorldInfo;
@@ -280,7 +279,7 @@ public class WorldProviderPlanet extends WorldProvider implements IPlanetaryProv
     //No clouds
     @Override
     public float getCloudHeight() {
-        return getAtmosphereDensity(new BlockPos(0, 0, 0)) > .75f ? 128 : -2000;
+        return getAtmosphereDensity(new BlockPos(0, 0, 0)) > .75f ? 128 : -200000;
     }
 
     @Override

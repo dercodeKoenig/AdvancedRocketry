@@ -5,11 +5,15 @@
         "model": "minecraft:orientable",
         "textures": {
             "top": "libvulpes:blocks/machinegeneric",
-            "front": "advancedrocketry:blocks/servicemachine",
+            "front": "advancedrocketry:blocks/servicemonitor",
             "side": "libvulpes:blocks/machinegeneric"
         }
     },
     "variants": {
+        "facing=north": [{}],
+        "facing=south": { "model": "minecraft:orientable", "y": 180},
+        "facing=west":  { "model": "minecraft:orientable", "y": 270 },
+        "facing=east":  { "model": "minecraft:orientable", "y": 90 },
         "normal": [{}],
         "inventory" : [{}]
     }

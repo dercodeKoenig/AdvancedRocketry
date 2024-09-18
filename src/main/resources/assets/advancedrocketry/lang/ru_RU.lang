@@ -9,6 +9,7 @@ entity.rocket.name=Ракета
 tile.landingPad.name=Посадочная площадка
 tile.serviceStation.name=Станция техобслуживания
 tile.servicemonitor.name=Монитор состояния
+tile.invhatch.name=Отсек хранения
 tile.seat.name=Сиденье
 tile.pad.name=Стартовая площадка
 tile.structuretower.name=Структурная башня
@@ -185,6 +186,7 @@ container.satellite=Отсек для спутника
 container.monitoringstation=Станция мониторинга
 container.satelliteMonitor=Спутниковый терминал
 container.servicestation=Станция техобслуживания
+container.invhatch=Отсек хранения
 
 enchantment.spaceBreathing=Герметичная изоляция
 

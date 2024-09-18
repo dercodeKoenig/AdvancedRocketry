@@ -93,8 +93,15 @@ import java.util.*;
 public class EntityRocket extends EntityRocketBase implements INetworkEntity, IModularInventory, IProgressBar, IButtonInventory, ISelectionNotify, IPlanetDefiner {
 
     // set to 2 seconds because keyboard event is not sent to server
-    // might be a temporary solution. Better be stuck 2 seconds than 25 seconds.
+    // might be a temporary solution. Better be stuck 2 seconds than 25 seconds. but it needs 1 second to load
     private static final int DESCENT_TIMER = 2*20;
+
+    //client sync stuff
+    private Vec3d poscorrection;
+    private Vec3d velcorrection;
+    boolean last_was_in_orbit = false;
+    boolean        reset_position = true;
+    boolean reset_motion = true;
 
     private static final int BUTTON_ID_OFFSET = 25;
     private static final int STATION_LOC_OFFSET = 50;
@@ -135,6 +142,12 @@ public class EntityRocket extends EntityRocketBase implements INetworkEntity, IM
     private boolean rcs_mode = false;
     public EntityRocket(World p_i1582_1_) {
         super(p_i1582_1_);
+
+        poscorrection = new Vec3d(0,0,0);
+        velcorrection = new Vec3d(0,0,0);
+        reset_position = true;
+        reset_motion = true;
+
         isInOrbit = false;
         stats = new StatsRocket();
         isInFlight = false;
@@ -339,8 +352,10 @@ public class EntityRocket extends EntityRocketBase implements INetworkEntity, IM
                 displayStr += "\n" + LibVulpes.proxy.getLocalizedString("msg.entity.rocket.rcs") + ": " + getRCS();
         }
 
-        if (isInOrbit() && !isInFlight())
-            return LibVulpes.proxy.getLocalizedString("msg.entity.rocket.descend.1") + "\n" + LibVulpes.proxy.getLocalizedString("msg.entity.rocket.descend.2") + ((DESCENT_TIMER - this.ticksExisted) / 20);
+        if (isInOrbit() && !isInFlight()) {
+            //return LibVulpes.proxy.getLocalizedString("msg.entity.rocket.descend.1") + "\n" + LibVulpes.proxy.getLocalizedString("msg.entity.rocket.descend.2") + ((DESCENT_TIMER - this.ticksExisted) / 20);
+            return super.getTextOverlay();
+        }
         else if (!isInFlight())
             return LibVulpes.proxy.getLocalizedString("msg.entity.rocket.ascend.1") + "\n" + LibVulpes.proxy.getLocalizedString("msg.entity.rocket.ascend.2") + displayStr;
 
@@ -599,6 +614,8 @@ public class EntityRocket extends EntityRocketBase implements INetworkEntity, IM
                             if (!connectedInfrastructure.contains(tile)) {
                                 linkInfrastructure(infrastructure);
 
+                                // TODO Translate
+
                                 if (!world.isRemote) {
                                     player.sendMessage(new TextComponentString("Linked successfully"));
                                 }
@@ -726,7 +743,18 @@ public class EntityRocket extends EntityRocketBase implements INetworkEntity, IM
     }
 
     public boolean isDescentPhase() {
-        return ARConfiguration.getCurrentConfig().automaticRetroRockets && isInOrbit() && ((this.posY < 500 && (this.motionY < -0.5f || world.isRemote)) || (this.posY < 200 && (this.motionY < -0.2f || world.isRemote)));
+        int ch = world.getHeight((int) posX, (int) posZ);
+        return ARConfiguration.getCurrentConfig().automaticRetroRockets &&
+                isInOrbit() &&
+                (
+                        (this.posY < ch + 300 && (this.motionY < -0.5f || world.isRemote)) ||
+                                (this.posY < ch + 150 && (this.motionY < -0.4f || world.isRemote)) ||
+                                (this.posY < ch + 100 && (this.motionY < -0.3f || world.isRemote)) ||
+                                (this.posY < ch + 70 && (this.motionY < -0.2f || world.isRemote)) ||
+                                (this.posY < ch + 50 && (this.motionY < -0.14f || world.isRemote)) ||
+                                (this.posY < ch + 20 && (this.motionY < -0.5f || world.isRemote))||
+                                (this.posY < ch + 10 && (this.motionY < -0.05f || world.isRemote))
+                );
     }
 
     public boolean isStartupPhase() {
@@ -750,10 +778,40 @@ public class EntityRocket extends EntityRocketBase implements INetworkEntity, IM
         return this.motionY > 0 || isDescentPhase() || (getPassengerMovingForward() > 0) || isStartupPhase();
     }
 
+
+
+    @Override
+    public void setPositionAndRotationDirect(double x, double y, double z, float yaw, float pitch, int posRotationIncrements, boolean teleport) {
+
+        if(last_was_in_orbit != this.dataManager.get(INORBIT)){
+            last_was_in_orbit = this.dataManager.get(INORBIT);
+            reset_motion= true;
+            reset_position = true;
+        }
+
+        if (reset_position){
+            this.setPosition(x,y,z);
+            reset_position = false;
+        }else {
+            Vec3d new_pos = new Vec3d(x, y, z);
+            poscorrection = new_pos.subtract(posX, posY, posZ);
+        }
+
+
+        //Vec3d new_pos = new Vec3d(x, y, z);
+        //poscorrection = new_pos.subtract(posX, posY, posZ);
+    }
+
+
+
     private void runEngines() {
         //Spawn in the particle effects for the engines
-        int engineNum = 0;
-        if (world.isRemote && Minecraft.getMinecraft().gameSettings.particleSetting < 2 && areEnginesRunning()) {
+        int max_engine_for_smoke = 16;
+        int engineNum = stats.getEngineLocations().size();
+        //System.out.println("engine locs:"+engineNum);
+
+
+        if (world.isRemote && areEnginesRunning()) {
             for (Vector3F<Float> vec : stats.getEngineLocations()) {
 
                 AtmosphereHandler handler = AtmosphereHandler.getOxygenHandler(world.provider.getDimension());
@@ -762,11 +820,34 @@ public class EntityRocket extends EntityRocketBase implements INetworkEntity, IM
                 if (handler != null)
                     atmosphere = handler.getAtmosphereType(this);
 
-                if (Minecraft.getMinecraft().gameSettings.particleSetting < 1 && world.getTotalWorldTime() % 10 == 0 && (engineNum < 8 || ((world.getTotalWorldTime() / 10) % Math.max((stats.getEngineLocations().size() / 8), 1)) == (engineNum / 8)) && (handler == null || (atmosphere != null && atmosphere.allowsCombustion())))
-                    AdvancedRocketry.proxy.spawnParticle("rocketSmoke", world, this.posX + vec.x, this.posY + vec.y - 0.75, this.posZ + vec.z, 0, 0, 0);
 
-                for (int i = 0; i < 4; i++) {
-                    AdvancedRocketry.proxy.spawnParticle("rocketFlame", world, this.posX + vec.x, this.posY + vec.y - 0.75, this.posZ + vec.z, (this.rand.nextFloat() - 0.5f) / 8f, -.75, (this.rand.nextFloat() - 0.5f) / 8f);
+                boolean can_smoke = true;
+                if (engineNum > max_engine_for_smoke) {
+                    can_smoke = rand.nextInt(engineNum) <= max_engine_for_smoke;
+                }
+
+                if (Minecraft.getMinecraft().gameSettings.particleSetting < 2 && can_smoke && Minecraft.getMinecraft().gameSettings.particleSetting < 1 && (handler == null || (atmosphere != null && atmosphere.allowsCombustion()))) {
+                    for (int i = 0; i < 3; i++) {
+
+
+                        double yo = 1 + this.rand.nextFloat();
+                        float xzv = 16f;
+                        if (motionY > 0)
+                            xzv = 32;
+
+                        double motionz = (this.rand.nextFloat() - 0.5f);
+                        double motionx = (this.rand.nextFloat() - 0.5f);
+                        double speed = (this.rand.nextFloat()) / xzv;
+                        double speedxz = Math.sqrt(motionx * motionx + motionz * motionz);
+                        motionx *= speed / speedxz;
+                        motionz *= speed / speedxz;
+
+
+                        AdvancedRocketry.proxy.spawnDynamicRocketSmoke(world, this.posX + vec.x, this.posY + vec.y - yo, this.posZ + vec.z, motionx, -0.75 - this.rand.nextFloat() / 6.0, motionz, engineNum);
+                    }
+                }
+                for (float i = 0; i < 15; i++) {
+                        AdvancedRocketry.proxy.spawnDynamicRocketFlame(world, this.posX + vec.x, this.posY + vec.y - 0.9 - (i*0.1f), this.posZ + vec.z, (this.rand.nextFloat() - 0.5f) / 6f, -0.75, (this.rand.nextFloat() - 0.5f) / 6f, engineNum);
 
                 }
             }
@@ -858,11 +939,64 @@ public class EntityRocket extends EntityRocketBase implements INetworkEntity, IM
         PacketHandler.sendToNearby(new PacketEntity(this, (byte) 0, nbtdata), world.provider.getDimension(), new BlockPos(this), 64);
     }
 
+
+    //stfu
+
+    @Override
+    public void setVelocity(double x, double y, double z) {
+
+        if (reset_motion){
+            velcorrection = new Vec3d(0,0,0);
+            this.motionX = x;
+            this.motionY = y;
+            this.motionZ = z;
+            reset_motion = false;
+        }else {
+            Vec3d new_vel = new Vec3d(x, y, z);
+            velcorrection = new_vel.subtract(motionX, motionY, motionZ);
+        }
+
+
+        //Vec3d new_vel = new Vec3d(x, y, z);
+        //velcorrection = new_vel.subtract(motionX, motionY, motionZ);
+    }
+
+
+
     @Override
     public void onUpdate() {
         super.onUpdate();
         long deltaTime = world.getTotalWorldTime() - lastWorldTickTicked;
         lastWorldTickTicked = world.getTotalWorldTime();
+
+        if (world.isRemote) {
+
+            double ct = 50;
+
+            if (!this.dataManager.get(INORBIT) && poscorrection.y < -0.01) {
+                // if this code runs, rocket is out of fuel and will have a hard crash. no smooth syncing!
+                ct = 1;
+            }
+
+
+                double cx = poscorrection.x / ct;
+                double cy = poscorrection.y / ct;
+                double cz = poscorrection.z / ct;
+                poscorrection = poscorrection.subtract(cx, cy, cz);
+                this.setPosition(posX + cx, posY + cy, posZ + cz);
+
+
+                double ct2 = 10;
+                double vx = velcorrection.x / ct2;
+                double vy = velcorrection.y / ct2;
+                double vz = velcorrection.z / ct2;
+                velcorrection = velcorrection.subtract(vx, vy, vz);
+
+                motionX += vx;
+                motionY += vy;
+                motionZ += vz;
+
+        }
 
         if (this.ticksExisted == 20) {
 
@@ -922,8 +1056,6 @@ public class EntityRocket extends EntityRocketBase implements INetworkEntity, IM
             for (Entity riddenByEntity : getPassengers()) {
                 if (riddenByEntity instanceof EntityPlayer) {
                     EntityPlayer player = (EntityPlayer) riddenByEntity;
-
-
                     PacketHandler.sendToPlayer(new PacketEntity(this, (byte) PacketType.FORCEMOUNT.ordinal()), player);
                 }
             }
@@ -946,6 +1078,7 @@ public class EntityRocket extends EntityRocketBase implements INetworkEntity, IM
             if (ARConfiguration.getCurrentConfig().launchingDestroysBlocks && launchCount <= 100 && launchCount != 0 && this.getFuelCapacity(getRocketFuelType()) > 0)
                 damageGroundBelowRocket(world, (int) this.posX, (int) this.posY, (int) this.posZ, (int) Math.pow(stats.getThrust(), 0.4));
         }
+
 
         // When flying around in space
         if (getInSpaceFlight()) {
@@ -979,7 +1112,6 @@ public class EntityRocket extends EntityRocketBase implements INetworkEntity, IM
 
                     if (distanceSq < properties.getRenderSizeSolarView() * properties.getRenderSizeSolarView() * 8) {
                         this.spacePosition.world = (DimensionProperties) properties;
-
 
                         //Radius to put the player
                         double radius = -properties.getRenderSizePlanetView() * 16;
@@ -1092,6 +1224,8 @@ public class EntityRocket extends EntityRocketBase implements INetworkEntity, IM
 
             if (burningFuel || descentPhase) {
                 //Burn the rocket fuel
+                // TODO SHOULD WE BURN IN DECENT PHASE TOO???
+                // TODO THIS COULD MAKE IT SO THAT OUT OF FUEL -> You crash -> rocket takes a lot of damage
                 if (!world.isRemote && !descentPhase) {
                     setFuelAmount(getRocketFuelType(), getFuelAmount(getRocketFuelType()) - getFuelConsumptionRate(getRocketFuelType()));
                     if (getRocketFuelType() == FuelType.LIQUID_BIPROPELLANT)
@@ -1108,34 +1242,29 @@ public class EntityRocket extends EntityRocketBase implements INetworkEntity, IM
 
                 runEngines();
             }
-
-            if (!this.getPassengers().isEmpty()) {
-
-                for (Entity entity : this.getPassengers()) {
-                    entity.fallDistance = 0;
-                    this.fallDistance = 0;
-                }
-
-                //if the player holds the forward key then decelerate
-                if (isInOrbit() && (burningFuel || descentPhase)) {
-                    float vel = descentPhase ? 1f : getPassengerMovingForward();
-                    this.motionY -= this.motionY * vel / 40f;
-                }
-                this.velocityChanged = true;
-
-            } else if (isInOrbit() && descentPhase) { //For unmanned rockets
-                this.motionY -= this.motionY / 40f;
-                this.velocityChanged = true;
-            }
-
             if (!world.isRemote) {
-                //If out of fuel or descending then accelerate downwards
-                if (isInOrbit() || !burningFuel) {
-                    //this.motionY = Math.min(this.motionY - 0.001, 1);
-                    this.motionY = this.motionY - 0.0001;
-                } else
-                    //this.motionY = Math.min(this.motionY + 0.001, 1);
-                    this.motionY += stats.getAcceleration(DimensionManager.getInstance().getDimensionProperties(this.world.provider.getDimension()).getGravitationalMultiplier()) * deltaTime;
+
+                if (isInOrbit() && descentPhase) { //going down & slowing
+                    this.motionY -= this.motionY / 120f;
+                    this.velocityChanged = true;
+                } else {
+                    //If out of fuel or descending then accelerate downwards
+                    if (isInOrbit() || !burningFuel) {
+                        //this.motionY = Math.min(this.motionY - 0.001, 1);
+                        this.motionY = this.motionY - 0.1f * 1 / 20f * 9.81 * (DimensionManager.getInstance().getDimensionProperties(this.world.provider.getDimension()).getGravitationalMultiplier());
+                        motionY = Math.max(-2, motionY);
+                        this.velocityChanged = true;
+                    } else {
+                        //this.motionY = Math.min(this.motionY + 0.001, 1);
+                        this.motionY += stats.getAcceleration(DimensionManager.getInstance().getDimensionProperties(this.world.provider.getDimension()).getGravitationalMultiplier()) * deltaTime;
+                        this.velocityChanged = true;
+                    }
+                }
+
+                if (isInOrbit() && descentPhase) { //going down & slowing
+                    this.motionY -= this.motionY / 120f;
+                    this.velocityChanged = true;
+                }
 
 
                 double lastPosY = this.posY;
@@ -1194,7 +1323,8 @@ public class EntityRocket extends EntityRocketBase implements INetworkEntity, IM
                         this.setDead();
                 }
             } else {
-                this.move(MoverType.SELF, 0, this.motionY, 0);
+                this.move(MoverType.SELF, 0, this.motionY*deltaTime, 0);
+                //this.setPosition(posX, posY + this.motionY * deltaTime, posZ);
             }
         } else if (DimensionManager.getInstance().getDimensionProperties(this.world.provider.getDimension()).isAsteroid() && getRCS()) {
 
@@ -1270,7 +1400,7 @@ public class EntityRocket extends EntityRocketBase implements INetworkEntity, IM
                     break;
                 }
             }
-            this.motionY = -this.motionY;
+            this.motionY = -2;
             setInOrbit(true);
         } else if (!stats.hasSeat()) {
             reachSpaceUnmanned();
@@ -1332,7 +1462,7 @@ public class EntityRocket extends EntityRocketBase implements INetworkEntity, IM
             storage.setDestinationCoordinates(new Vector3F<>((float) this.posX, (float) this.posY, (float) this.posZ), this.world.provider.getDimension());
             if (pos != null) {
                 this.setInOrbit(true);
-                this.motionY = -this.motionY;
+                this.motionY = -2;
 
                 //unlink any connected tiles
                 Iterator<IInfrastructure> connectedTiles = connectedInfrastructure.iterator();
@@ -1351,7 +1481,7 @@ public class EntityRocket extends EntityRocketBase implements INetworkEntity, IM
 
                 }
                 this.setInOrbit(true);
-                this.motionY = -this.motionY;
+                this.motionY = -2;
                 //unlink any connected tiles
 
                 Iterator<IInfrastructure> connectedTiles = connectedInfrastructure.iterator();
@@ -1368,7 +1498,7 @@ public class EntityRocket extends EntityRocketBase implements INetworkEntity, IM
             storage.setDestinationCoordinates(new Vector3F<>((float) this.posX, (float) this.posY, (float) this.posZ), this.world.provider.getDimension());
             if (pos != null) {
                 this.setInOrbit(true);
-                this.motionY = -this.motionY;
+                this.motionY = -2;
                 this.changeDimension(destinationDimId, pos.x, getEntryHeight(destinationDimId), pos.z);
             } else {
 
@@ -1379,7 +1509,7 @@ public class EntityRocket extends EntityRocketBase implements INetworkEntity, IM
 
                 }
                 this.setInOrbit(true);
-                this.motionY = -this.motionY;
+                this.motionY = -2;
 
                 this.changeDimension(destinationDimId, this.posX, getEntryHeight(destinationDimId), this.posZ);
             }
@@ -1388,7 +1518,7 @@ public class EntityRocket extends EntityRocketBase implements INetworkEntity, IM
             int offX = (world.rand.nextInt() % 256) - 128;
             int offZ = (world.rand.nextInt() % 256) - 128;
             this.setInOrbit(true);
-            this.motionY = -this.motionY;
+            this.motionY = -2;
             this.setPosition(posX + offX, posY, posZ + offZ);
 
             //unlink any connected tiles
@@ -1443,7 +1573,7 @@ public class EntityRocket extends EntityRocketBase implements INetworkEntity, IM
             }
 
         } else {
-            this.motionY = -this.motionY;
+            this.motionY = -2;
             setInOrbit(true);
             //If going to a station or something make sure to set coords accordingly
             //If in space land on the planet, if on the planet go to space
@@ -1609,12 +1739,18 @@ public class EntityRocket extends EntityRocketBase implements INetworkEntity, IM
         this.setDead();
     }
 
+    public void recalculateStats(){
+        this.storage.recalculateStats(this.stats);
+    }
+
     /**
      * Launches the rocket post determining its height, checking whether it can launch to the selected planet and whether it can exist,
      * among other factors. Also handles orbital height calculations
      */
     @Override
     public void launch() {
+
+        if(world.isRemote)return;
 
         if (isInFlight())
             return;
@@ -1625,15 +1761,20 @@ public class EntityRocket extends EntityRocketBase implements INetworkEntity, IM
 
         NBTTagCompound nbtdata = new NBTTagCompound();
         writeToNBT(nbtdata);
+        // Can this be done without sending the entity packet again?
+        // It causes rocket to skip rendering a few frames when launching
         PacketHandler.sendToNearby(new PacketEntity(this, (byte) 0, nbtdata), this.world.provider.getDimension(), this.getPosition(), 64);
 
 
         if (ARConfiguration.getCurrentConfig().advancedWeightSystem) {
-            this.stats.setWeight((int) storage.recalculateWeight());
+            this.stats.setWeight(storage.recalculateWeight());
             for (HashedBlockPosition pos : this.infrastructureCoords) {
                 TileEntity te = world.getTileEntity(pos.getBlockPos());
                 if (te instanceof TileRocketAssemblingMachine) {
-                    ((TileRocketAssemblingMachine) te).getRocketStats().setWeight(this.stats.getWeight());
+                    //this does not work: getWeight() returns weight + fuel. setWeight() should not include fuel weight because it is calculated on every getweight()
+                    // so if you say setweight(getweight()) and next time I call getweight() it returns weight+fuel+fuel
+                    // we do not need this anyway because the assembler has IDataSync interface and syncs itself
+                    //((TileRocketAssemblingMachine) te).getRocketStats().setWeight(this.stats.getWeight());
                 }
             }
         }
@@ -1962,7 +2103,7 @@ public class EntityRocket extends EntityRocketBase implements INetworkEntity, IM
                 storage.readtiles(in);
         }
         if (packetId == PacketType.RECIEVENBT.ordinal()) {
-            storage = new StorageChunk();
+            storage = new StorageChunk(); //this re-loading makes the rocket not render for a tick or two when launching
             storage.setEntity(this);
             storage.readFromNetwork(in);
         } else if (packetId == PacketType.SENDPLANETDATA.ordinal()) {
@@ -2036,8 +2177,11 @@ public class EntityRocket extends EntityRocketBase implements INetworkEntity, IM
     public void useNetworkData(EntityPlayer player, Side side, byte id,
                                NBTTagCompound nbt) {
 
+        if(id==(byte)9987){
+            // F*ck you little bug
+        }
 
-        if (id == PacketType.RECIEVENBT.ordinal()) {
+        else if (id == PacketType.RECIEVENBT.ordinal()) {
             this.readEntityFromNBT(nbt);
             initFromBounds();
         } else if (id == PacketType.DECONSTRUCT.ordinal()) {
@@ -2159,18 +2303,18 @@ public class EntityRocket extends EntityRocketBase implements INetworkEntity, IM
                 //Conditional b/c for some reason client/server positions do not match
                 float xOffset = this.storage.getSizeX() % 2 == 0 ? 0.5f : 0f;
                 float zOffset = this.storage.getSizeZ() % 2 == 0 ? 0.5f : 0f;
-                float halfy = storage.getSizeY() / 2f;
-                float halfx = storage.getSizeX() / 2f;
-                float halfz = storage.getSizeZ() / 2f;
+                //float halfy = storage.getSizeY() / 2f;
+                //float halfx = storage.getSizeX() / 2f;
+                //float halfz = storage.getSizeZ() / 2f;
 
-                double xPos = seatPos.x + xOffset - halfx+0.5;
-                double yPos = seatPos.y - 0.5f - halfy-0.5f;
-                double zPos = seatPos.z + zOffset - halfz+0.5;
+                double xPos = seatPos.x + xOffset;// - halfx+0.5;
+                double yPos = seatPos.y - 0.5f;// - 0.5f; // this does not work :(
+                double zPos = seatPos.z + zOffset;// - halfz+0.5;
                 float angle = (float) (getRCSRotateProgress() * 0.9f * Math.PI / 180f);
 
                 double yNew = (yPos) * MathHelper.cos(angle) + (-zPos - 0.5) * MathHelper.sin(angle);
                 double zNew = zPos * MathHelper.cos(angle) + (yPos + 1) * MathHelper.sin(angle);
-                yPos = yNew + this.posY + halfy;
+                yPos = yNew + this.posY;
                 zPos = zNew;
 
                 //Now do yaw
@@ -2179,7 +2323,6 @@ public class EntityRocket extends EntityRocketBase implements INetworkEntity, IM
                 zNew = zPos * MathHelper.cos(yawAngle) + (xPos) * MathHelper.sin(yawAngle);
                 xPos = this.posX + xNew;
                 zPos = this.posZ + zNew;
-
 
                 entity.setPosition(xPos, yPos, zPos);
             } catch (IndexOutOfBoundsException e) {
@@ -2309,13 +2452,12 @@ public class EntityRocket extends EntityRocketBase implements INetworkEntity, IM
         if (id == 0 && fuelType != null) {
             switch (fuelType) {
                 case LIQUID_BIPROPELLANT:
-                    return (getFuelAmount(FuelType.LIQUID_OXIDIZER) / (float) getFuelCapacity(FuelType.LIQUID_OXIDIZER) +
-                            getFuelAmount(fuelType)) / (float) getFuelCapacity(fuelType);
                 case LIQUID_MONOPROPELLANT:
                 case NUCLEAR_WORKING_FLUID:
                     return getFuelAmount(fuelType) / (float) getFuelCapacity(fuelType);
             }
         }
+
 
         return 0;
     }

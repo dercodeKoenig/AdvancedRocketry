@@ -111,7 +111,7 @@ public class ClientProxy extends CommonProxy {
         ClientRegistry.bindTileEntitySpecialRenderer(TileDataPipe.class, new RendererPipe(new ResourceLocation("AdvancedRocketry:textures/blocks/pipeData.png")));
         ClientRegistry.bindTileEntitySpecialRenderer(TileEnergyPipe.class, new RendererPipe(new ResourceLocation("AdvancedRocketry:textures/blocks/pipeEnergy.png")));
         ClientRegistry.bindTileEntitySpecialRenderer(TileMicrowaveReciever.class, new RendererMicrowaveReciever());
-        ClientRegistry.bindTileEntitySpecialRenderer(TileOrbitalLaserDrill.class, new RenderOrbitalLaserDrillTile());
+        //ClientRegistry.bindTileEntitySpecialRenderer(TileOrbitalLaserDrill.class, new RenderOrbitalLaserDrillTile());
         ClientRegistry.bindTileEntitySpecialRenderer(TileBiomeScanner.class, new RenderBiomeScanner());
         ClientRegistry.bindTileEntitySpecialRenderer(TileBlackHoleGenerator.class, new RenderBlackHoleGenerator());
         ClientRegistry.bindTileEntitySpecialRenderer(TileAtmosphereTerraformer.class, new RenderTerraformerAtm());
@@ -291,7 +291,7 @@ public class ClientProxy extends CommonProxy {
     public void registerEventHandlers() {
         super.registerEventHandlers();
         MinecraftForge.EVENT_BUS.register(new RocketEventHandler());
-
+        MinecraftForge.EVENT_BUS.register(new DelayedParticleRenderingEventHandler());
         MinecraftForge.EVENT_BUS.register(ModuleContainerPan.class);
         MinecraftForge.EVENT_BUS.register(new RenderComponents());
     }
@@ -319,6 +319,24 @@ public class ClientProxy extends CommonProxy {
     @Override
     public void changeClientPlayerWorld(World world) {
         Minecraft.getMinecraft().player.world = world;
+    }
+
+    @Override
+    public void spawnDynamicRocketSmoke(World world, double x, double y,
+                                        double z, double motionX, double motionY, double motionZ, int engineNum) {
+        TrailFx fx = new TrailFx(world, x, y, z, motionX, motionY, motionZ);
+        fx.register_additional_engines(engineNum);
+        Minecraft.getMinecraft().effectRenderer.addEffect(fx);
+
+    }
+    @Override
+    public void spawnDynamicRocketFlame(World world, double x, double y,
+                                        double z, double motionX, double motionY, double motionZ, int engineNum) {
+
+        RocketFx fx = new RocketFx(world, x, y, z, motionX, motionY, motionZ);
+        fx.register_additional_engines(engineNum);
+        Minecraft.getMinecraft().effectRenderer.addEffect(fx);
+
     }
 
     @Override

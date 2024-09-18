@@ -15,6 +15,7 @@ import net.minecraftforge.fluids.FluidStack;
 import net.minecraftforge.fluids.FluidTank;
 import net.minecraftforge.fluids.capability.CapabilityFluidHandler;
 import net.minecraftforge.fluids.capability.IFluidHandler;
+import zmaster587.advancedRocketry.api.ARConfiguration;
 import zmaster587.advancedRocketry.tile.TileFluidTank;
 
 import javax.annotation.Nonnull;
@@ -38,7 +39,7 @@ public class ItemBlockFluidTank extends ItemBlock {
         if (fluidStack == null) {
             list.add("Empty");
         } else {
-            list.add(fluidStack.getLocalizedName() + ": " + fluidStack.amount + "/64000mb");
+            list.add(fluidStack.getLocalizedName() + ": " + fluidStack.amount/1000 + "/"+64* ARConfiguration.getCurrentConfig().blockTankCapacity+"b");
         }
     }
 
@@ -62,7 +63,7 @@ public class ItemBlockFluidTank extends ItemBlock {
     public void fill(@Nonnull ItemStack stack, FluidStack fluid) {
 
         NBTTagCompound nbt;
-        FluidTank tank = new FluidTank(640000);
+        FluidTank tank = new FluidTank((int) (640000* ARConfiguration.getCurrentConfig().blockTankCapacity));
         if (stack.hasTagCompound()) {
             nbt = stack.getTagCompound();
             tank.readFromNBT(nbt);
@@ -77,7 +78,7 @@ public class ItemBlockFluidTank extends ItemBlock {
 
     public FluidStack drain(@Nonnull ItemStack stack, int amt) {
         NBTTagCompound nbt;
-        FluidTank tank = new FluidTank(640000);
+        FluidTank tank = new FluidTank((int) (640000* ARConfiguration.getCurrentConfig().blockTankCapacity));
         if (stack.hasTagCompound()) {
             nbt = stack.getTagCompound();
             tank.readFromNBT(nbt);
@@ -94,7 +95,7 @@ public class ItemBlockFluidTank extends ItemBlock {
 
     public FluidStack getFluid(@Nonnull ItemStack stack) {
         NBTTagCompound nbt;
-        FluidTank tank = new FluidTank(640000);
+        FluidTank tank = new FluidTank((int) (640000* ARConfiguration.getCurrentConfig().blockTankCapacity));
         if (stack.hasTagCompound()) {
             nbt = stack.getTagCompound();
             tank.readFromNBT(nbt);

@@ -1,0 +1,20 @@
+{
+    "display": {
+        "icon": {
+            "item": "advancedrocketry:lens"
+        },
+        "title": {
+            "translate": "Pressurized"
+        },
+        "description": {
+            "translate": "Construct a Atmosphere Terraformer"
+        },
+        "frame": "challenge"
+    },
+    "parent": "advancedrocketry:normal/deathstar",
+    "criteria": {
+        "deathstar": {
+            "trigger": "pressurize"
+        }
+    }
+} 

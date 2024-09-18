@@ -823,7 +823,7 @@ public class RenderSpaceTravelSky extends RenderPlanetarySky {
         GlStateManager.enableTexture2D();
         GlStateManager.depthMask(true);
 
-        RocketEventHandler.onPostWorldRender(partialTicks);
+        //RocketEventHandler.onPostWorldRender(partialTicks);
         //Fix player/items going transparent
         GlStateManager.blendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
 

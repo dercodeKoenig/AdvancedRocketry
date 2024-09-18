@@ -16,10 +16,12 @@ public class clientlists implements Afuckinginterface {
     public void initdim(int dim){
         if (terraforminginfolists.get(dim) != null){
             terraforminginfolists.get(dim).terraformingChunksDone = new HashSet<>();
+            terraforminginfolists.get(dim).biomeChangingChunksDone = new HashSet<>();
             terraforminginfolists.get(dim).terraformingProtectedBlocks = new ArrayList<>();
         }else{
             dimensionTerraformingInfo info = new dimensionTerraformingInfo();
             info.terraformingChunksDone = new HashSet<>();
+            info.biomeChangingChunksDone = new HashSet<>();
             info.terraformingProtectedBlocks = new ArrayList<>();
             terraforminginfolists.put(dim,info);
         }
@@ -43,6 +45,15 @@ public class clientlists implements Afuckinginterface {
     public HashSet<ChunkPos> getChunksFullyTerraformed(int dim){
         if (terraforminginfolists.get(dim) == null)return null;
         return terraforminginfolists.get(dim).terraformingChunksDone;
+    }
+
+    public void setChunksFullyBiomeChanged(int dim, HashSet<ChunkPos> lpos){
+        if (terraforminginfolists.get(dim) == null)return;
+        terraforminginfolists.get(dim).biomeChangingChunksDone = lpos;
+    }
+    public HashSet<ChunkPos> getChunksFullyBiomeChanged(int dim){
+        if (terraforminginfolists.get(dim) == null)return null;
+        return terraforminginfolists.get(dim).biomeChangingChunksDone;
     }
 
     public void sethelper(int dim, TerraformingHelper helper){

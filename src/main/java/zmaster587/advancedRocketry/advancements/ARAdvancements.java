@@ -14,13 +14,19 @@ public class ARAdvancements {
     public static final CustomTrigger WENT_TO_THE_MOON = new CustomTrigger("wenttothemoon");
     public static final CustomTrigger ALL_SHE_GOT = new CustomTrigger("givingitallshesgot");
     public static final CustomTrigger FLIGHT_OF_PHOENIX = new CustomTrigger("flightofpheonix");
+
+    public static final CustomTrigger DEATH_STAR = new CustomTrigger("deathstar");
+    public static final CustomTrigger ATM_TERRAFORMER = new CustomTrigger("pressurize");
+
     public static final CustomTrigger[] TRIGGER_ARRAY = new CustomTrigger[]{
             MOON_LANDING,
             ONE_SMALL_STEP,
             BEER,
             WENT_TO_THE_MOON,
             ALL_SHE_GOT,
-            FLIGHT_OF_PHOENIX
+            FLIGHT_OF_PHOENIX,
+            ATM_TERRAFORMER,
+            DEATH_STAR
     };
     private static Method CriterionRegister;
 

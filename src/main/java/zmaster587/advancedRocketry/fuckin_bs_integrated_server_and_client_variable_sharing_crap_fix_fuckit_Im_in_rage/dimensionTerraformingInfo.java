@@ -12,5 +12,6 @@ public class dimensionTerraformingInfo{
     public dimensionTerraformingInfo(){}
     public ArrayList<BlockPos> terraformingProtectedBlocks;
     public HashSet<ChunkPos> terraformingChunksDone;
+    public HashSet<ChunkPos> biomeChangingChunksDone;
     public TerraformingHelper terraformingHelper;
 }

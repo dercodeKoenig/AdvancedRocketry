@@ -2,37 +2,25 @@ package zmaster587.advancedRocketry.tile.multiblock;
 
 import io.netty.buffer.ByteBuf;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.entity.EntityPlayerSP;
 import net.minecraft.entity.player.EntityPlayer;
-import net.minecraft.entity.player.EntityPlayerMP;
 import net.minecraft.init.Blocks;
-import net.minecraft.inventory.IInventory;
-import net.minecraft.item.ItemStack;
 import net.minecraft.nbt.NBTTagCompound;
-import net.minecraft.network.NetworkManager;
-import net.minecraft.network.play.server.SPacketUpdateTileEntity;
-import net.minecraft.server.MinecraftServer;
 import net.minecraft.util.EnumFacing;
 import net.minecraft.util.SoundCategory;
 import net.minecraft.util.SoundEvent;
 import net.minecraft.util.math.AxisAlignedBB;
 import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.text.ITextComponent;
-import net.minecraft.util.text.TextComponentString;
 import net.minecraftforge.fluids.FluidStack;
 import net.minecraftforge.fluids.capability.IFluidHandler;
 import net.minecraftforge.fml.relauncher.Side;
 import net.minecraftforge.fml.relauncher.SideOnly;
 import zmaster587.advancedRocketry.AdvancedRocketry;
-import zmaster587.advancedRocketry.api.*;
-import zmaster587.advancedRocketry.api.satellite.SatelliteBase;
+import zmaster587.advancedRocketry.api.ARConfiguration;
+import zmaster587.advancedRocketry.api.AdvancedRocketryBlocks;
+import zmaster587.advancedRocketry.api.AdvancedRocketryFluids;
 import zmaster587.advancedRocketry.dimension.DimensionManager;
 import zmaster587.advancedRocketry.dimension.DimensionProperties;
-import zmaster587.advancedRocketry.item.ItemSatelliteIdentificationChip;
-import zmaster587.advancedRocketry.network.PacketBiomeIDChange;
-import zmaster587.advancedRocketry.satellite.SatelliteBiomeChanger;
 import zmaster587.advancedRocketry.util.AudioRegistry;
-import zmaster587.advancedRocketry.world.ChunkManagerPlanet;
 import zmaster587.advancedRocketry.world.provider.WorldProviderPlanet;
 import zmaster587.libVulpes.LibVulpes;
 import zmaster587.libVulpes.api.LibVulpesBlocks;
@@ -44,16 +32,13 @@ import zmaster587.libVulpes.network.PacketHandler;
 import zmaster587.libVulpes.network.PacketMachine;
 import zmaster587.libVulpes.tile.multiblock.TileMultiPowerConsumer;
 import zmaster587.libVulpes.tile.multiblock.TileMultiblockMachine;
-import zmaster587.libVulpes.tile.multiblock.TileMultiblockMachine.NetworkPackets;
-import zmaster587.libVulpes.util.EmbeddedInventory;
-import zmaster587.libVulpes.util.HashedBlockPosition;
 import zmaster587.libVulpes.util.INetworkMachine;
 import zmaster587.libVulpes.util.IconResource;
 
-import javax.annotation.Nonnull;
 import java.util.LinkedList;
 import java.util.List;
-import java.util.logging.Logger;
+
+//This code is a complete mess. it should be rewritten just like the space laser, but it kinda works, so I'll leave it with this for now
 
 public class TileAtmosphereTerraformer extends TileMultiPowerConsumer implements INetworkMachine {
 
@@ -276,13 +261,16 @@ public class TileAtmosphereTerraformer extends TileMultiPowerConsumer implements
     private ModuleToggleSwitch buttonIncrease, buttonDecrease;
     private ModuleRadioButton radioButton;
     private ModuleText text;
-    //private EmbeddedInventory inv;
+
     private boolean outOfFluid;
-    private boolean was_outOfFluid_last_tick;
     private int last_mode;
     int requiredN2 = 0, requiredO2 = 0;
-    //private boolean had_linker_last_tick;
+
+    boolean client_contructed = false;
+
     public TileAtmosphereTerraformer() {
+        super();
+
         completionTime = (int) (18000 * ARConfiguration.getCurrentConfig().terraformSpeed);
         buttonIncrease = new ModuleToggleSwitch(40, 20, 1, LibVulpes.proxy.getLocalizedString("msg.terraformer.atminc"), this, TextureResources.buttonScan, 80, 16, true);
         buttonDecrease = new ModuleToggleSwitch(40, 38, 2, LibVulpes.proxy.getLocalizedString("msg.terraformer.atmdec"), this, TextureResources.buttonScan, 80, 16, false);
@@ -293,10 +281,15 @@ public class TileAtmosphereTerraformer extends TileMultiPowerConsumer implements
         buttons.add(buttonIncrease);
         buttons.add(buttonDecrease);
         radioButton = new ModuleRadioButton(this, buttons);
-        //inv = new EmbeddedInventory(1);
+
         outOfFluid = false;
-        was_outOfFluid_last_tick = false;
         last_mode = radioButton.getOptionSelected();
+
+    }
+
+    @Override
+    public void update() {
+        super.update();
     }
 
     private int getCompletionTime() {
@@ -306,12 +299,12 @@ public class TileAtmosphereTerraformer extends TileMultiPowerConsumer implements
     @Override
     @SideOnly(Side.CLIENT)
     public double getMaxRenderDistanceSquared() {
-        return 160*160;
+        return 320 * 320;
     }
 
     @Override
     public List<ModuleBase> getModules(int ID, EntityPlayer player) {
-        List<ModuleBase> modules = super.getModules(ID, player);
+        List<ModuleBase> modules =  super.getModules(ID, player);
 
         //Backgrounds
         if (world.isRemote) {
@@ -321,6 +314,7 @@ public class TileAtmosphereTerraformer extends TileMultiPowerConsumer implements
         modules.add(radioButton);
         modules.add(new ModuleProgress(30, 57, 0, zmaster587.advancedRocketry.inventory.TextureResources.terraformProgressBar, this));
         modules.add(text);
+
 
         setText();
 
@@ -337,6 +331,7 @@ public class TileAtmosphereTerraformer extends TileMultiPowerConsumer implements
     private void setText() {
 
         String statusText;
+
 
         if (outOfFluid)
             statusText = LibVulpes.proxy.getLocalizedString("msg.terraformer.outofgas");
@@ -362,36 +357,37 @@ public class TileAtmosphereTerraformer extends TileMultiPowerConsumer implements
 
     @Override
     protected void onRunningPoweredTick() {
-
-
+        //System.out.println("energy:"+this.batteries.getUniversalEnergyStored());
 
         if (world.isRemote && !outOfFluid) {
             if (Minecraft.getMinecraft().gameSettings.particleSetting < 2) {
                 EnumFacing dir = RotatableBlock.getFront(world.getBlockState(pos)).getOpposite();
 
-                if (radioButton.getOptionSelected() == 0) {
-                    if (world.getTotalWorldTime() % 20 == 0) {
-                        float xMot = (float) ((0.5f - world.rand.nextGaussian()) / 40f);
-                        float zMot = (float) ((0.5f - world.rand.nextGaussian()) / 40f);
+                for (int i = 0; i < 3; i++) {
+
+
+                    if (radioButton.getOptionSelected() == 0) {
+                        float xMot = (float) ((world.rand.nextGaussian()) / 40f);
+                        float zMot = (float) ((world.rand.nextGaussian()) / 40f);
                         BlockPos offsetPos = pos.offset(dir);
                         AdvancedRocketry.proxy.spawnParticle("rocketSmoke", world, offsetPos.getX() + 5, pos.getY() + 7, offsetPos.getZ() + 0.5, xMot, 0.02f, zMot);
                         AdvancedRocketry.proxy.spawnParticle("rocketSmoke", world, offsetPos.getX() - 4, pos.getY() + 7, offsetPos.getZ() + 0.5, xMot, 0.02f, zMot);
                         AdvancedRocketry.proxy.spawnParticle("rocketSmoke", world, offsetPos.getX() + 0.5f, pos.getY() + 7, offsetPos.getZ() - 4, xMot, 0.02f, zMot);
                         AdvancedRocketry.proxy.spawnParticle("rocketSmoke", world, offsetPos.getX() + 0.5f, pos.getY() + 7, offsetPos.getZ() + 5, xMot, 0.02f, zMot);
+
+                    } else {
+                        float xMot = (float) ((world.rand.nextGaussian()) / 4f);
+                        float yMot = (float) (world.rand.nextGaussian() / 20f);
+                        float zMot = (float) ((world.rand.nextGaussian()) / 4f);
+                        BlockPos offsetPos = pos.offset(dir);
+                        AdvancedRocketry.proxy.spawnParticle("rocketSmokeInverse", world, offsetPos.getX() + 5, pos.getY() + 7, offsetPos.getZ() + 0.5, xMot, 0.4f + yMot, zMot);
+                        AdvancedRocketry.proxy.spawnParticle("rocketSmokeInverse", world, offsetPos.getX() - 4, pos.getY() + 7, offsetPos.getZ() + 0.5, xMot, 0.4f + yMot, zMot);
+                        AdvancedRocketry.proxy.spawnParticle("rocketSmokeInverse", world, offsetPos.getX() + 0.5f, pos.getY() + 7, offsetPos.getZ() - 4, xMot, 0.4f + yMot, zMot);
+                        AdvancedRocketry.proxy.spawnParticle("rocketSmokeInverse", world, offsetPos.getX() + 0.5f, pos.getY() + 7, offsetPos.getZ() + 5, xMot, 0.4f + yMot, zMot);
                     }
-                } else {
-                    float xMot = (float) ((0.5f - world.rand.nextGaussian()) / 4f);
-                    float yMot = (float) (world.rand.nextGaussian() / 20f);
-                    float zMot = (float) ((0.5f - world.rand.nextGaussian()) / 4f);
-                    BlockPos offsetPos = pos.offset(dir);
-                    AdvancedRocketry.proxy.spawnParticle("rocketSmokeInverse", world, offsetPos.getX() + 5, pos.getY() + 7, offsetPos.getZ() + 0.5, xMot, 0.4f + yMot, zMot);
-                    AdvancedRocketry.proxy.spawnParticle("rocketSmokeInverse", world, offsetPos.getX() - 4, pos.getY() + 7, offsetPos.getZ() + 0.5, xMot, 0.4f + yMot, zMot);
-                    AdvancedRocketry.proxy.spawnParticle("rocketSmokeInverse", world, offsetPos.getX() + 0.5f, pos.getY() + 7, offsetPos.getZ() - 4, xMot, 0.4f + yMot, zMot);
-                    AdvancedRocketry.proxy.spawnParticle("rocketSmokeInverse", world, offsetPos.getX() + 0.5f, pos.getY() + 7, offsetPos.getZ() + 5, xMot, 0.4f + yMot, zMot);
                 }
             }
         }
-
         if (!ARConfiguration.getCurrentConfig().terraformRequiresFluid)
             return;
 
@@ -421,29 +417,12 @@ public class TileAtmosphereTerraformer extends TileMultiPowerConsumer implements
 
 
                 if (requiredN2 != 0 || requiredO2 != 0) {
-                    outOfFluid = true;
-                    if (!was_outOfFluid_last_tick){
-                        was_outOfFluid_last_tick = true;
-                        PacketHandler.sendToNearby(new PacketMachine(this, (byte)23),world.provider.getDimension(),pos,256.0);
-                    }
-
-                    //this.setMachineEnabled(false);
-                    //this.setMachineRunning(false);
-                    //markDirty();
+                    setOOF(true);
                 } else {
-                    outOfFluid = false;
-                    if (was_outOfFluid_last_tick){
-                        was_outOfFluid_last_tick = false;
-                        PacketHandler.sendToNearby(new PacketMachine(this, (byte)23),world.provider.getDimension(),pos,256.0);
-                    }
+                    setOOF(false);
                 }
-            }
-            else{
-                outOfFluid = false;
-                if (was_outOfFluid_last_tick){
-                    was_outOfFluid_last_tick = false;
-                    PacketHandler.sendToNearby(new PacketMachine(this, (byte)23),world.provider.getDimension(),pos,256.0);
-                }
+            } else {
+                setOOF(false);
             }
         }
 
@@ -459,6 +438,7 @@ public class TileAtmosphereTerraformer extends TileMultiPowerConsumer implements
             /////////from the super method
         }
     }
+
     public SoundEvent getSound() {
         return AudioRegistry.machineLarge;
     }
@@ -468,19 +448,6 @@ public class TileAtmosphereTerraformer extends TileMultiPowerConsumer implements
         return 80;
     }
 
-    //moved to new machine: TerraformingTerminal
-/*
-    private boolean hasValidBiomeChanger() {
-        ItemStack biomeChanger = inv.getStackInSlot(0);
-        SatelliteBase satellite;
-
-        return !biomeChanger.isEmpty() &&
-                (biomeChanger.getItem() instanceof ItemBiomeChanger) &&
-                SatelliteRegistry.getSatellite(biomeChanger) != null &&
-                (satellite = ((ItemSatelliteIdentificationChip) AdvancedRocketryItems.itemBiomeChanger).getSatellite(biomeChanger)).getDimensionId() == world.provider.getDimension() &&
-                satellite instanceof SatelliteBiomeChanger;
-    }
-*/
     @Override
     protected void playMachineSound(SoundEvent event) {
         world.playSound(getPos().getX(), getPos().getY() + 7, getPos().getZ(), event, SoundCategory.BLOCKS, Minecraft.getMinecraft().gameSettings.getSoundLevel(SoundCategory.BLOCKS), 0.975f + world.rand.nextFloat() * 0.05f, false);
@@ -489,7 +456,9 @@ public class TileAtmosphereTerraformer extends TileMultiPowerConsumer implements
     @Override
     public boolean isRunning() {
 
-        boolean bool = getMachineEnabled() && super.isRunning() && zmaster587.advancedRocketry.api.ARConfiguration.getCurrentConfig().enableTerraforming;
+        boolean bool = getMachineEnabled() &&
+                //super.isRunning() &&
+                zmaster587.advancedRocketry.api.ARConfiguration.getCurrentConfig().enableTerraforming;
 
         if (!bool)
             currentTime = 0;
@@ -497,20 +466,27 @@ public class TileAtmosphereTerraformer extends TileMultiPowerConsumer implements
         return bool;
     }
 
-    @Override
-    public SPacketUpdateTileEntity getUpdatePacket() {
-        NBTTagCompound nbt = new NBTTagCompound();
-        writeToNBT(nbt);
-        return new SPacketUpdateTileEntity(pos, 0, nbt);
+    public void setOOF(boolean x) {
+        if (!x && outOfFluid) {
+            outOfFluid = false;
+            this.world.notifyBlockUpdate(this.pos, this.world.getBlockState(this.pos), this.world.getBlockState(this.pos), 3);
+
+            System.out.println("s oof false");
+        } else if (x && !outOfFluid) {
+            outOfFluid = true;
+            this.world.notifyBlockUpdate(this.pos, this.world.getBlockState(this.pos), this.world.getBlockState(this.pos), 3);
+
+            System.out.println("s oof true");
+        }
     }
 
     @Override
-    public void onDataPacket(NetworkManager net, SPacketUpdateTileEntity pkt) {
-        NBTTagCompound nbt = pkt.getNbtCompound();
-        readFromNBT(nbt);
-        setText();
+    public void setMachineRunning(boolean running) {
+        super.setMachineRunning(running);
+        this.world.notifyBlockUpdate(this.pos, this.world.getBlockState(this.pos), this.world.getBlockState(this.pos), 3);
 
     }
+
 
     @Override
     protected void processComplete() {
@@ -526,6 +502,8 @@ public class TileAtmosphereTerraformer extends TileMultiPowerConsumer implements
                     this.setMachineEnabled(false);
                     this.setMachineRunning(false);
                     markDirty();
+                    this.world.notifyBlockUpdate(this.pos, this.world.getBlockState(this.pos), this.world.getBlockState(this.pos), 3);
+
                 }
             }
             if (buttonDecrease.getState() && properties.getAtmosphereDensity() > 0) {
@@ -534,6 +512,8 @@ public class TileAtmosphereTerraformer extends TileMultiPowerConsumer implements
                     this.setMachineEnabled(false);
                     this.setMachineRunning(false);
                     markDirty();
+                    this.world.notifyBlockUpdate(this.pos, this.world.getBlockState(this.pos), this.world.getBlockState(this.pos), 3);
+
                 }
             }
         }
@@ -542,29 +522,22 @@ public class TileAtmosphereTerraformer extends TileMultiPowerConsumer implements
     @Override
     public void readDataFromNetwork(ByteBuf in, byte packetId,
                                     NBTTagCompound nbt) {
-        super.readDataFromNetwork(in,packetId, nbt);
+        super.readDataFromNetwork(in, packetId, nbt);
+
         if (packetId == (byte) TileMultiblockMachine.NetworkPackets.TOGGLE.ordinal()) {
             radioButton.setOptionSelected(in.readByte());
-        }
-
-        if (packetId == (byte) 23){
-            nbt.setBoolean("outOfFluid", in.readBoolean());
         }
     }
 
     @Override
     public void writeDataToNetwork(ByteBuf out, byte id) {
-        super.writeDataToNetwork(out,id);
+        super.writeDataToNetwork(out, id);
 
         if (id == (byte) TileMultiblockMachine.NetworkPackets.TOGGLE.ordinal()) {
             out.writeByte(radioButton.getOptionSelected());
         }
-
-        if (id == (byte) 23){
-            out.writeBoolean(outOfFluid);
-        }
-
     }
+
     @Override
     public void setMachineEnabled(boolean enabled) {
         super.setMachineEnabled(enabled);
@@ -574,59 +547,60 @@ public class TileAtmosphereTerraformer extends TileMultiPowerConsumer implements
     }
 
     @Override
-    public void setMachineRunning(boolean running) {
-        super.setMachineRunning(running);
-        markDirty();
-    }
-
-    @Override
     public void useNetworkData(EntityPlayer player, Side side, byte id,
                                NBTTagCompound nbt) {
         super.useNetworkData(player, side, id, nbt);
+        if(!world.isRemote) {
+            setOOF(false);
+            markDirty();
+            this.world.notifyBlockUpdate(this.pos, this.world.getBlockState(this.pos), this.world.getBlockState(this.pos), 3);
 
-        if (!world.isRemote && id == NetworkPackets.TOGGLE.ordinal()) {
-            outOfFluid = false;
-            was_outOfFluid_last_tick = false;
-            setMachineRunning(isRunning());
         }
-
-        if(world.isRemote && id == (byte) 23) {
-           this.outOfFluid = nbt.getBoolean("outOfFluid");
-        }
-
     }
 
     @Override
     public void onInventoryButtonPressed(int buttonId) {
         //if (hasValidBiomeChanger()) {
-            super.onInventoryButtonPressed(buttonId);
-            outOfFluid = false;
-            if (buttonId == 1 || buttonId == 2) {
-                PacketHandler.sendToServer(new PacketMachine(this, (byte) TileMultiblockMachine.NetworkPackets.TOGGLE.ordinal()));
-            }
-            setText();
+        super.onInventoryButtonPressed(buttonId);
+        if (buttonId == 1 || buttonId == 2) {
+            PacketHandler.sendToServer(new PacketMachine(this, (byte) TileMultiblockMachine.NetworkPackets.TOGGLE.ordinal()));
+        }
         //}
+    }
+
+    @Override
+    protected void writeNetworkData(NBTTagCompound nbt) {
+        super.writeNetworkData(nbt);
+        nbt.setInteger("selected", radioButton.getOptionSelected());
+        nbt.setBoolean("oofluid", outOfFluid);
+        System.out.println("write oof:"+outOfFluid);
+    }
+
+    @Override
+    protected void readNetworkData(NBTTagCompound nbt) {
+        super.readNetworkData(nbt);
+        radioButton.setOptionSelected(nbt.getInteger("selected"));
+        outOfFluid = nbt.getBoolean("oofluid");
+        System.out.println("oof:"+outOfFluid);
+
+        if (world !=null && world.isRemote){
+            //if (!client_contructed)
+                //client_contructed = this.completeStructure(this.world.getBlockState(this.pos));
+
+            setText();
+        }
     }
 
     @Override
     public NBTTagCompound writeToNBT(NBTTagCompound nbt) {
         super.writeToNBT(nbt);
-
-        nbt.setInteger("selected", radioButton.getOptionSelected());
-
-        nbt.setBoolean("oofluid", outOfFluid);
-
         return nbt;
-
     }
 
     @Override
     public void readFromNBT(NBTTagCompound nbt) {
         super.readFromNBT(nbt);
-
-        radioButton.setOptionSelected(nbt.getInteger("selected"));
-        outOfFluid = nbt.getBoolean("oofluid");
-
+        outOfFluid = false;
     }
 
     @Override

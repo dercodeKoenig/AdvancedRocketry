@@ -3,8 +3,11 @@ package zmaster587.advancedRocketry.api;
 import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.nbt.NBTTagFloat;
 import net.minecraft.nbt.NBTTagInt;
+import net.minecraftforge.fluids.Fluid;
+import net.minecraftforge.fluids.FluidRegistry;
 import zmaster587.advancedRocketry.api.fuel.FuelRegistry;
 import zmaster587.advancedRocketry.api.fuel.FuelRegistry.FuelType;
+import zmaster587.advancedRocketry.util.WeightEngine;
 import zmaster587.libVulpes.util.HashedBlockPosition;
 import zmaster587.libVulpes.util.Vector3F;
 
@@ -24,7 +27,7 @@ public class StatsRocket {
     public float injectionBurnLenghtMult;
     HashedBlockPosition pilotSeatPos;
     private int thrust;
-    private int weight;
+    private float weight;
     private float drillingPower;
     private String fuelFluid;
     private String oxidizerFluid;
@@ -128,11 +131,25 @@ public class StatsRocket {
         this.thrust = thrust;
     }
 
-    public int getWeight() {
-        return weight;
+    public float getWeight_NoFuel() {return weight;}
+
+    public float getWeight() {
+        float fluidWeight = 0;
+        if (ARConfiguration.getCurrentConfig().advancedWeightSystem) {
+            if (FluidRegistry.isFluidRegistered(getFuelFluid())) {
+                Fluid f = FluidRegistry.getFluid(getFuelFluid());
+                fluidWeight += WeightEngine.INSTANCE.getWeight(f, getFuelAmount(FuelType.LIQUID_MONOPROPELLANT));
+                fluidWeight += WeightEngine.INSTANCE.getWeight(f, getFuelAmount(FuelType.LIQUID_BIPROPELLANT));
+            }
+            if (FluidRegistry.isFluidRegistered(getOxidizerFluid())) {
+                Fluid f = FluidRegistry.getFluid(getOxidizerFluid());
+                fluidWeight += WeightEngine.INSTANCE.getWeight(f, getFuelAmount(FuelType.LIQUID_OXIDIZER));
+            }
+        }
+        return weight + fluidWeight;
     }
 
-    public void setWeight(int weight) {
+    public void setWeight(float weight) {
         this.weight = weight;
     }
 
@@ -169,7 +186,8 @@ public class StatsRocket {
     }
 
     public float getAcceleration(float gravitationalMultiplier) {
-        return (getThrust() - (weight * ((ARConfiguration.getCurrentConfig().gravityAffectsFuel) ? gravitationalMultiplier : 1))) / 10000f;
+        float N = getThrust() - (getWeight()  * ((ARConfiguration.getCurrentConfig().gravityAffectsFuel) ? gravitationalMultiplier : 1));
+        return N/getWeight() /20f;
     }
 
     public List<Vector3F<Float>> getEngineLocations() {
@@ -552,6 +570,16 @@ public class StatsRocket {
         passengerSeats.clear();
         statTags.clear();
     }
+    public void reset_no_fuel() {
+        thrust = 0;
+        weight = 0;
+        drillingPower = 0f;
+
+        pilotSeatPos.x = INVALID_SEAT;
+        clearEngineLocations();
+        passengerSeats.clear();
+        statTags.clear();
+    }
 
     public void setStatTag(String str, float value) {
         statTags.put(str, value);
@@ -574,7 +602,7 @@ public class StatsRocket {
         NBTTagCompound stats = new NBTTagCompound();
 
         stats.setInteger("thrust", this.thrust);
-        stats.setInteger("weight", this.weight);
+        stats.setFloat("weight", this.weight);
         stats.setFloat("drillingPower", this.drillingPower);
         stats.setString("fuelFluid", this.fuelFluid);
         stats.setString("oxidizerFluid", this.oxidizerFluid);
@@ -658,11 +686,11 @@ public class StatsRocket {
     }
 
     public void readFromNBT(NBTTagCompound nbt) {
-
+this.reset();
         if (nbt.hasKey(TAGNAME)) {
             NBTTagCompound stats = nbt.getCompoundTag(TAGNAME);
             this.thrust = stats.getInteger("thrust");
-            this.weight = stats.getInteger("weight");
+            this.weight = stats.getFloat("weight");
             this.fuelFluid = stats.getString("fuelFluid");
             this.oxidizerFluid = stats.getString("oxidizerFluid");
             this.workingFluid = stats.getString("workingFluid");
