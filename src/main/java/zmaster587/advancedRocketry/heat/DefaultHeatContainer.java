@@ -17,7 +17,7 @@ public class DefaultHeatContainer implements IHeatContainer {
 
     @Override
     public void setHeat(final int amount) {
-        heat = Math.min(amount, getMaxHeat());
+        heat = Math.max(0, Math.min(amount, getMaxHeat()));
     }
 
     @Override

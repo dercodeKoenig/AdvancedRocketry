@@ -625,7 +625,7 @@ public class AdvancedRocketry {
         AdvancedRocketryBlocks.blockSolarArrayPanel = new BlockMultiBlockComponentVisibleAlphaTexture(Material.IRON).setUnlocalizedName("solararraypanel").setCreativeTab(tabAdvRocketry).setHardness(1).setResistance(1f);
         AdvancedRocketryBlocks.blockQuartzCrucible = new BlockQuartzCrucible().setUnlocalizedName("qcrucible").setCreativeTab(tabAdvRocketry);
         AdvancedRocketryBlocks.blockSawBlade = new BlockMotor(Material.IRON, 1f).setCreativeTab(tabAdvRocketry).setUnlocalizedName("sawBlade").setHardness(2f);
-        AdvancedRocketryBlocks.blockHeatDissipator = new BlockFullyRotatable(Material.IRON).setCreativeTab(tabAdvRocketry).setUnlocalizedName("heatdissipator").setHardness(2f);
+        AdvancedRocketryBlocks.blockHeatDissipator = new BlockTile(TileDefaultHeatDissipator.class, -1).setCreativeTab(tabAdvRocketry).setUnlocalizedName("heatdissipator").setHardness(2f);
         //Singleblock machines
         AdvancedRocketryBlocks.blockPlatePress = new BlockSmallPlatePress().setUnlocalizedName("blockHandPress").setCreativeTab(tabAdvRocketry).setHardness(2f);
         AdvancedRocketryBlocks.blockForceFieldProjector = new BlockForceFieldProjector(Material.IRON).setUnlocalizedName("forceFieldProjector").setCreativeTab(tabAdvRocketry).setHardness(3f);

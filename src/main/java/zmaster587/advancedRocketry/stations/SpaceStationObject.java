@@ -71,8 +71,8 @@ public class SpaceStationObject implements ISpaceObject, IPlanetDefiner, IHeatab
     private DimensionProperties properties;
     private final CapabilityDispatcher capabilities;
     private int basicHeatGeneration;
-    private List<TileEntity> tileEntities = new ArrayList<>();
-    private List<BlockPos> tileEntityPoses = new ArrayList<>();
+    private List<TileEntity> tileEntities;
+    private List<BlockPos> tileEntityPoses;
 
     private int ticksHandled;
 
