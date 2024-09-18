@@ -98,6 +98,7 @@ import zmaster587.advancedRocketry.tile.cables.TileWirelessTransciever;
 import zmaster587.advancedRocketry.tile.hatch.TileDataBus;
 import zmaster587.advancedRocketry.tile.hatch.TileSatelliteHatch;
 import zmaster587.advancedRocketry.tile.heat.TileDefaultHeatDissipator;
+import zmaster587.advancedRocketry.tile.heat.TileHeatMonitor;
 import zmaster587.advancedRocketry.tile.infrastructure.*;
 import zmaster587.advancedRocketry.tile.multiblock.*;
 import zmaster587.advancedRocketry.tile.multiblock.energy.TileBlackHoleGenerator;
@@ -429,6 +430,7 @@ public class AdvancedRocketry {
         GameRegistry.registerTileEntity(TileSolarArray.class, new ResourceLocation(Constants.modId, "ARSolarArray"));
 
         this.registerTileEntity(TileDefaultHeatDissipator.class, "heatdissipator");
+        this.registerTileEntity(TileHeatMonitor.class, "heatmonitor");
 
         if (zmaster587.advancedRocketry.api.ARConfiguration.getCurrentConfig().enableGravityController)
             GameRegistry.registerTileEntity(TileAreaGravityController.class, "ARGravityMachine");
@@ -626,6 +628,7 @@ public class AdvancedRocketry {
         AdvancedRocketryBlocks.blockQuartzCrucible = new BlockQuartzCrucible().setUnlocalizedName("qcrucible").setCreativeTab(tabAdvRocketry);
         AdvancedRocketryBlocks.blockSawBlade = new BlockMotor(Material.IRON, 1f).setCreativeTab(tabAdvRocketry).setUnlocalizedName("sawBlade").setHardness(2f);
         AdvancedRocketryBlocks.blockHeatDissipator = new BlockTile(TileDefaultHeatDissipator.class, -1).setCreativeTab(tabAdvRocketry).setUnlocalizedName("heatdissipator").setHardness(2f);
+        AdvancedRocketryBlocks.blockHeatMonitor = new BlockTile(TileHeatMonitor.class, GuiHandler.guiId.MODULARNOINV.ordinal()).setCreativeTab(tabAdvRocketry).setUnlocalizedName("heatmonitor").setHardness(2f);
         //Singleblock machines
         AdvancedRocketryBlocks.blockPlatePress = new BlockSmallPlatePress().setUnlocalizedName("blockHandPress").setCreativeTab(tabAdvRocketry).setHardness(2f);
         AdvancedRocketryBlocks.blockForceFieldProjector = new BlockForceFieldProjector(Material.IRON).setUnlocalizedName("forceFieldProjector").setCreativeTab(tabAdvRocketry).setHardness(3f);
@@ -799,6 +802,7 @@ public class AdvancedRocketry {
         LibVulpesBlocks.registerBlock(AdvancedRocketryBlocks.blockQuartzCrucible.setRegistryName("quartzcrucible"), null, false);
         LibVulpesBlocks.registerBlock(AdvancedRocketryBlocks.blockSawBlade.setRegistryName("sawBlade"));
         LibVulpesBlocks.registerBlock(AdvancedRocketryBlocks.blockHeatDissipator.setRegistryName("heatDissipator"));
+        LibVulpesBlocks.registerBlock(AdvancedRocketryBlocks.blockHeatMonitor.setRegistryName("heatMonitor"));
         //Singleblock machines
         LibVulpesBlocks.registerBlock(AdvancedRocketryBlocks.blockPlatePress.setRegistryName("platepress"));
         LibVulpesBlocks.registerBlock(AdvancedRocketryBlocks.blockForceFieldProjector.setRegistryName("forceFieldProjector"));

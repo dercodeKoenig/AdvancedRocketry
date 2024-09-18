@@ -124,7 +124,7 @@ public class SpaceStationObject implements ISpaceObject, IPlanetDefiner, IHeatab
 
             if (tileEntities == null) {
                 World world = FMLCommonHandler.instance().getMinecraftServerInstance().getWorld(ARConfiguration.getCurrentConfig().spaceDimId);
-                tileEntities = tileEntityPoses.stream().map(world::getTileEntity).collect(Collectors.toList());
+                tileEntities = tileEntityPoses.stream().map(world::getTileEntity).filter(Objects::nonNull).collect(Collectors.toList());
             }
 
             IHeatContainer heatContainer = this.getCapability(HeatContainerProvider.HEAT_CAP, null);
@@ -146,11 +146,11 @@ public class SpaceStationObject implements ISpaceObject, IPlanetDefiner, IHeatab
             }
 
             heatContainer.addHeat(heatBalance);
-            System.out.println("Heat: " + heatContainer.getCurrentHeat() + ", max heat: " + heatContainer.getMaxHeat());
-
-            if (heatContainer.getCurrentHeat() > heatContainer.getMaxHeat()) {
-                System.out.println("Too much heat!");
-            }
+//            System.out.println("Heat: " + heatContainer.getCurrentHeat() + ", max heat: " + heatContainer.getMaxHeat());
+//
+//            if (heatContainer.getCurrentHeat() > heatContainer.getMaxHeat()) {
+//                System.out.println("Too much heat!");
+//            }
         }
     }
 
@@ -924,6 +924,8 @@ public class SpaceStationObject implements ISpaceObject, IPlanetDefiner, IHeatab
         if (nbt.hasKey("tileEntityPoses")) {
             basicHeatGeneration = nbt.getInteger("basicHeatGeneration");
             tileEntityPoses = NBTHelper.readCollection("tileEntityPoses", nbt, ArrayList::new, NBTHelper::readBlockPos);
+        } else {
+            tileEntities = new ArrayList<>();
         }
     }
 

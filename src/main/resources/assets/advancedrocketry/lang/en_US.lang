@@ -137,6 +137,7 @@ tile.landingfloat.name=Landing Float
 tile.solararray.name=Solar Array
 tile.solararraypanel.name=Solar Array Panel
 tile.heatdissipator.name=Heat dissipator
+tile.heatmonitor.name=Heat monitor
 
 item.lens.0.name=Basic Lens
 item.wafer.0.name=Silicon Wafer
@@ -436,6 +437,9 @@ msg.serviceStation.wornSeatsText=Seats
 msg.serviceStation.wornTanksText=Tanks
 msg.serviceStation.assemblerScan=Scan for assemblers
 msg.serviceStation.link=You program the linker with the service station at
+
+msg.heat.totalHeatNA=Total heat: N/A
+msg.heat.totalHeat=Total heat
 
 msg.itemsatellite.pwr=Power Storage: 
 msg.itemsatellite.nopwr=No Power Storage

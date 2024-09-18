@@ -110,6 +110,7 @@ tile.spaceElevatorController.name=Космический лифт
 tile.beacon.name=Маяк
 tile.thermiteTorch.name=Термитный факел
 tile.heatdissipator.name=Теплорассеиватель
+tile.heatmonitor.name=Монитор теплообмена
 
 tile.Dilithium.name=Руда дилития
 
@@ -279,6 +280,9 @@ msg.serviceStation.wornSeatsText=Сиденья
 msg.serviceStation.wornTanksText=Резервуары
 msg.serviceStation.assemblerScan=Сканировать сборщики
 msg.serviceStation.link=Вы подключили частотный связыватель к станции техобслуживания на
+
+msg.heat.totalHeatNA=Всего тепла: Н/Д
+msg.heat.totalHeat=Всего тепла
 
 msg.guidanceComputerHatch.loadingState=Состояние загрузки:
 msg.guidanceComputerHatch.ejectonlanding=Автоматический выброс при посадке
