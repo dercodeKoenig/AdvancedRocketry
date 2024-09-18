@@ -18,7 +18,9 @@ public class CapabilityEventHandler {
 
     @SubscribeEvent
     public void attachCapability(AttachCapabilitiesEvent<SpaceStationObject> event) {
-        event.addCapability(HEAT_CAP, new HeatContainerProvider());
+        HeatContainerProvider obj = new HeatContainerProvider();
+        obj.getCapability(HeatContainerProvider.HEAT_CAP, null).setMaxHeat(event.getObject().getMaxHeat());
+        event.addCapability(HEAT_CAP, obj);
     }
 
     public static CapabilityDispatcher gatherCapabilities(AttachCapabilitiesEvent<?> event, @Nullable ICapabilityProvider parent) {

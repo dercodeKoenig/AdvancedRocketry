@@ -127,6 +127,15 @@ public class SpaceStationObject implements ISpaceObject, IPlanetDefiner, IHeatab
                 tileEntities = tileEntityPoses.stream().map(world::getTileEntity).collect(Collectors.toList());
             }
 
+            IHeatContainer heatContainer = this.getCapability(HeatContainerProvider.HEAT_CAP, null);
+            if (heatContainer == null) {
+                System.out.println("HEAT_CAP was not injected into the space station!!");
+                return;
+            }
+
+//            heatContainer.setHeat(0);
+//            System.out.println("Heat: " + heatContainer.getCurrentHeat() + ", max heat: " + heatContainer.getMaxHeat());
+
             int heatBalance = basicHeatGeneration;
             for (TileEntity te : tileEntities) {
                 if (te instanceof IHeatDissipator) {
@@ -134,11 +143,6 @@ public class SpaceStationObject implements ISpaceObject, IPlanetDefiner, IHeatab
                     continue;
                 }
                 heatBalance += HeatHandler.INSTANCE.getHeat(te);
-            }
-            IHeatContainer heatContainer = this.getCapability(HeatContainerProvider.HEAT_CAP, null);
-            if (heatContainer == null) {
-                System.out.println("HEAT_CAP was not injected into the space station!!");
-                return;
             }
 
             heatContainer.addHeat(heatBalance);
@@ -764,6 +768,7 @@ public class SpaceStationObject implements ISpaceObject, IPlanetDefiner, IHeatab
 
     @Override
     public void writeToNbt(NBTTagCompound nbt) {
+        nbt.setTag("ForgeCaps", capabilities.serializeNBT());
         properties.writeToNBT(nbt);
 
         nbt.setInteger("id", getId());
@@ -843,6 +848,7 @@ public class SpaceStationObject implements ISpaceObject, IPlanetDefiner, IHeatab
 
     @Override
     public void readFromNbt(NBTTagCompound nbt) {
+        capabilities.deserializeNBT(nbt.getCompoundTag("ForgeCaps"));
         properties.readFromNBT(nbt);
 
         destinationDimId = nbt.getInteger("destinationDimId");
@@ -951,5 +957,10 @@ public class SpaceStationObject implements ISpaceObject, IPlanetDefiner, IHeatab
     @Override
     public boolean isStarKnown(StellarBody body) {
         return true;
+    }
+
+    @Override
+    public int getMaxHeat() {
+        return 10000;
     }
 }
