@@ -111,4 +111,5 @@ public class AdvancedRocketryBlocks {
     public static Block blockInvHatch;
     public static Block blockHeatDissipator;
     public static Block blockHeatMonitor;
+    public static Block blockHeatAccumulator;
 }

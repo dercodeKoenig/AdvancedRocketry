@@ -141,6 +141,7 @@ tile.solararraypanel.name=Solar Array Panel
 tile.serviceStation.name=Service Station
 tile.heatdissipator.name=Heat dissipator
 tile.heatmonitor.name=Heat monitor
+tile.heataccumulator.name=Heat accumulator
 
 item.lens.0.name=Basic Lens
 item.wafer.0.name=Silicon Wafer

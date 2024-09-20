@@ -98,6 +98,7 @@ import zmaster587.advancedRocketry.tile.cables.TileLiquidPipe;
 import zmaster587.advancedRocketry.tile.cables.TileWirelessTransciever;
 import zmaster587.advancedRocketry.tile.hatch.TileDataBus;
 import zmaster587.advancedRocketry.tile.hatch.TileSatelliteHatch;
+import zmaster587.advancedRocketry.tile.heat.TileDefaultHeatAccumulator;
 import zmaster587.advancedRocketry.tile.heat.TileDefaultHeatDissipator;
 import zmaster587.advancedRocketry.tile.heat.TileHeatMonitor;
 import zmaster587.advancedRocketry.tile.infrastructure.*;
@@ -138,8 +139,8 @@ import zmaster587.libVulpes.recipe.RecipesMachine;
 import zmaster587.libVulpes.tile.TileMaterial;
 import zmaster587.libVulpes.tile.energy.TilePlugBase;
 import zmaster587.libVulpes.tile.multiblock.TileMultiBlock;
-import zmaster587.libVulpes.tile.multiblock.hatch.TileInventoryHatch;
 import zmaster587.libVulpes.tile.multiblock.hatch.TileFluidHatch;
+import zmaster587.libVulpes.tile.multiblock.hatch.TileInventoryHatch;
 import zmaster587.libVulpes.util.FluidUtils;
 import zmaster587.libVulpes.util.HashedBlockPosition;
 import zmaster587.libVulpes.util.InputSyncHandler;
@@ -436,6 +437,7 @@ public class AdvancedRocketry {
 
         this.registerTileEntity(TileDefaultHeatDissipator.class, "heatdissipator");
         this.registerTileEntity(TileHeatMonitor.class, "heatmonitor");
+        this.registerTileEntity(TileDefaultHeatAccumulator.class, "heataccumulator");
 
         if (zmaster587.advancedRocketry.api.ARConfiguration.getCurrentConfig().enableGravityController)
             GameRegistry.registerTileEntity(TileAreaGravityController.class, "ARGravityMachine");
@@ -632,8 +634,7 @@ public class AdvancedRocketry {
         AdvancedRocketryBlocks.blockSolarArrayPanel = new BlockMultiBlockComponentVisibleAlphaTexture(Material.IRON).setUnlocalizedName("solararraypanel").setCreativeTab(tabAdvRocketry).setHardness(1).setResistance(1f);
         AdvancedRocketryBlocks.blockQuartzCrucible = new BlockQuartzCrucible().setUnlocalizedName("qcrucible").setCreativeTab(tabAdvRocketry);
         AdvancedRocketryBlocks.blockSawBlade = new BlockMotor(Material.IRON, 1f).setCreativeTab(tabAdvRocketry).setUnlocalizedName("sawBlade").setHardness(2f);
-        AdvancedRocketryBlocks.blockHeatDissipator = new BlockTile(TileDefaultHeatDissipator.class, -1).setCreativeTab(tabAdvRocketry).setUnlocalizedName("heatdissipator").setHardness(2f);
-        AdvancedRocketryBlocks.blockHeatMonitor = new BlockTile(TileHeatMonitor.class, GuiHandler.guiId.MODULARNOINV.ordinal()).setCreativeTab(tabAdvRocketry).setUnlocalizedName("heatmonitor").setHardness(2f);
+
         //Singleblock machines
         AdvancedRocketryBlocks.blockPlatePress = new BlockSmallPlatePress().setUnlocalizedName("blockHandPress").setCreativeTab(tabAdvRocketry).setHardness(2f);
         AdvancedRocketryBlocks.blockForceFieldProjector = new BlockForceFieldProjector(Material.IRON).setUnlocalizedName("forceFieldProjector").setCreativeTab(tabAdvRocketry).setHardness(3f);
@@ -644,6 +645,10 @@ public class AdvancedRocketry {
         AdvancedRocketryBlocks.blockPressureTank = new BlockPressurizedFluidTank(Material.IRON).setUnlocalizedName("pressurizedTank").setCreativeTab(tabAdvRocketry).setHardness(3f);
         AdvancedRocketryBlocks.blockSolarGenerator = new BlockSolarGenerator(TileSolarPanel.class, GuiHandler.guiId.MODULAR.ordinal()).setCreativeTab(tabAdvRocketry).setHardness(3f).setUnlocalizedName("solarGenerator");
         AdvancedRocketryBlocks.blockTransciever = new BlockTransciever(TileWirelessTransciever.class, GuiHandler.guiId.MODULAR.ordinal()).setUnlocalizedName("wirelessTransciever").setCreativeTab(tabAdvRocketry).setHardness(3f);
+        AdvancedRocketryBlocks.blockHeatDissipator = new BlockTileNoGui(TileDefaultHeatDissipator.class, -1).setCreativeTab(tabAdvRocketry).setUnlocalizedName("heatdissipator").setHardness(2f);
+        AdvancedRocketryBlocks.blockHeatMonitor = new BlockTile(TileHeatMonitor.class, GuiHandler.guiId.MODULARNOINV.ordinal()).setCreativeTab(tabAdvRocketry).setUnlocalizedName("heatmonitor").setHardness(2f);
+        AdvancedRocketryBlocks.blockHeatAccumulator = new BlockTileNoGui(TileDefaultHeatAccumulator.class, -1).setCreativeTab(tabAdvRocketry).setUnlocalizedName("heataccumulator").setHardness(2f);
+
         //Multiblock machines
         //T1 processing
         AdvancedRocketryBlocks.blockArcFurnace = new BlockMultiblockMachine(TileElectricArcFurnace.class, GuiHandler.guiId.MODULAR.ordinal()).setUnlocalizedName("electricArcFurnace").setCreativeTab(tabAdvRocketry).setHardness(3f);
@@ -808,8 +813,6 @@ public class AdvancedRocketry {
         LibVulpesBlocks.registerBlock(AdvancedRocketryBlocks.blockSolarArrayPanel.setRegistryName("solararraypanel"));
         LibVulpesBlocks.registerBlock(AdvancedRocketryBlocks.blockQuartzCrucible.setRegistryName("quartzcrucible"), null, false);
         LibVulpesBlocks.registerBlock(AdvancedRocketryBlocks.blockSawBlade.setRegistryName("sawBlade"));
-        LibVulpesBlocks.registerBlock(AdvancedRocketryBlocks.blockHeatDissipator.setRegistryName("heatDissipator"));
-        LibVulpesBlocks.registerBlock(AdvancedRocketryBlocks.blockHeatMonitor.setRegistryName("heatMonitor"));
         //Singleblock machines
         LibVulpesBlocks.registerBlock(AdvancedRocketryBlocks.blockPlatePress.setRegistryName("platepress"));
         LibVulpesBlocks.registerBlock(AdvancedRocketryBlocks.blockForceFieldProjector.setRegistryName("forceFieldProjector"));
@@ -820,6 +823,9 @@ public class AdvancedRocketry {
         LibVulpesBlocks.registerBlock(AdvancedRocketryBlocks.blockPressureTank.setRegistryName("liquidTank"), ItemBlockFluidTank.class, true);
         LibVulpesBlocks.registerBlock(AdvancedRocketryBlocks.blockSolarGenerator.setRegistryName("solarGenerator"));
         LibVulpesBlocks.registerBlock(AdvancedRocketryBlocks.blockTransciever.setRegistryName("wirelessTransciever"));
+        LibVulpesBlocks.registerBlock(AdvancedRocketryBlocks.blockHeatDissipator.setRegistryName("heatDissipator"));
+        LibVulpesBlocks.registerBlock(AdvancedRocketryBlocks.blockHeatMonitor.setRegistryName("heatMonitor"));
+        LibVulpesBlocks.registerBlock(AdvancedRocketryBlocks.blockHeatAccumulator.setRegistryName("heatAccumulator"));
         //Multiblock machines
         //T1 processing
         LibVulpesBlocks.registerBlock(AdvancedRocketryBlocks.blockArcFurnace.setRegistryName("arcfurnace"));

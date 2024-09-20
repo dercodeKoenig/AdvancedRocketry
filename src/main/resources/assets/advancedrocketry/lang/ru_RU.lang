@@ -112,6 +112,7 @@ tile.beacon.name=Маяк
 tile.thermiteTorch.name=Термитный факел
 tile.heatdissipator.name=Теплорассеиватель
 tile.heatmonitor.name=Монитор теплообмена
+tile.heataccumulator.name=Тепловой аккумулятор
 
 tile.Dilithium.name=Руда дилития
 

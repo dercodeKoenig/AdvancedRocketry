@@ -292,6 +292,8 @@ public class ARConfiguration {
     public int heatDissipatorEffectiveness;
     @ConfigProperty
     public int stationBaseHeatCapacity;
+    @ConfigProperty
+    public int heatAccumulatorCapacity;
 
     public ARConfiguration() {}
 
@@ -474,6 +476,7 @@ public class ARConfiguration {
         arConfig.increaseWearIntensityProb = config.get(ROCKET, "increaseWearIntensityProb", 0.025, "Every rocket usage every part has this probability to increase wear intensity").getDouble();
         arConfig.heatDissipatorEffectiveness = config.get(ROCKET, "heatDissipatorEffectiveness", 10, "The heat units that heat dissipator dissipates per second").getInt();
         arConfig.stationBaseHeatCapacity = config.get(ROCKET, "stationBaseHeatCapacity", 10, "Maximum heat units station can carry").getInt();
+        arConfig.heatAccumulatorCapacity = config.get(ROCKET, "heatAccumulatorCapacity", 10000, "Maximum heat units default heat accumulator can carry").getInt();
 
         //Ore and worldgen configuration
         //Ore configuration

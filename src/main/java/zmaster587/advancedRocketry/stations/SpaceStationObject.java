@@ -133,9 +133,10 @@ public class SpaceStationObject implements ISpaceObject, IPlanetDefiner, IHeatab
         if (ticksHandled++ == 20) {
             ticksHandled = 0;
 
-            if (tileEntityPoses != null) {
+            if (tileEntityPoses != null && !tileEntityPoses.isEmpty()) {
                 World world = getWorld();
                 tileEntities = tileEntityPoses.stream().map(world::getTileEntity).filter(Objects::nonNull).collect(Collectors.toList());
+                tileEntityPoses = null;
             }
 
             IHeatContainer heatContainer = this.getCapability(HeatContainerProvider.HEAT_CAP, null);
@@ -449,6 +450,10 @@ public class SpaceStationObject implements ISpaceObject, IPlanetDefiner, IHeatab
     @Override
     public void addTileEntity(TileEntity te) {
         tileEntities.add(te);
+        if (te instanceof IHeatAccumulator) {
+            IHeatContainer heatContainer = this.getCapability(HeatContainerProvider.HEAT_CAP, null);
+            heatContainer.setMaxHeat(heatContainer.getMaxHeat() + ((IHeatAccumulator) te).getHeatCapacity());
+        }
     }
 
     @Override
@@ -459,6 +464,10 @@ public class SpaceStationObject implements ISpaceObject, IPlanetDefiner, IHeatab
     @Override
     public void removeTileEntity(TileEntity te) {
         tileEntities.remove(te);
+        if (te instanceof IHeatAccumulator) {
+            IHeatContainer heatContainer = this.getCapability(HeatContainerProvider.HEAT_CAP, null);
+            heatContainer.setMaxHeat(heatContainer.getMaxHeat() - ((IHeatAccumulator) te).getHeatCapacity());
+        }
     }
 
     @Override
@@ -878,7 +887,12 @@ public class SpaceStationObject implements ISpaceObject, IPlanetDefiner, IHeatab
         nbt.setTag("dockingPositons", list);
 
         nbt.setInteger("basicHeatGeneration", basicHeatGeneration);
-        NBTHelper.writeCollection("tileEntityPoses", nbt, this.tileEntities, te -> NBTHelper.writeBlockPos(te.getPos()));
+        if (tileEntityPoses != null && !tileEntityPoses.isEmpty()) {
+            // I have no idea why writeToNBT is called after readFromNBT, but this.tileEntity stays uninitialized...
+            NBTHelper.writeCollection("tileEntityPoses", nbt, this.tileEntityPoses, NBTHelper::writeBlockPos);
+        } else {
+            NBTHelper.writeCollection("tileEntityPoses", nbt, this.tileEntities, te -> NBTHelper.writeBlockPos(te.getPos()));
+        }
         nbt.setInteger("actualStationSize", actualStationSize);
     }
 
@@ -960,7 +974,6 @@ public class SpaceStationObject implements ISpaceObject, IPlanetDefiner, IHeatab
         if (nbt.hasKey("tileEntityPoses")) {
             basicHeatGeneration = nbt.getInteger("basicHeatGeneration");
             tileEntityPoses = NBTHelper.readCollection("tileEntityPoses", nbt, ArrayList::new, NBTHelper::readBlockPos);
-
         }
         tileEntities = new ArrayList<>();
 
