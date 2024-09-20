@@ -22,6 +22,10 @@ public interface ISpaceObject extends ITickable {
 
     float getOrbitalDistance();
 
+    void setActualRadius(int radius);
+
+    int getActualRadius();
+
     void setOrbitalDistance(float finalVel);
 
     /**

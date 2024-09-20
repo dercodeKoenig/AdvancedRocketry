@@ -282,6 +282,15 @@ public class PlanetEventHandler {
             if (te != null) {
                 spaceObj.addTileEntity(te);
             }
+
+            HashedBlockPosition stationPos = spaceObj.getSpawnLocation();
+            int shiftX = Math.abs(stationPos.x - event.getPos().getX());
+            int shiftY = Math.abs(stationPos.y - event.getPos().getY());
+            int shiftZ = Math.abs(stationPos.z - event.getPos().getZ());
+
+            int newRadius = Math.max(shiftX, Math.max(shiftY, shiftZ));
+
+            spaceObj.setActualRadius(Math.max(spaceObj.getActualRadius(), newRadius));
         }
     }
 

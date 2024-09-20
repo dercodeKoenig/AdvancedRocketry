@@ -1,6 +1,8 @@
 package zmaster587.advancedRocketry.stations;
 
+import net.minecraft.block.material.Material;
 import net.minecraft.block.state.IBlockState;
+import net.minecraft.init.Blocks;
 import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.nbt.NBTTagList;
 import net.minecraft.tileentity.TileEntity;
@@ -75,6 +77,7 @@ public class SpaceStationObject implements ISpaceObject, IPlanetDefiner, IHeatab
     private List<BlockPos> tileEntityPoses;
 
     private int ticksHandled;
+    private int actualStationSize;
 
     public SpaceStationObject() {
         properties = (DimensionProperties) zmaster587.advancedRocketry.dimension.DimensionManager.defaultSpaceDimensionProperties.clone();
@@ -117,13 +120,21 @@ public class SpaceStationObject implements ISpaceObject, IPlanetDefiner, IHeatab
         return ret;
     }
 
+    public World getWorld() {
+        return DimensionManager.getWorld(ARConfiguration.getCurrentConfig().spaceDimId);
+    }
+
+    private int nextIntInRadius(Random rand, int radius) {
+        return (int) (2 * (rand.nextFloat() - 0.5F) * radius);
+    }
+
     @Override
     public void update() {
         if (ticksHandled++ == 20) {
             ticksHandled = 0;
 
-            if (tileEntities == null) {
-                World world = FMLCommonHandler.instance().getMinecraftServerInstance().getWorld(ARConfiguration.getCurrentConfig().spaceDimId);
+            if (tileEntityPoses != null) {
+                World world = getWorld();
                 tileEntities = tileEntityPoses.stream().map(world::getTileEntity).filter(Objects::nonNull).collect(Collectors.toList());
             }
 
@@ -148,9 +159,33 @@ public class SpaceStationObject implements ISpaceObject, IPlanetDefiner, IHeatab
             heatContainer.addHeat(heatBalance);
 //            System.out.println("Heat: " + heatContainer.getCurrentHeat() + ", max heat: " + heatContainer.getMaxHeat());
 //
-//            if (heatContainer.getCurrentHeat() > heatContainer.getMaxHeat()) {
-//                System.out.println("Too much heat!");
-//            }
+            if (heatContainer.getCurrentHeat() > heatContainer.getMaxHeat() * 0.75) {
+                final int sampleSize = 10;
+
+                World world = getWorld();
+                for (int i = 0; i < sampleSize; i++) {
+                    int radius = actualStationSize;
+                    HashedBlockPosition stationPos = getSpawnLocation();
+                    BlockPos sampledPos = stationPos.getPositionAtOffset(
+                            nextIntInRadius(getWorld().rand, radius),
+                            nextIntInRadius(getWorld().rand, radius),
+                            nextIntInRadius(getWorld().rand, radius)
+                    ).getBlockPos();
+
+                    if (world.getBlockState(sampledPos).getMaterial() == Material.AIR) {
+                        Material underlyingMat = world.getBlockState(sampledPos.down()).getMaterial();
+                        if (underlyingMat.getCanBurn()) {
+                            world.setBlockState(sampledPos, Blocks.FIRE.getDefaultState());
+                        }
+                    } else {
+                        if (world.getBlockState(sampledPos.down()).getMaterial().getCanBurn()) {
+                            world.setBlockState(sampledPos, Blocks.FIRE.getDefaultState());
+                        } else if (heatContainer.getCurrentHeat() > heatContainer.getMaxHeat() * 0.9) {
+                            world.setBlockState(sampledPos, Blocks.FLOWING_LAVA.getDefaultState());
+                        }
+                    }
+                }
+            }
         }
     }
 
@@ -844,6 +879,7 @@ public class SpaceStationObject implements ISpaceObject, IPlanetDefiner, IHeatab
 
         nbt.setInteger("basicHeatGeneration", basicHeatGeneration);
         NBTHelper.writeCollection("tileEntityPoses", nbt, this.tileEntities, te -> NBTHelper.writeBlockPos(te.getPos()));
+        nbt.setInteger("actualStationSize", actualStationSize);
     }
 
     @Override
@@ -924,9 +960,11 @@ public class SpaceStationObject implements ISpaceObject, IPlanetDefiner, IHeatab
         if (nbt.hasKey("tileEntityPoses")) {
             basicHeatGeneration = nbt.getInteger("basicHeatGeneration");
             tileEntityPoses = NBTHelper.readCollection("tileEntityPoses", nbt, ArrayList::new, NBTHelper::readBlockPos);
-        } else {
-            tileEntities = new ArrayList<>();
+
         }
+        tileEntities = new ArrayList<>();
+
+        actualStationSize = nbt.getInteger("actualStationSize");
     }
 
     /**
@@ -940,6 +978,16 @@ public class SpaceStationObject implements ISpaceObject, IPlanetDefiner, IHeatab
     @Override
     public float getOrbitalDistance() {
         return orbitalDistance;
+    }
+
+    @Override
+    public void setActualRadius(int radius) {
+        this.actualStationSize = radius;
+    }
+
+    @Override
+    public int getActualRadius() {
+        return actualStationSize;
     }
 
     @Override
@@ -963,6 +1011,6 @@ public class SpaceStationObject implements ISpaceObject, IPlanetDefiner, IHeatab
 
     @Override
     public int getMaxHeat() {
-        return 10000;
+        return ARConfiguration.getCurrentConfig().stationBaseHeatCapacity;
     }
 }

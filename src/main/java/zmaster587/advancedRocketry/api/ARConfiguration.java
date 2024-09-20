@@ -288,6 +288,10 @@ public class ARConfiguration {
 
     @ConfigProperty
     public double increaseWearIntensityProb;
+    @ConfigProperty
+    public int heatDissipatorEffectiveness;
+    @ConfigProperty
+    public int stationBaseHeatCapacity;
 
     public ARConfiguration() {}
 
@@ -468,6 +472,8 @@ public class ARConfiguration {
         arConfig.advancedWeightSystemInventories = config.get(ROCKET, "advancedWeightSystemInventories", true, "Enables advanced weight system for inventories - may not work with modded inventories (eg IE storage chests)").getBoolean();
         arConfig.partsWearSystem = config.get(ROCKET, "partsWearSystem", true, "Enables rocket parts wear subsystem. Every rocket start it has probability to explode based on parts' wear intensities").getBoolean();
         arConfig.increaseWearIntensityProb = config.get(ROCKET, "increaseWearIntensityProb", 0.025, "Every rocket usage every part has this probability to increase wear intensity").getDouble();
+        arConfig.heatDissipatorEffectiveness = config.get(ROCKET, "heatDissipatorEffectiveness", 10, "The heat units that heat dissipator dissipates per second").getInt();
+        arConfig.stationBaseHeatCapacity = config.get(ROCKET, "stationBaseHeatCapacity", 10, "Maximum heat units station can carry").getInt();
 
         //Ore and worldgen configuration
         //Ore configuration
