@@ -686,20 +686,17 @@ public class ClassTransformer implements IClassTransformer {
                 LabelNode label = new LabelNode();
                 AbstractInsnNode pos;
                 AbstractInsnNode ain = null;
-                int numSpec = 1;
-                int numAload = 7;
 
                 for (int i = 0; i < onUpdate.instructions.size(); i++) {
                     ain = onUpdate.instructions.get(i);
-                    if (ain.getOpcode() == Opcodes.INVOKESPECIAL && numSpec-- == 0) {
-
+                    if (ain.getOpcode() == Opcodes.GETFIELD && ((FieldInsnNode) ain).name.equals(obf ? "by" : "openContainer")) {
+                        ain = ain.getPrevious();
                         while (i < onUpdate.instructions.size()) {
                             pos = onUpdate.instructions.get(i++);
-                            if (pos.getOpcode() == Opcodes.ALOAD && numAload-- == 0) {
-                                label = (LabelNode) pos.getPrevious().getPrevious().getPrevious();
+                            if (pos.getOpcode() == Opcodes.PUTFIELD && ((FieldInsnNode) pos).name.equals(obf ? "by" : "openContainer")) {
+                                label = (LabelNode) pos.getNext();
                                 break;
                             }
-
                         }
                         break;
                     }
@@ -711,7 +708,7 @@ public class ClassTransformer implements IClassTransformer {
                 nodeAdd.add(new MethodInsnNode(Opcodes.INVOKESTATIC, "zmaster587/advancedRocketry/util/RocketInventoryHelper", "allowAccess", "(Ljava/lang/Object;)Z", false));
                 nodeAdd.add(new JumpInsnNode(Opcodes.IFEQ, label));
 
-                onUpdate.instructions.insert(ain, nodeAdd);
+                onUpdate.instructions.insertBefore(ain, nodeAdd);
 
                 //onUpdate.instructions.insertBefore(pos, label);
 
