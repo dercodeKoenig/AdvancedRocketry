@@ -1,9 +1,12 @@
 package zmaster587.advancedRocketry.atmosphere;
 
+import matteroverdrive.entity.player.MOPlayerCapabilityProvider;
+import matteroverdrive.init.OverdriveBioticStats;
 import net.minecraft.entity.EntityLivingBase;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.inventory.EntityEquipmentSlot;
 import net.minecraft.item.ItemStack;
+import net.minecraftforge.fml.common.Loader;
 import zmaster587.advancedRocketry.api.EntityRocketBase;
 import zmaster587.advancedRocketry.api.capability.CapabilitySpaceArmor;
 import zmaster587.advancedRocketry.entity.EntityElevatorCapsule;
@@ -25,7 +28,11 @@ public class AtmosphereNeedsSuit extends AtmosphereType {
     @Override
     public boolean isImmune(EntityLivingBase player) {
 
-
+        if(Loader.isModLoaded("matteroverdrive")) {
+            if (MOPlayerCapabilityProvider.GetAndroidCapability(player) != null
+                    && MOPlayerCapabilityProvider.GetAndroidCapability(player).isAndroid()
+                    && MOPlayerCapabilityProvider.GetAndroidCapability(player).isUnlocked(OverdriveBioticStats.oxygen, 1)) return true;
+        }
         //Checks if player is wearing spacesuit or anything that extends ItemSpaceArmor
 
         ItemStack feet = player.getItemStackFromSlot(EntityEquipmentSlot.FEET);
