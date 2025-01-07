@@ -314,9 +314,9 @@ public class EntityElevatorCapsule extends Entity implements INetworkEntity {
                 for (Entity ent : list) {
                     if (this.getRidingEntity() == null)
                         ent.startRiding(this);
-                    this.fallDistance = 0; // I have no idea what I am doing I just copied this from
                     ent.fallDistance = 0;   // entityRocket.java to prevent fall damage
                 }
+                this.fallDistance = 0; // I have no idea what I am doing I just copied this from
 
                 if (this.posY <= dstTilePos.pos.y + 1 && world.provider.getDimension() != ARConfiguration.getCurrentConfig().spaceDimId) {
                     setCapsuleMotion(0);

@@ -140,7 +140,7 @@ public class TileSolarArray extends TileMultiPowerProducer implements ITickable 
             if (enabled && ((world.isDaytime() && world.canBlockSeeSky(this.pos.up())) || (world.provider.getDimension() == ARConfiguration.getCurrentConfig().spaceDimId && world.canBlockSeeSky(this.pos.down())))) {
                 //Multiplied by two for 520W = 1 RF/t becoming 2 RF/t @ 100% efficiency, and by insolation mult for solar stuff
                 //Slight adjustment to make Earth 0.9995 into a 1.0
-                energyRecieved = (int) (numPanels * 1.0005d * 2 * insolationPowerMultiplier);
+                energyRecieved = Math.min(4096, (int) (numPanels * 1.0005d * 2 * insolationPowerMultiplier));
             }
             powerMadeLastTick = energyRecieved * ARConfiguration.getCurrentConfig().solarGeneratorMult;
 

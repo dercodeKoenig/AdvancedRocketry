@@ -29,7 +29,7 @@ import zmaster587.advancedRocketry.api.dimension.IDimensionProperties;
 import zmaster587.advancedRocketry.api.dimension.solar.StellarBody;
 import zmaster587.advancedRocketry.api.satellite.SatelliteBase;
 import zmaster587.advancedRocketry.atmosphere.AtmosphereType;
-import zmaster587.advancedRocketry.fuckin_bs_integrated_server_and_client_variable_sharing_crap_fix_fuckit_Im_in_rage.Afuckinginterface;
+import zmaster587.advancedRocketry.integrated_server_and_client_variable_sharing_fix.Afuckinginterface;
 import zmaster587.advancedRocketry.inventory.TextureResources;
 import zmaster587.advancedRocketry.network.PacketDimInfo;
 import zmaster587.advancedRocketry.network.PacketSatellite;
@@ -143,7 +143,7 @@ public class DimensionProperties implements Cloneable, IDimensionProperties {
 
 
 
-    @SidedProxy(serverSide = "zmaster587.advancedRocketry.fuckin_bs_integrated_server_and_client_variable_sharing_crap_fix_fuckit_Im_in_rage.serverlists", clientSide = "zmaster587.advancedRocketry.fuckin_bs_integrated_server_and_client_variable_sharing_crap_fix_fuckit_Im_in_rage.clientlists")
+    @SidedProxy(serverSide = "zmaster587.advancedRocketry.integrated_server_and_client_variable_sharing_fix.serverlists", clientSide = "zmaster587.advancedRocketry.integrated_server_and_client_variable_sharing_fix.clientlists")
     public static Afuckinginterface proxylists;
 
 

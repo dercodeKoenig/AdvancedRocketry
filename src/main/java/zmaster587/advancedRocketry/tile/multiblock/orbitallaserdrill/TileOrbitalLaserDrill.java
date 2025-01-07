@@ -21,6 +21,7 @@ import net.minecraftforge.items.CapabilityItemHandler;
 import net.minecraftforge.items.IItemHandler;
 import zmaster587.advancedRocketry.api.ARConfiguration;
 import zmaster587.advancedRocketry.api.AdvancedRocketryBlocks;
+import zmaster587.advancedRocketry.api.stations.ISpaceObject;
 import zmaster587.advancedRocketry.stations.SpaceObjectManager;
 import zmaster587.advancedRocketry.util.TerraformingHelper;
 import zmaster587.advancedRocketry.world.provider.WorldProviderSpace;
@@ -627,8 +628,15 @@ public class TileOrbitalLaserDrill extends TileMultiPowerConsumer implements IGu
     public void checkCanRun() {
         if (world.isRemote) return; // client has no business here
 
-
-        int orbitDimId = SpaceObjectManager.getSpaceManager().getSpaceStationFromBlockCoords(this.pos).getOrbitingPlanetId();
+        ISpaceObject spaceObject =  SpaceObjectManager.getSpaceManager().getSpaceStationFromBlockCoords(this.pos);
+        if(spaceObject == null){
+            if (isRunning) {
+                drill.deactivate();
+                setRunning(false);
+            }
+            return;
+        }
+        int orbitDimId = spaceObject.getOrbitingPlanetId();
 
         if (orbitDimId != last_orbit_dim ||orbitWorld== null || t == null){
             last_orbit_dim = orbitDimId;

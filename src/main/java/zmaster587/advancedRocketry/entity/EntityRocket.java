@@ -1079,6 +1079,12 @@ public class EntityRocket extends EntityRocketBase implements INetworkEntity, IM
                 damageGroundBelowRocket(world, (int) this.posX, (int) this.posY, (int) this.posZ, (int) Math.pow(stats.getThrust(), 0.4));
         }
 
+        if(!world.isRemote){
+            for(Entity entity : this.getPassengers()) {
+                entity.fallDistance = 0;
+            }
+            this.fallDistance = 0;
+        }
 
         // When flying around in space
         if (getInSpaceFlight()) {

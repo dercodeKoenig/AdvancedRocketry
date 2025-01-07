@@ -642,7 +642,7 @@ public class TileObservatory extends TileMultiPowerConsumer implements IModularI
 
             for (TileDataBus tile : dataCables) {
                 if (doesSlotIndexMatchDataType(data.getDataType(), chipSlot))
-                    dataItem.removeData(dataChip, tile.addData(Math.min(tile.getDataObject().getMaxData() - tile.getData(), data.getMaxData()), data.getDataType(), EnumFacing.UP, true), DataStorage.DataType.UNDEFINED);
+                    dataItem.removeData(dataChip, tile.addData(Math.min(tile.getDataObject().getMaxData() - tile.getData(), data.getData()), data.getDataType(), EnumFacing.UP, true), DataStorage.DataType.UNDEFINED);
             }
 
             //dataItem.setData(dataChip, data.getData(), data.getData() != 0 ? data.getDataType() : DataType.UNDEFINED);

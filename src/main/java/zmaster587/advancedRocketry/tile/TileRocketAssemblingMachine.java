@@ -65,7 +65,7 @@ public class TileRocketAssemblingMachine extends TileEntityRFConsumer implements
     private final static int MAXSCANDELAY = 10;
     private final static int ENERGYFOROP = 100;
     private final static int MAX_SIZE = 16;
-    private final static int MAX_SIZE_Y = 64;
+    private final static int MAX_SIZE_Y = 128;
     private final static int MIN_SIZE = 3;
     private final static int MIN_SIZE_Y = 4;
     private static final ProgressBarImage horizontalProgressBar = new ProgressBarImage(89, 9, 81, 17, 176, 0, 80, 15, 0, 2, EnumFacing.EAST, backdrop);

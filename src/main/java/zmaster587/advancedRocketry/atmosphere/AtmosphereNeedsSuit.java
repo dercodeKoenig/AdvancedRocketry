@@ -1,15 +1,20 @@
 package zmaster587.advancedRocketry.atmosphere;
 
+import matteroverdrive.api.android.IBioticStat;
+import matteroverdrive.entity.player.MOPlayerCapabilityProvider;
+import matteroverdrive.init.OverdriveBioticStats;
 import net.minecraft.entity.EntityLivingBase;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.inventory.EntityEquipmentSlot;
 import net.minecraft.item.ItemStack;
+import net.minecraftforge.fml.common.Loader;
 import zmaster587.advancedRocketry.api.EntityRocketBase;
 import zmaster587.advancedRocketry.api.capability.CapabilitySpaceArmor;
 import zmaster587.advancedRocketry.entity.EntityElevatorCapsule;
 import zmaster587.advancedRocketry.util.ItemAirUtils;
 
 import javax.annotation.Nonnull;
+import java.lang.reflect.Method;
 
 public class AtmosphereNeedsSuit extends AtmosphereType {
 
@@ -25,7 +30,25 @@ public class AtmosphereNeedsSuit extends AtmosphereType {
     @Override
     public boolean isImmune(EntityLivingBase player) {
 
+        //idk for what reason it's trying to load MO stuff under this check so i'll just use some relfexia
+        if (Loader.isModLoaded("matteroverdrive")) {
+            try {
+                Object androidCapability = MOPlayerCapabilityProvider.GetAndroidCapability(player);
+                if (androidCapability != null) {
+                    Method isAndroidMethod = androidCapability.getClass().getMethod("isAndroid");
+                    boolean isAndroid = (boolean) isAndroidMethod.invoke(androidCapability);
 
+                    Method isUnlockedMethod = androidCapability.getClass().getMethod("isUnlocked", IBioticStat.class, int.class);
+                    boolean oxygenUnlocked = (boolean) isUnlockedMethod.invoke(androidCapability, OverdriveBioticStats.oxygen, 1);
+
+                    if (isAndroid && oxygenUnlocked) {
+                        return true;
+                    }
+                }
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        }
         //Checks if player is wearing spacesuit or anything that extends ItemSpaceArmor
 
         ItemStack feet = player.getItemStackFromSlot(EntityEquipmentSlot.FEET);
