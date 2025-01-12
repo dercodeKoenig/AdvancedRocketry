@@ -32,6 +32,10 @@ val startGitRev: String by project
 group = "zmaster587.advancedRocketry"
 setProperty("archivesBaseName", archiveBase)
 
+legacy {
+    fixClasspath = true
+}
+
 val buildNumber: String by lazy { System.getenv("BUILD_NUMBER") ?: getDate() }
 
 fun getDate(): String {
@@ -51,9 +55,25 @@ java {
     }
 }
 
-configurations.configureEach {
-    exclude(group = "net.minecraftforge", module = "mergetool")
+tasks {
+    javadoc {
+        options.encoding = "UTF-8"
+    }
+    compileJava {
+        options.encoding = "UTF-8"
+    }
+    compileTestJava {
+        options.encoding = "UTF-8"
+    }
+
+//    withType(JavaCompile) {
+//        options.encoding = "UTF-8"
+//    }
 }
+
+//configurations.configureEach {
+//    exclude(group = "net.minecraftforge", module = "mergetool")
+//}
 
 //sourceCompatibility = targetCompatibility = '1.8' // Need this here so eclipse task generates correctly.
 tasks.compileJava {
@@ -161,7 +181,8 @@ dependencies {
     implementation(fileTree(mapOf("dir" to "libs", "include" to listOf("*.jar"))))
     compileOnly(fileTree(mapOf("dir" to "libs/compileOnly", "include" to listOf("*.jar"))))
 
-    implementation ("net.minecraftforge:mergetool:0.2.3.3")
+//    implementation ("net.minecraftforge:mergetool:0.2.3.3")
+    implementation ("net.minecraftforge:mergetool") { version { strictly("0.2.3.3") } }
 }
 
 tasks.processResources {
@@ -207,6 +228,7 @@ tasks.withType(Jar::class) {
                 "Implementation-Title" to archiveBase,
                 "Implementation-Version" to project.version,
                 "Git-Hash" to gitHash,
+                "FMLAT" to "accessTransformer.cfg",
                 "FMLCorePlugin" to "zmaster587.advancedRocketry.asm.AdvancedRocketryPlugin",
                 "FMLCorePluginContainsFMLMod" to "true"
         )

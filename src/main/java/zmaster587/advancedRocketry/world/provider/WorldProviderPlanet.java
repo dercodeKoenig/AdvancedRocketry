@@ -13,10 +13,7 @@ import net.minecraft.world.DimensionType;
 import net.minecraft.world.WorldProvider;
 import net.minecraft.world.chunk.Chunk;
 import net.minecraft.world.gen.IChunkGenerator;
-import net.minecraft.world.storage.DerivedWorldInfo;
-import net.minecraft.world.storage.WorldInfo;
 import net.minecraftforge.client.IRenderHandler;
-import net.minecraftforge.fml.relauncher.ReflectionHelper;
 import net.minecraftforge.fml.relauncher.Side;
 import net.minecraftforge.fml.relauncher.SideOnly;
 import org.apache.commons.lang3.ArrayUtils;
@@ -32,7 +29,6 @@ import zmaster587.advancedRocketry.capability.DimensionCompat;
 import zmaster587.advancedRocketry.client.render.planet.RenderPlanetarySky;
 import zmaster587.advancedRocketry.dimension.DimensionManager;
 import zmaster587.advancedRocketry.dimension.DimensionProperties;
-import zmaster587.advancedRocketry.integration.CompatibilityMgr;
 import zmaster587.advancedRocketry.util.AstronomicalBodyHelper;
 import zmaster587.advancedRocketry.world.ChunkManagerPlanet;
 import zmaster587.advancedRocketry.world.ChunkProviderCavePlanet;
@@ -74,7 +70,7 @@ public class WorldProviderPlanet extends WorldProvider implements IPlanetaryProv
         if (!ARConfiguration.getCurrentConfig().planetSkyOverride || DimensionManager.getInstance().getDimensionProperties(world.provider.getDimension()).skyRenderOverride)
             return null;
 
-        int genType = DimensionManager.getInstance().getDimensionProperties(world.provider.getDimension()).getGenType();
+//        int genType = DimensionManager.getInstance().getDimensionProperties(world.provider.getDimension()).getGenType();
 
 
         if (super.getSkyRenderer() == null)
@@ -123,19 +119,19 @@ public class WorldProviderPlanet extends WorldProvider implements IPlanetaryProv
     }
 
     private void doWeatherStuff() {
-        if (getAtmosphereDensity(new BlockPos(0, 0, 0)) <= 75 && world.isRaining()) {
-            if (!CompatibilityMgr.isSpongeInstalled) {
-                try {
-                    WorldInfo worldInfo = ReflectionHelper.getPrivateValue(DerivedWorldInfo.class, (DerivedWorldInfo) this.world.getWorldInfo(), "delegate", "field_76115_a");
-                    worldInfo.setRaining(false);
-                } catch (ClassCastException e) {
-                    //Fallback.  Sometimes mods screw with worldInfo
-                    this.world.getWorldInfo().setRaining(false);
-                }
-            } else
-                //Hope that sponge cooperates
-                this.world.getWorldInfo().setRaining(false);
-        }
+//        if (getAtmosphereDensity(new BlockPos(0, 0, 0)) <= 75 && world.isRaining()) {
+//            if (!CompatibilityMgr.isSpongeInstalled) {
+//                try {
+//                    WorldInfo worldInfo = ReflectionHelper.getPrivateValue(DerivedWorldInfo.class, (DerivedWorldInfo) this.world.getWorldInfo(), "delegate", "field_76115_a");
+//                    worldInfo.setRaining(false);
+//                } catch (ClassCastException e) {
+//                    //Fallback.  Sometimes mods screw with worldInfo
+//                    this.world.getWorldInfo().setRaining(false);
+//                }
+//            } else
+//                //Hope that sponge cooperates
+//                this.world.getWorldInfo().setRaining(false);
+//        }
     }
 
     @Override
