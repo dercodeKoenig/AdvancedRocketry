@@ -503,3 +503,7 @@ msg.muchTooDense=Warning: Atmosphere pressure critically dense!
 msg.chat.nostation1=You wake up on the space station with a lingering feeling that your far-reaching spacewalk was frowned upon by some elder fox deity, and that it would be foolish to attempt so again and to expect different results
 msg.chat.nostation2=Maybe you should think before overstepping clearly logical and absolute boundaries again then deciding it was a good idea and not your fault if things go wrong
 msg.chat.nostation3=You must be on a space station to be in this dimension, and none have been created!
+
+commands.weather.always_not_clear=This planet is always not clear...
+commands.weather.cannot_rain=Cannot start a rain here
+commands.weather.cannot_thunder=Cannot start a thunder here

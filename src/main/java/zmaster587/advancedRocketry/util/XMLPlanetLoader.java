@@ -103,6 +103,14 @@ public class XMLPlanetLoader {
     private static final String ATTR_GROUPMIN = "groupMin";
     private static final String ATTR_GROUPMAX = "groupMax";
     private static final String ATTR_NBT = "nbt";
+    // Weather
+    private static final String ELEMENT_RAIN_START_LENGTH = "rainStartLength";
+    private static final String ELEMENT_THUNDER_START_LENGTH = "thunderStartLength";
+    private static final String ELEMENT_RAIN_PROLONGATION_LENGTH = "rainProlongationLength";
+    private static final String ELEMENT_THUNDER_PROLONGATION_LENGTH = "thunderProlongationLength";
+    private static final String ELEMENT_RAIN_MARKER = "rainMarker";
+    private static final String ELEMENT_THUNDER_MARKER = "thunderMarker";
+
     NodeList currentList;
     private Document doc;
     private int currentNodeIndex;
@@ -261,11 +269,20 @@ public class XMLPlanetLoader {
         nodePlanet.appendChild(createTextNode(doc, AVG_TEMPERATURE, properties.averageTemperature));
         nodePlanet.appendChild(createTextNode(doc, ELEMENT_PERIOD, properties.rotationalPeriod));
         nodePlanet.appendChild(createTextNode(doc, ELEMENT_ATMDENSITY, properties.getAtmosphereDensity()));
+        // Custom weather properties
+        nodePlanet.appendChild(createTextNode(doc, ELEMENT_RAIN_START_LENGTH, properties.rainStartLength));
+        nodePlanet.appendChild(createTextNode(doc, ELEMENT_RAIN_PROLONGATION_LENGTH, properties.rainProlongationLength));
+        nodePlanet.appendChild(createTextNode(doc, ELEMENT_THUNDER_START_LENGTH, properties.thunderStartLength));
+        nodePlanet.appendChild(createTextNode(doc, ELEMENT_THUNDER_PROLONGATION_LENGTH, properties.thunderProlongationLength));
+        nodePlanet.appendChild(createTextNode(doc, ELEMENT_RAIN_MARKER, properties.getRainMarker()));
+        nodePlanet.appendChild(createTextNode(doc, ELEMENT_THUNDER_MARKER, properties.getThunderMarker()));
+
         nodePlanet.appendChild(createTextNode(doc, GENERATECRATERS, properties.canGenerateCraters()));
         nodePlanet.appendChild(createTextNode(doc, GENERATECAVES, properties.canGenerateCaves()));
         nodePlanet.appendChild(createTextNode(doc, GENERATEVOLCANOS, properties.canGenerateVolcanos()));
         nodePlanet.appendChild(createTextNode(doc, GENERATESTRUCTURES, properties.canGenerateStructures()));
         nodePlanet.appendChild(createTextNode(doc, GENERATEGEODES, properties.canGenerateGeodes()));
+
 
         if (properties.canGenerateCraters() && !(properties.getCraterMultiplier() == 1))
             nodePlanet.appendChild(createTextNode(doc, ELEMENT_CRATER_MULTIPLIER, properties.getCraterMultiplier()));
@@ -584,6 +601,19 @@ public class XMLPlanetLoader {
                 properties.colorOverride = Boolean.parseBoolean(planetPropertyNode.getTextContent());
             else if (planetPropertyNode.getNodeName().equalsIgnoreCase(ELEMENT_SKYOVERRIDE))
                 properties.skyRenderOverride = Boolean.parseBoolean(planetPropertyNode.getTextContent());
+            else if (planetPropertyNode.getNodeName().equalsIgnoreCase(ELEMENT_RAIN_START_LENGTH))
+                properties.rainStartLength = Integer.parseInt(planetPropertyNode.getTextContent());
+            // TODO Create default values for new fields
+            else if (planetPropertyNode.getNodeName().equalsIgnoreCase(ELEMENT_RAIN_PROLONGATION_LENGTH))
+                properties.rainProlongationLength = Integer.parseInt(planetPropertyNode.getTextContent());
+            else if (planetPropertyNode.getNodeName().equalsIgnoreCase(ELEMENT_THUNDER_START_LENGTH))
+                properties.thunderStartLength = Integer.parseInt(planetPropertyNode.getTextContent());
+            else if (planetPropertyNode.getNodeName().equalsIgnoreCase(ELEMENT_THUNDER_PROLONGATION_LENGTH))
+                properties.thunderProlongationLength = Integer.parseInt(planetPropertyNode.getTextContent());
+            else if (planetPropertyNode.getNodeName().equalsIgnoreCase(ELEMENT_RAIN_MARKER))
+                properties.setRainMarker(Integer.parseInt(planetPropertyNode.getTextContent()));
+            else if (planetPropertyNode.getNodeName().equalsIgnoreCase(ELEMENT_THUNDER_MARKER))
+                properties.setThunderMarker(Integer.parseInt(planetPropertyNode.getTextContent()));
             else if (planetPropertyNode.getNodeName().equalsIgnoreCase(ELEMENT_ATMDENSITY)) {
 
                 try {

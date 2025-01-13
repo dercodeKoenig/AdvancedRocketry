@@ -43,8 +43,6 @@ import zmaster587.libVulpes.util.ZUtils;
 import java.util.*;
 import java.util.Map.Entry;
 
-import static org.apache.commons.lang3.RandomUtils.nextInt;
-
 
 public class DimensionProperties implements Cloneable, IDimensionProperties {
 
@@ -101,6 +99,15 @@ public class DimensionProperties implements Cloneable, IDimensionProperties {
     public int ringAngle;
     public boolean hasRivers;
     public List<ItemStack> requiredArtifacts;
+
+    // Custom weather properties
+    public int rainStartLength = 168000;
+    public int thunderStartLength = 168000;
+    public int rainProlongationLength = 12000;
+    public int thunderProlongationLength = 12000;
+    private int rainMarker;  // -1 - never rain, 1 - always rain, 0 - regular weather
+    private int thunderMarker;  // -1 - never thunder, 1 - always thunder, 0 - regular weather
+
     IAtmosphere atmosphereType;
     StellarBody star;
     int starId;
@@ -139,8 +146,6 @@ public class DimensionProperties implements Cloneable, IDimensionProperties {
     private int seaLevel;
     private int generatorType;
     //public int target_sea_level;
-
-
 
 
     @SidedProxy(serverSide = "zmaster587.advancedRocketry.integrated_server_and_client_variable_sharing_fix.serverlists", clientSide = "zmaster587.advancedRocketry.integrated_server_and_client_variable_sharing_fix.clientlists")
@@ -215,6 +220,22 @@ public class DimensionProperties implements Cloneable, IDimensionProperties {
 
         //dont need this here because the terraforming terminal will re-create it anyway
         //this.chunkMgrTerraformed = new ChunkManagerPlanet(net.minecraftforge.common.DimensionManager.getWorld(id), net.minecraftforge.common.DimensionManager.getWorld(getId()).getWorldInfo().getGeneratorOptions(), getTerraformedBiomes());
+    }
+
+    public int getRainMarker() {
+        return rainMarker;
+    }
+
+    public int getThunderMarker() {
+        return thunderMarker;
+    }
+
+    public void setRainMarker(int marker) {
+        this.rainMarker = marker;
+    }
+
+    public void setThunderMarker(int marker) {
+        this.thunderMarker = marker;
     }
 
     public void load_terraforming_helper(boolean reset) {
@@ -1605,6 +1626,14 @@ public class DimensionProperties implements Cloneable, IDimensionProperties {
         craterFrequencyMultiplier = nbt.getFloat("craterFrequencyMultiplier");
         volcanoFrequencyMultiplier = nbt.getFloat("volcanoFrequencyMultiplier");
 
+        // Custom weather info
+        rainStartLength = nbt.getInteger("rainStartLength");
+        thunderStartLength = nbt.getInteger("thunderStartLength");
+        rainProlongationLength = nbt.getInteger("rainProlongationLength");
+        thunderProlongationLength = nbt.getInteger("thunderProlongationLength");
+        rainMarker = nbt.getInteger("rainMarker");
+        thunderMarker = nbt.getInteger("thunderMarker");
+
 
         //Hierarchy
         if (nbt.hasKey("childrenPlanets")) {
@@ -1921,6 +1950,14 @@ public class DimensionProperties implements Cloneable, IDimensionProperties {
         nbt.setFloat("geodeFrequencyMultiplier", geodeFrequencyMultiplier);
         nbt.setFloat("craterFrequencyMultiplier", craterFrequencyMultiplier);
         nbt.setFloat("volcanoFrequencyMultiplier", volcanoFrequencyMultiplier);
+
+        // Custom weather data
+        nbt.setInteger("rainStartLength", rainStartLength);
+        nbt.setInteger("thunderStartLength", thunderStartLength);
+        nbt.setInteger("rainProlongationLength", rainProlongationLength);
+        nbt.setInteger("thunderProlongationLength", thunderProlongationLength);
+        nbt.setInteger("rainMarker", rainMarker);
+        nbt.setInteger("thunderMarker", thunderMarker);
 
         //Hierarchy
         if (!childPlanets.isEmpty()) {

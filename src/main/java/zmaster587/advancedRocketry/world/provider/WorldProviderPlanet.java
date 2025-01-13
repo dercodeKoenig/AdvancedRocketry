@@ -114,8 +114,94 @@ public class WorldProviderPlanet extends WorldProvider implements IPlanetaryProv
 
     @Override
     public void updateWeather() {
-        super.updateWeather();
-        doWeatherStuff();
+        DimensionProperties props = getDimensionProperties();
+
+        // Totally override weather cycle
+        if (world.provider.hasSkyLight()) {
+            if (!world.isRemote) {
+                boolean flag = world.getGameRules().getBoolean("doWeatherCycle");
+
+                if (flag) {
+                    if (props.getRainMarker() == -1 && props.getThunderMarker() == -1) {
+                        world.getWorldInfo().setRaining(false);
+                        world.getWorldInfo().setRainTime(0);
+                        world.getWorldInfo().setThundering(false);
+                        world.getWorldInfo().setThunderTime(0);
+                        world.getWorldInfo().setCleanWeatherTime(20000);
+                    }
+
+                    int j2 = world.getWorldInfo().getCleanWeatherTime();
+
+                    if (j2 > 0) {
+                        --j2;
+                        world.getWorldInfo().setCleanWeatherTime(j2);
+                        world.getWorldInfo().setThunderTime(world.getWorldInfo().isThundering() ? 1 : 2);
+                        world.getWorldInfo().setRainTime(world.getWorldInfo().isRaining() ? 1 : 2);
+                    }
+                    if (props.getThunderMarker() == 1) {
+                        world.getWorldInfo().setCleanWeatherTime(0);
+                        world.getWorldInfo().setThundering(true);
+                    }
+                    if (props.getRainMarker() == 1) {
+                        world.getWorldInfo().setCleanWeatherTime(0);
+                        world.getWorldInfo().setRaining(true);
+                    }
+
+                    int k2 = world.getWorldInfo().getThunderTime();
+
+                    if (k2 <= 0) {
+                        if (world.getWorldInfo().isThundering()) {
+                            world.getWorldInfo().setThunderTime(world.rand.nextInt(getDimensionProperties().thunderProlongationLength) + 3600);
+                        } else {
+                            world.getWorldInfo().setThunderTime(world.rand.nextInt(getDimensionProperties().thunderStartLength) + 12000);
+                        }
+                    } else {
+                        --k2;
+                        world.getWorldInfo().setThunderTime(k2);
+
+                        if (props.getThunderMarker() == 0 && k2 <= 0) {
+                            world.getWorldInfo().setThundering(!world.getWorldInfo().isThundering());
+                        }
+                    }
+
+                    int l2 = world.getWorldInfo().getRainTime();
+
+                    if (l2 <= 0) {
+                        if (world.getWorldInfo().isRaining()) {
+                            world.getWorldInfo().setRainTime(world.rand.nextInt(getDimensionProperties().rainProlongationLength) + 12000);
+                        } else {
+                            world.getWorldInfo().setRainTime(world.rand.nextInt(getDimensionProperties().rainStartLength) + 12000);
+                        }
+                    } else {
+                        --l2;
+                        world.getWorldInfo().setRainTime(l2);
+
+                        if (props.getRainMarker() == 0 && l2 <= 0) {
+                            world.getWorldInfo().setRaining(!world.getWorldInfo().isRaining());
+                        }
+                    }
+                }
+
+                world.prevThunderingStrength = world.thunderingStrength;
+
+                if (world.getWorldInfo().isThundering()) {
+                    world.thunderingStrength = (float) ((double) world.thunderingStrength + 0.01D);
+                } else {
+                    world.thunderingStrength = (float) ((double) world.thunderingStrength - 0.01D);
+                }
+
+                world.thunderingStrength = MathHelper.clamp(world.thunderingStrength, 0.0F, 1.0F);
+                world.prevRainingStrength = world.rainingStrength;
+
+                if (world.getWorldInfo().isRaining()) {
+                    world.rainingStrength = (float) ((double) world.rainingStrength + 0.01D);
+                } else {
+                    world.rainingStrength = (float) ((double) world.rainingStrength - 0.01D);
+                }
+
+                world.rainingStrength = MathHelper.clamp(world.rainingStrength, 0.0F, 1.0F);
+            }
+        }
     }
 
     private void doWeatherStuff() {
@@ -423,6 +509,10 @@ public class WorldProviderPlanet extends WorldProvider implements IPlanetaryProv
 
     public int getSolarOrbitalDistance(@Nullable BlockPos pos) {
         return getDimensionProperties(pos).getSolarOrbitalDistance();
+    }
+
+    public DimensionProperties getDimensionProperties() {
+        return this.getDimensionProperties(null);
     }
 
     @Override

@@ -10,9 +10,11 @@ import net.minecraftforge.common.DimensionManager;
 import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.event.world.WorldEvent;
 import net.minecraftforge.fml.common.FMLLog;
+import zmaster587.advancedRocketry.dimension.DimensionProperties;
 import zmaster587.advancedRocketry.repack.gloomyfolken.hooklib.asm.Hook;
 import zmaster587.advancedRocketry.repack.gloomyfolken.hooklib.asm.ReturnCondition;
 import zmaster587.advancedRocketry.world.WorldServerNotMulti;
+import zmaster587.advancedRocketry.world.provider.WorldProviderPlanet;
 
 import java.util.Random;
 
@@ -153,8 +155,18 @@ public class ARHooks {
 
             World world = sender.getEntityWorld();
             WorldInfo worldinfo = world.getWorldInfo();
+            WorldProvider provider = world.provider;
+            DimensionProperties props = null;
+            if (provider instanceof WorldProviderPlanet) {
+                props = ((WorldProviderPlanet) provider).getDimensionProperties();
+            }
 
             if ("clear".equalsIgnoreCase(args[0])) {
+                if (props != null && (props.getRainMarker() == 1 || props.getThunderMarker() == 1)) {
+                    CommandBase.notifyCommandListener(sender, command, "commands.weather.always_not_clear", new Object[0]);
+                    return;
+                }
+
                 worldinfo.setCleanWeatherTime(i);
                 worldinfo.setRainTime(0);
                 worldinfo.setThunderTime(0);
@@ -162,6 +174,11 @@ public class ARHooks {
                 worldinfo.setThundering(false);
                 CommandBase.notifyCommandListener(sender, command, "commands.weather.clear", new Object[0]);
             } else if ("rain".equalsIgnoreCase(args[0])) {
+                if (props != null && props.getRainMarker() == -1) {
+                    CommandBase.notifyCommandListener(sender, command, "commands.weather.cannot_rain", new Object[0]);
+                    return;
+                }
+
                 worldinfo.setCleanWeatherTime(0);
                 worldinfo.setRainTime(i);
                 worldinfo.setThunderTime(i);
@@ -171,6 +188,10 @@ public class ARHooks {
             } else {
                 if (!"thunder".equalsIgnoreCase(args[0])) {
                     throw new WrongUsageException("commands.weather.usage", new Object[0]);
+                }
+                if (props != null && props.getThunderMarker() == -1) {
+                    CommandBase.notifyCommandListener(sender, command, "commands.weather.cannot_thunder", new Object[0]);
+                    return;
                 }
 
                 worldinfo.setCleanWeatherTime(0);
