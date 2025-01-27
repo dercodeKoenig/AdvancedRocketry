@@ -10,6 +10,8 @@ import net.minecraftforge.common.DimensionManager;
 import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.event.world.WorldEvent;
 import net.minecraftforge.fml.common.FMLLog;
+import net.minecraftforge.fml.relauncher.Side;
+import net.minecraftforge.fml.relauncher.SideOnly;
 import zmaster587.advancedRocketry.dimension.DimensionProperties;
 import zmaster587.advancedRocketry.repack.gloomyfolken.hooklib.asm.Hook;
 import zmaster587.advancedRocketry.repack.gloomyfolken.hooklib.asm.ReturnCondition;
@@ -110,6 +112,7 @@ public class ARHooks {
         server.initialWorldChunkLoad();
     }
 
+    @SideOnly(Side.CLIENT)
     @Hook(returnCondition = ReturnCondition.ALWAYS)
     public static void loadAllWorlds(IntegratedServer server, String saveName, String worldNameIn, long seed, WorldType type, String generatorOptions) {
         server.convertMapIfNeeded(saveName);
