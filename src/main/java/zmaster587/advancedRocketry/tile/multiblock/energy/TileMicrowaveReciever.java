@@ -91,9 +91,13 @@ public class TileMicrowaveReciever extends TileMultiPowerProducer implements ITi
     public List<BlockMeta> getAllowableWildCardBlocks() {
         List<BlockMeta> blocks = super.getAllowableWildCardBlocks();
 
-        blocks.addAll(TileMultiBlock.getMapping('I'));
+        // Null-guard: TileMultiBlock.getMapping returns null for wildcards not
+        // yet registered (postInit ordering crashes the dedicated server).
+        for (char c : new char[] {'I', 'p'}) {
+            List<BlockMeta> mapping = TileMultiBlock.getMapping(c);
+            if (mapping != null) blocks.addAll(mapping);
+        }
         blocks.add(iron_block);
-        blocks.addAll(TileMultiBlock.getMapping('p'));
 
         return blocks;
     }

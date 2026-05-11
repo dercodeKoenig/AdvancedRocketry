@@ -60,12 +60,24 @@ public class TileElectricArcFurnace extends TileMultiblockMachine implements IMo
     @Override
     public List<BlockMeta> getAllowableWildCardBlocks() {
         List<BlockMeta> list = super.getAllowableWildCardBlocks();
-        list.addAll(TileMultiBlock.getMapping('O'));
-        list.addAll(TileMultiBlock.getMapping('I'));
-        list.addAll(TileMultiBlock.getMapping('l'));
-        list.addAll(TileMultiBlock.getMapping('L'));
+        // Null-guard: TileMultiBlock.getMapping(char) returns null for characters
+        // that haven't been registered yet. Without this guard the dedicated
+        // server crashes during AR postInit (the client path happens to register
+        // these wildcards in time, masking the bug). Surfaced by the headless
+        // scenario suite.
+        addMappingIfPresent(list, 'O');
+        addMappingIfPresent(list, 'I');
+        addMappingIfPresent(list, 'l');
+        addMappingIfPresent(list, 'L');
         list.add(new BlockMeta(AdvancedRocketryBlocks.blockBlastBrick, -1));
         return list;
+    }
+
+    private static void addMappingIfPresent(List<BlockMeta> dest, char wildcard) {
+        List<BlockMeta> mapping = TileMultiBlock.getMapping(wildcard);
+        if (mapping != null) {
+            dest.addAll(mapping);
+        }
     }
 
     @Override

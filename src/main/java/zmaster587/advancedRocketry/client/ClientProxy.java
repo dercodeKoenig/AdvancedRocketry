@@ -261,6 +261,32 @@ public class ClientProxy extends CommonProxy {
     public void preinit() {
         OBJLoader.INSTANCE.addDomain("advancedrocketry");
         registerRenderers();
+        bootstrapTestClientBridge();
+    }
+
+    /**
+     * Test-only hook: when the client JVM is launched with
+     * {@code -Dforge.test.client=true} (the reusable test framework's marker for
+     * {@code RealClientHarness}-spawned clients), reflectively load and start
+     * the framework's bridge so {@code ClientBot} can drive this client.
+     *
+     * <p>Inert in normal gameplay (flag absent → returns immediately). The
+     * bridge class lives in the test-only framework jar and is NOT on the
+     * production runtime classpath; the {@link ClassNotFoundException} branch
+     * handles that gracefully.</p>
+     */
+    private static void bootstrapTestClientBridge() {
+        if (!Boolean.getBoolean("forge.test.client")) {
+            return;
+        }
+        try {
+            Class<?> bridge = Class.forName("com.github.stannismod.forge.testing.client.bridge.ForgeTestClientBootstrap");
+            bridge.getMethod("bootstrap").invoke(null);
+        } catch (ClassNotFoundException ignored) {
+            // Test framework jar absent at runtime — no-op (production launch).
+        } catch (ReflectiveOperationException e) {
+            throw new RuntimeException("Failed to bootstrap forge test client bridge", e);
+        }
     }
 
     private void registerFluidModel(IFluidBlock fluidBlock) {

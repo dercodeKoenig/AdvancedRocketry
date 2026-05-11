@@ -98,9 +98,13 @@ public class TileBlackHoleGenerator extends TileMultiPowerProducer implements IT
     @Override
     public List<BlockMeta> getAllowableWildCardBlocks() {
         List<BlockMeta> blocks = super.getAllowableWildCardBlocks();
-        blocks.addAll(TileMultiBlock.getMapping('I'));
+        // Null-guard: TileMultiBlock.getMapping returns null for wildcards not
+        // yet registered (postInit ordering crashes the dedicated server).
+        for (char c : new char[] {'I', 'p'}) {
+            List<BlockMeta> mapping = TileMultiBlock.getMapping(c);
+            if (mapping != null) blocks.addAll(mapping);
+        }
         blocks.add(new BlockMeta(LibVulpesBlocks.blockAdvStructureBlock));
-        blocks.addAll(TileMultiBlock.getMapping('p'));
 
         return blocks;
     }

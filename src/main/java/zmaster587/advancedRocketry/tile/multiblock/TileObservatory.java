@@ -217,8 +217,12 @@ public class TileObservatory extends TileMultiPowerConsumer implements IModularI
         List<BlockMeta> list = super.getAllowableWildCardBlocks();
 
         list.add(new BlockMeta(Blocks.IRON_BLOCK, BlockMeta.WILDCARD));
-        list.addAll(TileMultiBlock.getMapping('P'));
-        list.addAll(TileMultiBlock.getMapping('D'));
+        // Null-guard: TileMultiBlock.getMapping returns null for wildcards not
+        // yet registered (postInit ordering crashes the dedicated server).
+        for (char c : new char[] {'P', 'D'}) {
+            List<BlockMeta> mapping = TileMultiBlock.getMapping(c);
+            if (mapping != null) list.addAll(mapping);
+        }
         return list;
     }
 

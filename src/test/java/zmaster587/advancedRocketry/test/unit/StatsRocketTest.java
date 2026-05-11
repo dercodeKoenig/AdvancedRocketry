@@ -217,6 +217,84 @@ public class StatsRocketTest {
     }
 
     @Test
+    public void fuelTypeSelectionPrefersExpectedFuelType() {
+        // Each FuelType has its own independent backing storage. Setting one
+        // type must not bleed into another — this guards against any future
+        // refactor that consolidates the per-type fields into a shared map and
+        // accidentally collapses keys.
+        StatsRocket stats = new StatsRocket();
+        stats.setFuelCapacity(FuelType.LIQUID_MONOPROPELLANT, 1000);
+        stats.setFuelCapacity(FuelType.LIQUID_BIPROPELLANT, 2000);
+        stats.setFuelCapacity(FuelType.LIQUID_OXIDIZER, 500);
+
+        stats.setFuelAmount(FuelType.LIQUID_MONOPROPELLANT, 100);
+        stats.setFuelAmount(FuelType.LIQUID_BIPROPELLANT, 200);
+        stats.setFuelAmount(FuelType.LIQUID_OXIDIZER, 300);
+
+        assertEquals(100, stats.getFuelAmount(FuelType.LIQUID_MONOPROPELLANT));
+        assertEquals(200, stats.getFuelAmount(FuelType.LIQUID_BIPROPELLANT));
+        assertEquals(300, stats.getFuelAmount(FuelType.LIQUID_OXIDIZER));
+        // Other types remain at default (0) — proves storage is truly per-type.
+        assertEquals(0, stats.getFuelAmount(FuelType.WARP));
+        assertEquals(0, stats.getFuelAmount(FuelType.IMPULSE));
+        assertEquals(0, stats.getFuelAmount(FuelType.ION));
+        assertEquals(0, stats.getFuelAmount(FuelType.NUCLEAR_WORKING_FLUID));
+    }
+
+    /**
+     * SMART §6.4 — {@code rocketStatsBackwardCompatibleWithOldNbt}.
+     *
+     * Synthesizes a minimal NBT shaped like an older save (only `thrust`/`weight`
+     * + a few fuel keys, no per-type rate/capacity). Asserts {@code readFromNBT}
+     * tolerates missing keys (defaults to zero) without throwing — saves from
+     * earlier AR versions must not crash on load.
+     */
+    @Test
+    public void rocketStatsBackwardCompatibleWithOldNbt() {
+        NBTTagCompound stats = new NBTTagCompound();
+        stats.setInteger("thrust", 999);
+        stats.setFloat("weight", 12.5f);
+        stats.setString("fuelFluid", "ar:legacy_fuel");
+        stats.setInteger("fuelMonopropellant", 250);
+        // Intentionally omit: bipropellant / oxidizer / nuclear / ion / warp /
+        // impulse fields, all *Capacity* keys, *Rate* keys, dynStats, engineLoc,
+        // passengerSeats, playerXPos/YPos/ZPos. A pre-2.x save would lack these.
+
+        NBTTagCompound outer = new NBTTagCompound();
+        outer.setTag("rocketStats", stats);
+
+        StatsRocket restored = new StatsRocket();
+        restored.readFromNBT(outer);
+
+        assertEquals(999, restored.getThrust());
+        assertEquals(12.5f, restored.getWeight_NoFuel(), 1e-6);
+        assertEquals("ar:legacy_fuel", restored.getFuelFluid());
+        assertEquals(250, restored.getFuelAmount(FuelType.LIQUID_MONOPROPELLANT));
+        // Missing keys default to zero — no NPE, no exception.
+        for (FuelType type : new FuelType[] {
+                FuelType.LIQUID_BIPROPELLANT, FuelType.LIQUID_OXIDIZER,
+                FuelType.NUCLEAR_WORKING_FLUID, FuelType.ION, FuelType.WARP, FuelType.IMPULSE
+        }) {
+            assertEquals("missing fuel amount key for " + type + " must default to 0",
+                    0, restored.getFuelAmount(type));
+            assertEquals("missing capacity key for " + type + " must default to 0",
+                    0, restored.getFuelCapacity(type));
+        }
+        // KNOWN ISSUE (do NOT fix per SMART §3, just document):
+        // readFromNBT does `pilotSeatPos.x = stats.getInteger("playerXPos")`, which
+        // returns 0 when the key is absent rather than the INVALID_SEAT sentinel
+        // (Integer.MIN_VALUE) initialized by reset(). Result: legacy saves without
+        // seat keys load as "seat at (0,0,0)" with hasSeat()=true. In practice
+        // production saves always write the seat keys (writeToNBT is unconditional),
+        // so the bug is only reachable via NBT crafted by hand or by very old saves.
+        assertTrue("legacy NBT without seat keys: hasSeat() returns true because the "
+                + "missing-key default (0) collides with a valid seat coordinate",
+                restored.hasSeat());
+        assertEquals(0, restored.getSeatX());
+        assertEquals(0, restored.getNumPassengerSeats()); // passenger list still empty
+    }
+
+    @Test
     public void copyProducesIndependentInstance() {
         StatsRocket original = new StatsRocket();
         original.setThrust(500);

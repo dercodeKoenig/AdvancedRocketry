@@ -54,15 +54,42 @@ public class AdvancedRocketryTestBootstrap {
         assertTrue("summary.json must be produced",
                 reportRoot.resolve("summary.json").toFile().exists());
 
+        // Per-scenario log so the JUnit test report shows outcomes inline (the
+        // framework-native summary.txt is in tempFolder and gets cleaned up by
+        // JUnit). Without this, only PASSED/FAILED on the outer test is visible.
+        int passed = 0, failed = 0, skipped = 0;
+        StringBuilder summary = new StringBuilder("\n=== AR Scenario Suite Outcomes ===\n");
+        for (TestOutcome o : outcomes) {
+            summary.append(String.format("  %-7s %-12s %-50s%s%n",
+                    o.status(), o.category(), o.id(),
+                    o.failure() == null ? "" : "  ← " + o.failure().getClass().getSimpleName() + ": "
+                            + truncate(String.valueOf(o.failure().getMessage()), 80)));
+            switch (o.status()) {
+                case PASSED:  passed++; break;
+                case FAILED:  failed++; break;
+                case SKIPPED: skipped++; break;
+                default: break;
+            }
+        }
+        summary.append(String.format("Total=%d  PASSED=%d  FAILED=%d  SKIPPED=%d%n",
+                outcomes.size(), passed, failed, skipped));
+        System.out.println(summary);
+
         // Required scenarios must not be in FAILED state. SKIPPED is acceptable when
         // an environmental prerequisite (server harness, deobf MC) is not present.
         for (TestOutcome outcome : outcomes) {
             if (outcome.required() && outcome.status() == TestStatus.FAILED) {
                 throw new AssertionError(
                         "Required scenario " + outcome.id() + " failed: "
-                                + (outcome.failure() == null ? "no failure object" : outcome.failure().toString()));
+                                + (outcome.failure() == null ? "no failure object" : outcome.failure().toString())
+                                + summary);
             }
         }
+    }
+
+    private static String truncate(String s, int max) {
+        if (s == null) return "null";
+        return s.length() <= max ? s : s.substring(0, max) + "...";
     }
 
     public static void main(String[] args) throws Exception {

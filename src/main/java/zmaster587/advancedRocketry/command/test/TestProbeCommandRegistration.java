@@ -21,10 +21,18 @@ public final class TestProbeCommandRegistration {
 
     private static final String FLAG = "advancedrocketry.tests";
 
+    /**
+     * Framework-set flag on dedicated server JVMs spawned by
+     * {@code RealDedicatedServerHarness}. AR doesn't need to forward
+     * {@link #FLAG} explicitly — being in a harness-spawned server is a
+     * sufficient signal to register the probes.
+     */
+    private static final String HARNESS_FLAG = "forge.test.server";
+
     private TestProbeCommandRegistration() {}
 
     public static boolean isTestMode() {
-        return Boolean.getBoolean(FLAG);
+        return Boolean.getBoolean(FLAG) || Boolean.getBoolean(HARNESS_FLAG);
     }
 
     public static void registerIfTestMode(FMLServerStartingEvent event) {

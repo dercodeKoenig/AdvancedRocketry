@@ -1,14 +1,22 @@
 package zmaster587.advancedRocketry.command.test;
 
+import net.minecraft.block.state.IBlockState;
 import net.minecraft.command.CommandBase;
 import net.minecraft.command.CommandException;
+import net.minecraft.command.ICommand;
 import net.minecraft.command.ICommandSender;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.player.EntityPlayerMP;
 import net.minecraft.server.MinecraftServer;
+import net.minecraft.tileentity.TileEntity;
+import net.minecraft.util.ResourceLocation;
 import net.minecraft.util.math.BlockPos;
+import net.minecraft.util.math.ChunkPos;
 import net.minecraft.util.text.TextComponentString;
+import net.minecraft.world.World;
 import net.minecraft.world.WorldServer;
+import net.minecraft.world.biome.Biome;
+import net.minecraft.world.chunk.Chunk;
 import net.minecraftforge.fluids.FluidRegistry;
 import net.minecraftforge.fml.common.registry.ForgeRegistries;
 import zmaster587.advancedRocketry.api.IAtmosphere;
@@ -54,7 +62,7 @@ public class TestProbeCommand extends CommandBase {
     @Override
     @Nonnull
     public String getUsage(@Nonnull ICommandSender sender) {
-        return "/artest <registry|dim|planet|weather|atmosphere|oxygen|rocket|station|satellite>";
+        return "/artest <registry|dim|planet|weather|atmosphere|oxygen|rocket|station|satellite|machine|terraforming|worldgen|commands|energy|infra|place|fill>";
     }
 
     @Override
@@ -97,6 +105,30 @@ public class TestProbeCommand extends CommandBase {
                     break;
                 case "oxygen":
                     handleOxygen(server, sender, tail(args));
+                    break;
+                case "machine":
+                    handleMachine(server, sender, tail(args));
+                    break;
+                case "terraforming":
+                    handleTerraforming(sender, tail(args));
+                    break;
+                case "worldgen":
+                    handleWorldgen(server, sender, tail(args));
+                    break;
+                case "commands":
+                    handleCommands(server, sender, tail(args));
+                    break;
+                case "energy":
+                    handleEnergy(server, sender, tail(args));
+                    break;
+                case "infra":
+                    handleInfra(server, sender, tail(args));
+                    break;
+                case "place":
+                    handlePlace(server, sender, tail(args));
+                    break;
+                case "fill":
+                    handleFill(server, sender, tail(args));
                     break;
                 default:
                     send(sender, "{\"error\":\"unknown subcommand\",\"sub\":\"" + args[0] + "\"}");
@@ -505,6 +537,367 @@ public class TestProbeCommand extends CommandBase {
         send(sender, "{\"error\":\"unknown oxygen subcommand — try player <name>\"}");
     }
 
+    // §5.4 Machine probes -----------------------------------------------------
+
+    private void handleMachine(MinecraftServer server, ICommandSender sender, String[] args) {
+        if (args.length >= 4 && "info".equalsIgnoreCase(args[0])) {
+            int dim = parseIntOr(args[1], sender.getEntityWorld().provider.getDimension());
+            int x = parseIntOr(args[1], 0); // legacy fallback if dim omitted
+            // Accept either: machine info <x> <y> <z>  (current dim)
+            //              : machine info <dim> <x> <y> <z>
+            int posX, posY, posZ;
+            World world;
+            if (args.length == 4) {
+                world = sender.getEntityWorld();
+                posX = parseIntOr(args[1], 0);
+                posY = parseIntOr(args[2], 0);
+                posZ = parseIntOr(args[3], 0);
+            } else {
+                world = server.getWorld(dim);
+                posX = parseIntOr(args[2], 0);
+                posY = parseIntOr(args[3], 0);
+                posZ = parseIntOr(args[4], 0);
+            }
+            if (world == null) {
+                send(sender, "{\"error\":\"world not loaded\",\"dim\":" + dim + "}");
+                return;
+            }
+
+            BlockPos pos = new BlockPos(posX, posY, posZ);
+            TileEntity tile = world.getTileEntity(pos);
+            if (tile == null) {
+                send(sender, "{\"error\":\"no tile entity\",\"pos\":[" + posX + "," + posY + "," + posZ + "]}");
+                return;
+            }
+
+            Map<String, Object> info = new LinkedHashMap<>();
+            info.put("dim", world.provider.getDimension());
+            info.put("posX", posX);
+            info.put("posY", posY);
+            info.put("posZ", posZ);
+            info.put("tileClass", tile.getClass().getName());
+
+            // libVulpes TileMultiBlock public API: isComplete()
+            try {
+                java.lang.reflect.Method m = tile.getClass().getMethod("isComplete");
+                info.put("isComplete", m.invoke(tile));
+            } catch (NoSuchMethodException ignored) {
+                info.put("isComplete", "n/a");
+            } catch (ReflectiveOperationException e) {
+                info.put("isCompleteError", e.getMessage());
+            }
+            // TileMultiPowerConsumer adds isRunning + getMachineEnabled.
+            for (String name : new String[] {"isRunning", "getMachineEnabled"}) {
+                try {
+                    java.lang.reflect.Method m = tile.getClass().getMethod(name);
+                    info.put(name, m.invoke(tile));
+                } catch (NoSuchMethodException ignored) {
+                    // skip — tile is not a power consumer
+                } catch (ReflectiveOperationException e) {
+                    info.put(name + "Error", e.getMessage());
+                }
+            }
+            // Progress (slot 0) — most multiblock recipes report current/total here.
+            try {
+                java.lang.reflect.Method get = tile.getClass().getMethod("getProgress", int.class);
+                java.lang.reflect.Method total = tile.getClass().getMethod("getTotalProgress", int.class);
+                info.put("progress", get.invoke(tile, 0));
+                info.put("totalProgress", total.invoke(tile, 0));
+            } catch (NoSuchMethodException ignored) {
+                // skip — tile has no progress bar
+            } catch (ReflectiveOperationException e) {
+                info.put("progressError", e.getMessage());
+            }
+
+            send(sender, jsonMap(info));
+            return;
+        }
+        send(sender, "{\"error\":\"unknown machine subcommand — try info [dim] <x> <y> <z>\"}");
+    }
+
+    // §5.8 Terraforming probe -------------------------------------------------
+
+    private void handleTerraforming(ICommandSender sender, String[] args) {
+        if (args.length >= 2 && "info".equalsIgnoreCase(args[0])) {
+            int dim = parseIntOr(args[1], Integer.MIN_VALUE);
+            DimensionProperties props = DimensionManager.getInstance().getDimensionProperties(dim);
+            if (props == null) {
+                send(sender, "{\"error\":\"dim not registered\",\"dim\":" + dim + "}");
+                return;
+            }
+            Map<String, Object> info = new LinkedHashMap<>();
+            info.put("dim", dim);
+            info.put("name", props.getName());
+            info.put("originalAtmosphere", reflectInt(props, "originalAtmosphereDensity"));
+            info.put("currentAtmosphere", props.getAtmosphereDensity());
+            // Safe access to terraforming proxy state — these methods may NPE if
+            // proxylists hasn't been initialized for the dim yet.
+            try {
+                boolean inited = DimensionProperties.proxylists.isinitialized(dim);
+                info.put("proxyInitialized", inited);
+                if (inited) {
+                    info.put("protectingBlockCount",
+                            DimensionProperties.proxylists.getProtectingBlocksForDimension(dim).size());
+                    info.put("chunksFullyTerraformed",
+                            DimensionProperties.proxylists.getChunksFullyTerraformed(dim).size());
+                    info.put("chunksFullyBiomeChanged",
+                            DimensionProperties.proxylists.getChunksFullyBiomeChanged(dim).size());
+                    info.put("helperPresent", DimensionProperties.proxylists.gethelper(dim) != null);
+                }
+            } catch (Exception e) {
+                info.put("proxyError", e.getClass().getSimpleName() + ": " + e.getMessage());
+            }
+            send(sender, jsonMap(info));
+            return;
+        }
+        send(sender, "{\"error\":\"unknown terraforming subcommand — try info <dim>\"}");
+    }
+
+    // §5.8 Worldgen probe -----------------------------------------------------
+
+    private void handleWorldgen(MinecraftServer server, ICommandSender sender, String[] args) {
+        if (args.length >= 4 && "sample".equalsIgnoreCase(args[0])) {
+            int dim = parseIntOr(args[1], Integer.MIN_VALUE);
+            int chunkX = parseIntOr(args[2], 0);
+            int chunkZ = parseIntOr(args[3], 0);
+            WorldServer world = server.getWorld(dim);
+            if (world == null) {
+                send(sender, "{\"error\":\"world not loaded\",\"dim\":" + dim + "}");
+                return;
+            }
+            // getChunk(int, int) force-loads + populates if needed.
+            Chunk chunk = world.getChunkProvider().provideChunk(chunkX, chunkZ);
+            if (chunk == null || !chunk.isLoaded()) {
+                send(sender, "{\"error\":\"chunk failed to load\",\"chunk\":[" + chunkX + "," + chunkZ + "]}");
+                return;
+            }
+
+            // Sample center of chunk: top non-air block + biome.
+            int worldX = (chunkX << 4) + 8;
+            int worldZ = (chunkZ << 4) + 8;
+            int topY = chunk.getHeightValue(worldX & 15, worldZ & 15);
+            BlockPos topPos = new BlockPos(worldX, Math.max(0, topY - 1), worldZ);
+            IBlockState topBlock = world.getBlockState(topPos);
+            Biome biome = world.getBiome(topPos);
+
+            Map<String, Object> info = new LinkedHashMap<>();
+            info.put("dim", dim);
+            info.put("chunkX", chunkX);
+            info.put("chunkZ", chunkZ);
+            info.put("centerWorldX", worldX);
+            info.put("centerWorldZ", worldZ);
+            info.put("topY", topY);
+            info.put("topBlock", topBlock.getBlock().getRegistryName() == null
+                    ? "minecraft:air" : topBlock.getBlock().getRegistryName().toString());
+            info.put("biome", biome.getRegistryName() == null
+                    ? "unknown" : biome.getRegistryName().toString());
+            info.put("biomeId", Biome.getIdForBiome(biome));
+            send(sender, jsonMap(info));
+            return;
+        }
+        send(sender, "{\"error\":\"unknown worldgen subcommand — try sample <dim> <chunkX> <chunkZ>\"}");
+    }
+
+    // §5 Commands probe -------------------------------------------------------
+
+    private void handleCommands(MinecraftServer server, ICommandSender sender, String[] args) {
+        if (args.length == 0 || "list".equalsIgnoreCase(args[0])) {
+            // Use a TreeSet for stable / sorted output so test diffs stay readable.
+            java.util.Set<String> sortedNames = new java.util.TreeSet<>();
+            for (ICommand cmd : server.getCommandManager().getCommands().values()) {
+                sortedNames.add(cmd.getName());
+            }
+            StringBuilder builder = new StringBuilder("{\"commands\":[");
+            boolean first = true;
+            for (String name : sortedNames) {
+                if (!first) builder.append(',');
+                first = false;
+                builder.append('"').append(escapeJson(name)).append('"');
+            }
+            builder.append("]}");
+            send(sender, builder.toString());
+            return;
+        }
+        send(sender, "{\"error\":\"unknown commands subcommand — try list\"}");
+    }
+
+    // §5.16 Energy probe -------------------------------------------------------
+
+    private void handleEnergy(MinecraftServer server, ICommandSender sender, String[] args) {
+        if (args.length >= 4 && "stored".equalsIgnoreCase(args[0])) {
+            // energy stored [dim] <x> <y> <z>  — single signature: dim required for clarity.
+            int dim = parseIntOr(args[1], Integer.MIN_VALUE);
+            int x = parseIntOr(args[2], 0);
+            int y = parseIntOr(args[3], 0);
+            int z = args.length >= 5 ? parseIntOr(args[4], 0) : 0;
+            net.minecraft.world.WorldServer world = server.getWorld(dim);
+            if (world == null) {
+                send(sender, "{\"error\":\"world not loaded\",\"dim\":" + dim + "}");
+                return;
+            }
+            BlockPos pos = new BlockPos(x, y, z);
+            TileEntity tile = world.getTileEntity(pos);
+            if (tile == null) {
+                send(sender, "{\"error\":\"no tile entity\",\"pos\":[" + x + "," + y + "," + z + "]}");
+                return;
+            }
+            Map<String, Object> info = new LinkedHashMap<>();
+            info.put("dim", dim);
+            info.put("posX", x);
+            info.put("posY", y);
+            info.put("posZ", z);
+            info.put("tileClass", tile.getClass().getName());
+
+            // Try Forge's energy capability on every face. Reports the first face
+            // that exposes IEnergyStorage and its current/max values.
+            net.minecraftforge.energy.IEnergyStorage es = null;
+            String face = "null";
+            for (net.minecraft.util.EnumFacing dir : net.minecraft.util.EnumFacing.values()) {
+                if (tile.hasCapability(net.minecraftforge.energy.CapabilityEnergy.ENERGY, dir)) {
+                    es = tile.getCapability(net.minecraftforge.energy.CapabilityEnergy.ENERGY, dir);
+                    face = dir.name();
+                    break;
+                }
+            }
+            if (es == null && tile.hasCapability(net.minecraftforge.energy.CapabilityEnergy.ENERGY, null)) {
+                es = tile.getCapability(net.minecraftforge.energy.CapabilityEnergy.ENERGY, null);
+                face = "null";
+            }
+            if (es == null) {
+                info.put("hasEnergy", false);
+            } else {
+                info.put("hasEnergy", true);
+                info.put("energyFace", face);
+                info.put("energyStored", es.getEnergyStored());
+                info.put("energyMax", es.getMaxEnergyStored());
+                info.put("canExtract", es.canExtract());
+                info.put("canReceive", es.canReceive());
+            }
+            send(sender, jsonMap(info));
+            return;
+        }
+        send(sender, "{\"error\":\"unknown energy subcommand — try stored <dim> <x> <y> <z>\"}");
+    }
+
+    // §5.10 Rocket infrastructure probe ---------------------------------------
+
+    private void handleInfra(MinecraftServer server, ICommandSender sender, String[] args) {
+        if (args.length >= 4 && "info".equalsIgnoreCase(args[0])) {
+            int dim = parseIntOr(args[1], Integer.MIN_VALUE);
+            int x = parseIntOr(args[2], 0);
+            int y = parseIntOr(args[3], 0);
+            int z = args.length >= 5 ? parseIntOr(args[4], 0) : 0;
+            net.minecraft.world.WorldServer world = server.getWorld(dim);
+            if (world == null) {
+                send(sender, "{\"error\":\"world not loaded\",\"dim\":" + dim + "}");
+                return;
+            }
+            TileEntity tile = world.getTileEntity(new BlockPos(x, y, z));
+            if (tile == null) {
+                send(sender, "{\"error\":\"no tile entity\",\"pos\":[" + x + "," + y + "," + z + "]}");
+                return;
+            }
+            Map<String, Object> info = new LinkedHashMap<>();
+            info.put("dim", dim);
+            info.put("posX", x); info.put("posY", y); info.put("posZ", z);
+            info.put("tileClass", tile.getClass().getName());
+            if (tile instanceof zmaster587.advancedRocketry.api.IInfrastructure) {
+                zmaster587.advancedRocketry.api.IInfrastructure infra =
+                        (zmaster587.advancedRocketry.api.IInfrastructure) tile;
+                info.put("isInfrastructure", true);
+                info.put("maxLinkDistance", infra.getMaxLinkDistance());
+                info.put("disconnectOnLiftOff", infra.disconnectOnLiftOff());
+            } else {
+                info.put("isInfrastructure", false);
+            }
+            send(sender, jsonMap(info));
+            return;
+        }
+        send(sender, "{\"error\":\"unknown infra subcommand — try info <dim> <x> <y> <z>\"}");
+    }
+
+    // §9.2 Fixture-building primitives -----------------------------------------
+
+    private void handlePlace(MinecraftServer server, ICommandSender sender, String[] args) {
+        // place <dim> <x> <y> <z> <block-id> [meta]
+        if (args.length < 5) {
+            send(sender, "{\"error\":\"usage: /artest place <dim> <x> <y> <z> <block-id> [meta]\"}");
+            return;
+        }
+        int dim = parseIntOr(args[0], Integer.MIN_VALUE);
+        int x = parseIntOr(args[1], 0);
+        int y = parseIntOr(args[2], 0);
+        int z = parseIntOr(args[3], 0);
+        String blockId = args[4];
+        int meta = args.length >= 6 ? parseIntOr(args[5], 0) : 0;
+
+        net.minecraft.world.WorldServer world = server.getWorld(dim);
+        if (world == null) {
+            send(sender, "{\"error\":\"world not loaded\",\"dim\":" + dim + "}");
+            return;
+        }
+        net.minecraft.block.Block block = ForgeRegistries.BLOCKS.getValue(new ResourceLocation(blockId));
+        if (block == null) {
+            send(sender, "{\"error\":\"unknown block id\",\"id\":\"" + escapeJson(blockId) + "\"}");
+            return;
+        }
+
+        @SuppressWarnings("deprecation")
+        IBlockState state = block.getStateFromMeta(meta);
+        boolean placed = world.setBlockState(new BlockPos(x, y, z), state);
+        send(sender, "{\"ok\":true,\"placed\":" + placed + ",\"block\":\"" + escapeJson(blockId)
+                + "\",\"pos\":[" + x + "," + y + "," + z + "]}");
+    }
+
+    private void handleFill(MinecraftServer server, ICommandSender sender, String[] args) {
+        // fill <dim> <x1> <y1> <z1> <x2> <y2> <z2> <block-id> [meta]
+        if (args.length < 8) {
+            send(sender, "{\"error\":\"usage: /artest fill <dim> <x1> <y1> <z1> <x2> <y2> <z2> <block-id> [meta]\"}");
+            return;
+        }
+        int dim = parseIntOr(args[0], Integer.MIN_VALUE);
+        int x1 = parseIntOr(args[1], 0); int y1 = parseIntOr(args[2], 0); int z1 = parseIntOr(args[3], 0);
+        int x2 = parseIntOr(args[4], 0); int y2 = parseIntOr(args[5], 0); int z2 = parseIntOr(args[6], 0);
+        String blockId = args[7];
+        int meta = args.length >= 9 ? parseIntOr(args[8], 0) : 0;
+
+        net.minecraft.world.WorldServer world = server.getWorld(dim);
+        if (world == null) {
+            send(sender, "{\"error\":\"world not loaded\",\"dim\":" + dim + "}");
+            return;
+        }
+        net.minecraft.block.Block block = ForgeRegistries.BLOCKS.getValue(new ResourceLocation(blockId));
+        if (block == null) {
+            send(sender, "{\"error\":\"unknown block id\",\"id\":\"" + escapeJson(blockId) + "\"}");
+            return;
+        }
+        @SuppressWarnings("deprecation")
+        IBlockState state = block.getStateFromMeta(meta);
+
+        int minX = Math.min(x1, x2), maxX = Math.max(x1, x2);
+        int minY = Math.min(y1, y2), maxY = Math.max(y1, y2);
+        int minZ = Math.min(z1, z2), maxZ = Math.max(z1, z2);
+        int volume = (maxX - minX + 1) * (maxY - minY + 1) * (maxZ - minZ + 1);
+        // Soft cap to keep tests deterministic and quick — refuse pathological fills.
+        if (volume > 32_768) {
+            send(sender, "{\"error\":\"fill volume too large\",\"volume\":" + volume + ",\"cap\":32768}");
+            return;
+        }
+
+        int placed = 0;
+        for (int x = minX; x <= maxX; x++) {
+            for (int y = minY; y <= maxY; y++) {
+                for (int z = minZ; z <= maxZ; z++) {
+                    if (world.setBlockState(new BlockPos(x, y, z), state)) {
+                        placed++;
+                    }
+                }
+            }
+        }
+        send(sender, "{\"ok\":true,\"placed\":" + placed + ",\"block\":\"" + escapeJson(blockId)
+                + "\",\"volume\":" + volume + "}");
+    }
+
     // ---- helpers -------------------------------------------------------------
 
     @Override
@@ -513,7 +906,9 @@ public class TestProbeCommand extends CommandBase {
                                           @Nonnull String[] args, @javax.annotation.Nullable BlockPos targetPos) {
         if (args.length == 1) {
             return getListOfStringsMatchingLastWord(args,
-                    "registry", "dim", "planet", "weather", "rocket", "station", "satellite", "atmosphere", "oxygen");
+                    "registry", "dim", "planet", "weather", "rocket", "station", "satellite",
+                    "atmosphere", "oxygen", "machine", "terraforming", "worldgen", "commands",
+                    "energy", "infra", "place", "fill");
         }
         return Collections.emptyList();
     }

@@ -46,11 +46,12 @@ public class TilePrecisionAssembler extends TileMultiblockMachine implements IMo
         List<BlockMeta> list = super.getAllowableWildCardBlocks();
 
         list.add(new BlockMeta(LibVulpesBlocks.blockStructureBlock, BlockMeta.WILDCARD));
-        list.addAll(TileMultiBlock.getMapping('O'));
-        list.addAll(TileMultiBlock.getMapping('I'));
-        list.addAll(TileMultiBlock.getMapping('P'));
-        list.addAll(TileMultiBlock.getMapping('l'));
-        list.addAll(TileMultiBlock.getMapping('L'));
+        // Null-guard each mapping — TileMultiBlock.getMapping returns null for
+        // wildcards not yet registered (postInit ordering on dedicated server).
+        for (char c : new char[] {'O', 'I', 'P', 'l', 'L'}) {
+            List<BlockMeta> mapping = TileMultiBlock.getMapping(c);
+            if (mapping != null) list.addAll(mapping);
+        }
 
         return list;
     }
