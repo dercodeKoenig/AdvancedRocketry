@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(mkdir -p .agent/tasks .agent/system .agent/sops/integrations .agent/sops/debugging .agent/sops/development .agent/sops/deployment .agent/grafana .claude)"
+    ]
+  }
+}

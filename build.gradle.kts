@@ -178,11 +178,52 @@ dependencies {
     implementation(fg.deobf("mezz.jei:jei_${mcVersion}:${jeiVersion}")) // Sorry but it won't start wihout jei...
     //runtimeOnly(fg.deobf("mezz.jei:jei_${mcVersion}:${jeiVersion}")) // I think this crashes the game for me when running from IntelliJ
 
-    implementation(fileTree(mapOf("dir" to "libs", "include" to listOf("*.jar"))))
+    implementation(fileTree(mapOf("dir" to "libs", "include" to listOf("*.jar"), "exclude" to listOf("test/**", "compileOnly/**"))))
     compileOnly(fileTree(mapOf("dir" to "libs/compileOnly", "include" to listOf("*.jar"))))
 
 //    implementation ("net.minecraftforge:mergetool:0.2.3.3")
     implementation ("net.minecraftforge:mergetool") { version { strictly("0.2.3.3") } }
+
+    // Test framework (Forge 1.12.2 reusable test framework — see .agent/sops/development/test-framework.md)
+    testImplementation("junit:junit:4.13.2")
+    testImplementation(fileTree(mapOf("dir" to "libs/test", "include" to listOf("*.jar"))))
+}
+
+tasks.test {
+    useJUnit()
+    testLogging {
+        events("failed", "skipped", "passed")
+        exceptionFormat = org.gradle.api.tasks.testing.logging.TestExceptionFormat.FULL
+        showStandardStreams = false
+    }
+    // Test-only flag gating /artest probe commands and other test-only behavior
+    systemProperty("advancedrocketry.tests", "true")
+}
+
+// SMART §11 — dedicated task that runs ONLY the AR scenario suite (P0 + P1
+// scenarios composed by AdvancedRocketryTestRegistry). Useful in CI to gate
+// merges on the in-game scenarios separately from the unit tests.
+//
+// Configurable expected weather mode for §7.5:
+//   ./gradlew testAdvancedRocketryScenarios -Pweather=shared
+//   ./gradlew testAdvancedRocketryScenarios -Pweather=per_dimension
+val weatherMode: String = (project.findProperty("weather") as? String) ?: "shared"
+
+tasks.register<Test>("testAdvancedRocketryScenarios") {
+    description = "Runs the AR-specific scenario suite (SMART §7 P0+P1)."
+    group = "verification"
+    useJUnit()
+    testClassesDirs = sourceSets["test"].output.classesDirs
+    classpath = sourceSets["test"].runtimeClasspath
+    filter {
+        includeTestsMatching("zmaster587.advancedRocketry.test.AdvancedRocketryTestBootstrap*")
+    }
+    systemProperty("advancedrocketry.tests", "true")
+    systemProperty("advancedrocketry.tests.expectedWeatherMode", weatherMode)
+    testLogging {
+        events("failed", "skipped", "passed")
+        exceptionFormat = org.gradle.api.tasks.testing.logging.TestExceptionFormat.FULL
+    }
 }
 
 tasks.processResources {
@@ -208,9 +249,18 @@ val currentJvm: String = Jvm.current().toString()
 println("Current Java version: $currentJvm")
 
 val gitHash: String by lazy {
-    val hash: String = if (File(projectDir, ".git").exists()) {
-        val repo = Grgit.open(mapOf("currentDir" to project.rootDir))
-        repo.log().first().abbreviatedId
+    // .git can be a file (git worktree) — Grgit only works on a real .git directory.
+    // Fall back to "unknown" so that builds in worktrees / shallow checkouts don't fail
+    // configuration phase for tasks unrelated to changelog generation.
+    val gitMarker = File(projectDir, ".git")
+    val hash: String = if (gitMarker.isDirectory) {
+        try {
+            val repo = Grgit.open(mapOf("currentDir" to project.rootDir))
+            repo.log().first().abbreviatedId
+        } catch (e: Exception) {
+            println("Grgit failed to resolve HEAD: ${e.message}")
+            "unknown"
+        }
     } else {
         "unknown"
     }
@@ -256,7 +306,11 @@ val makeChangelog by tasks.creating(GitChangelogTask::class.java) {
     else
         lastHashFile.readText()
 
-    lastHashFile.writeText(gitHash)
+    // Defer writing lasthash.txt to task execution so the changelog metadata is only
+    // touched when this task actually runs (release pipeline), not on every configure.
+    doFirst {
+        lastHashFile.writeText(gitHash)
+    }
 
     toRef = "HEAD"
     gitHubIssuePattern = "nonada123";

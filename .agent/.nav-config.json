@@ -1,0 +1,14 @@
+{
+  "version": "5.5.0",
+  "project_name": "AdvancedRocketry",
+  "tech_stack": "Java 8, Minecraft Forge 1.12.2, Kotlin DSL Gradle",
+  "project_management": "none",
+  "task_prefix": "TASK",
+  "team_chat": "none",
+  "auto_load_navigator": true,
+  "compact_strategy": "conservative",
+  "auto_update": {
+    "enabled": true,
+    "check_interval_hours": 1
+  }
+}

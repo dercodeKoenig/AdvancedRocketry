@@ -1158,6 +1158,7 @@ public class AdvancedRocketry {
     @EventHandler
     public void serverStarting(FMLServerStartingEvent event) {
         event.registerServerCommand(new WorldCommand());
+        zmaster587.advancedRocketry.command.test.TestProbeCommandRegistration.registerIfTestMode(event);
 
         //Regenerate Chemical Reactor armor recipes
         TileChemicalReactor.reloadRecipesSpecial();

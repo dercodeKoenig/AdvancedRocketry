@@ -27,3 +27,11 @@ AdvancedRocketry.txt
 changelog.html
 lasthash.txt
 *.bak
+
+logs
+
+# Navigator context markers
+.context-markers/
+
+# Navigator temporary files
+.agent/.nav-temp/
