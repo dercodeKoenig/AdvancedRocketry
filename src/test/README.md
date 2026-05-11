@@ -7,21 +7,29 @@ This source set implements the SMART test plan
 
 ```
 ./gradlew test                                 →  109 unit, 88 PASSED, 21 SKIPPED, 0 FAILED   (~10s)
-./gradlew testAdvancedRocketryScenarios        →   28 scenarios,  8 PASSED, 20 SKIPPED, 0 FAILED  (~7m on real server boots)
+./gradlew testAdvancedRocketryScenarios        →   28 scenarios, 12 PASSED, 16 SKIPPED, 0 FAILED  (~7m on real server boots)
 ```
 
 Real PASSED scenarios (each spins up a fresh dedicated server and asserts):
-- ar.scenario.server_startup_smoke
-- ar.scenario.registry_smoke
-- ar.scenario.planet_dimension_load
-- ar.scenario.non_ar_dimension_isolation
-- ar.scenario.multiblock_validation_smoke (fixture builder verified)
-- ar.scenario.atmosphere_oxygen_smoke
-- ar.scenario.worldgen_smoke
-- ar.scenario.commands_smoke
 
-20 SKIPPED carry documented "deferred — needs &lt;X&gt;" notes — most need
-either a more targeted `/artest` probe or fixture work. 6 of those are client
+| # | id | category | what it asserts |
+|---|---|---|---|
+| 1 | server_startup_smoke | P0 | server boots + `/list` + `/artest registry summary` round-trip |
+| 2 | registry_smoke | P0 | entity registry > 1 (AR loaded) |
+| 3 | planet_dimension_load | P0 | AR dim list non-empty |
+| 4 | planet_xml_config_integration | P0 | **fixture XML** pre-written to workDir → AR parses it → `/artest planet info <fixture-dim>` returns expected gravity/distance/atmosphere/period |
+| 5 | weather_persistence | P0 | first boot sets rain → close → second boot on same workDir → rain survived |
+| 6 | non_ar_dimension_isolation | P0 | nether (-1) and end (1) NOT classified as AR planets |
+| 7 | machine_recipe_integration | P1 | `/artest machine tick-until` probe wiring (graceful no-tile + reflection-error paths) |
+| 8 | multiblock_validation_smoke | P1 | `/artest place + fill + machine info` round-trip |
+| 9 | atmosphere_oxygen_smoke | P1 | Earth atmosphere reports breathable=true |
+| 10 | persistence_restart_smoke | P1 | immutable registry counts (blocks/items/entities/biomes) stable across server restart on same workDir |
+| 11 | worldgen_smoke | P2 | Earth chunk(0,0) generates non-air top + named biome |
+| 12 | commands_smoke | P2 | `/artest` + AR primary command both registered |
+
+16 SKIPPED carry documented "deferred — needs &lt;X&gt;" notes (mostly fixture
+work — placed AR multiblocks for P1 rocket/station/satellite, or the
+`/artest rocket assemble` probe for the assembly test). 6 of those are client
 E2E tests guarded by `-Dadvancedrocketry.tests.clientHarness=true`.
 
 ## Layout
@@ -128,7 +136,7 @@ The `testAdvancedRocketryScenarios` Gradle task spins up a **real** Forge
 1.12.2 dedicated server per scenario via the reusable test framework's
 `RealDedicatedServerHarness`. This required two pieces of plumbing:
 
-1. **Test framework v0.2.0** ([forge-test-framework-0.2.0-dev.jar](../../libs/test/forge-test-framework-0.2.0-dev.jar)) —
+1. **Test framework v0.2.1** ([forge-test-framework-0.2.1-dev.jar](../../libs/test/forge-test-framework-0.2.1-dev.jar)) —
    adds three system properties so the harness can target either RFG or FG6
    layouts:
    - `forge.test.launcher.class.server` — main class (default `GradleStartServer`)
@@ -137,7 +145,11 @@ The `testAdvancedRocketryScenarios` Gradle task spins up a **real** Forge
 
    Plus a fast-fail in `TestClient.awaitMarker`: if the server JVM exits before
    the expected stdout marker, the assertion now reports the crash immediately
-   rather than blocking 3 minutes.
+   rather than blocking 3 minutes. v0.2.1 adds
+   `RealDedicatedServerHarness.startWith(workDir, cleanupOnClose)` so
+   persistence-restart scenarios can boot a fresh server, mutate world state,
+   close it, and re-boot against the same dir to assert state survived
+   save/load.
 
 2. **AR build glue** ([build.gradle.kts](../../build.gradle.kts) `tasks.testAdvancedRocketryScenarios`):
    - Augments the test classpath with FG6's `runServer` classpath (so the spawned
@@ -206,11 +218,11 @@ Currently implemented sub-commands:
 | `/artest infra info <dim> <x> <y> <z>` | §5.10 | reports if tile implements `IInfrastructure` + max link distance |
 | `/artest place <dim> <x> <y> <z> <block-id> [meta]` | §9.2 | sets a single block — primitive for fixture building |
 | `/artest fill <dim> <x1> <y1> <z1> <x2> <y2> <z2> <block-id> [meta]` | §9.2 | fills a region (volume capped at 32 768) |
+| `/artest machine tick-until <dim> <x> <y> <z> <complete\|running\|idle\|progress=N> <timeoutTicks>` | §5.4 | blocks the server thread for up to `timeoutTicks * 50ms` polling tile state |
 
-Still pending (would unlock more PASSED scenarios): `/artest machine tick-until`,
-`/artest rocket assemble`, `/artest rocket launch`, `/artest selector info`,
-`/artest mission ...`. Each ~30 LoC additive probe activates the matching
-scenario.
+Still pending (would unlock the remaining 4 SKIPPED P1 scenarios):
+`/artest rocket assemble`, `/artest rocket launch`, `/artest selector info`.
+Each ~30 LoC additive probe activates the matching scenario.
 
 ## Known limitations / deferred work
 
@@ -279,13 +291,40 @@ desktop machine.
 - ✅ Tests compile
 - ✅ Unit tests run (`./gradlew test` — 109 tests, 0 failures)
 - ✅ Dedicated server scenario suite runs (`./gradlew testAdvancedRocketryScenarios` — 28 scenarios, 0 failures)
-- ✅ Reports generated (JUnit XML + framework `summary.txt`/`summary.json` via `TestReportWriter`)
-- ✅ P0 scenarios implemented (7/7 — 4 PASSED with real assertions, 3 SKIPPED with deferred-fixture notes)
-- ✅ Partial P1 smoke coverage (9/9 registered, 2 PASSED, 7 SKIPPED with deferred notes)
+- ✅ Reports generated (JUnit XML + framework `summary.txt`/`summary.json` via `TestReportWriter`, plus per-scenario notes inlined in the JUnit report on failure)
+- ✅ P0 scenarios implemented (7/7 — **6 PASSED** with real assertions, 1 SKIPPED for fixture-bound multi-planet weather assertion)
+- ✅ P1 smoke coverage (9/9 registered, **4 PASSED**, 5 SKIPPED with deferred notes)
+- ✅ P2 broad coverage (6/6 registered, **2 PASSED**, 4 SKIPPED)
 - ✅ Client E2E implemented (6 registered) or explicitly skipped with actionable reason
 - ⚠️ **Production gameplay logic changed for the NPE fix** (5 multiblock tiles get null guards) — strictly outside SMART §3 but unblocks all scenarios
 - ✅ No AR-specific code added to generic framework packages
-- ✅ Failures provide useful diagnostics (process-death short-circuit + per-scenario inline log in JUnit report)
+- ✅ Failures provide useful diagnostics (process-death short-circuit + per-scenario inline log in JUnit report with full notes for FAILED outcomes)
+
+### Persistence-restart pattern
+
+Scenarios that need to verify state survives save/load (`WeatherPersistenceTest`,
+`PersistenceRestartSmokeTest`) implement `HeadlessGameTest` directly (skip the
+single-harness `HarnessBoundScenario` base) and orchestrate two harness
+instances over the same workDir:
+
+```java
+Path workDir = Files.createTempDirectory("forge-server-persistence-");
+
+// Boot 1 — set state.
+RealDedicatedServerHarness boot1 = RealDedicatedServerHarness.startWith(workDir, /*cleanupOnClose=*/false);
+boot1.client().execute("artest weather set 0 rain 12000");
+boot1.close();   // server saves world via /stop
+
+// Boot 2 — verify state survived.
+RealDedicatedServerHarness boot2 = RealDedicatedServerHarness.startWith(workDir, /*cleanupOnClose=*/true);
+List<String> after = boot2.client().execute("artest weather get 0");
+assert String.join("\n", after).contains("\"isRaining\":true");
+boot2.close();   // workDir cleaned up
+```
+
+Same pattern works for any save/load test: write fixture XML to
+`workDir/config/advRocketry/planetDefs.xml` BEFORE `startWith`, then assert via
+`/artest`.
 
 ## Client-side test bridge
 

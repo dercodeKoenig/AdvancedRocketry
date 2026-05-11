@@ -540,6 +540,10 @@ public class TestProbeCommand extends CommandBase {
     // §5.4 Machine probes -----------------------------------------------------
 
     private void handleMachine(MinecraftServer server, ICommandSender sender, String[] args) {
+        if (args.length >= 6 && "tick-until".equalsIgnoreCase(args[0])) {
+            handleMachineTickUntil(server, sender, args);
+            return;
+        }
         if (args.length >= 4 && "info".equalsIgnoreCase(args[0])) {
             int dim = parseIntOr(args[1], sender.getEntityWorld().provider.getDimension());
             int x = parseIntOr(args[1], 0); // legacy fallback if dim omitted
@@ -613,6 +617,113 @@ public class TestProbeCommand extends CommandBase {
             return;
         }
         send(sender, "{\"error\":\"unknown machine subcommand — try info [dim] <x> <y> <z>\"}");
+    }
+
+    /**
+     * {@code /artest machine tick-until <dim> <x> <y> <z> <condition> <timeoutTicks>}
+     *
+     * <p>Polls the tile at the given position once per server tick (via
+     * {@link MinecraftServer#getCurrentTime()}-based wait) until either
+     * {@code condition} matches or {@code timeoutTicks} elapses. Conditions:</p>
+     * <ul>
+     *   <li>{@code complete} — {@code isComplete()} returns true</li>
+     *   <li>{@code running} — {@code isRunning()} returns true</li>
+     *   <li>{@code idle} — {@code isRunning()} returns false (machine done)</li>
+     *   <li>{@code progress=N} — {@code getProgress(0)} reaches at least N</li>
+     * </ul>
+     *
+     * <p>Returns {@code {"matched":true, "ticks":N}} on success or
+     * {@code {"matched":false, "ticks":timeout, "lastSeen":...}} on timeout.</p>
+     *
+     * <p>NOTE: this probe blocks the server's main thread for up to
+     * {@code timeoutTicks * 50ms} via Thread.sleep — fine for short waits but
+     * keep the timeout below ~1200 ticks (1 minute) to avoid harness deadline
+     * issues.</p>
+     */
+    private void handleMachineTickUntil(MinecraftServer server, ICommandSender sender, String[] args) {
+        // tick-until <dim> <x> <y> <z> <condition> <timeoutTicks>
+        int dim = parseIntOr(args[1], Integer.MIN_VALUE);
+        int x = parseIntOr(args[2], 0), y = parseIntOr(args[3], 0), z = parseIntOr(args[4], 0);
+        String condition = args[5].toLowerCase();
+        int timeoutTicks = args.length >= 7 ? parseIntOr(args[6], 100) : 100;
+        if (timeoutTicks > 1200) {
+            send(sender, "{\"error\":\"timeoutTicks > 1200 — refuse to block server thread that long\"}");
+            return;
+        }
+
+        net.minecraft.world.WorldServer world = server.getWorld(dim);
+        if (world == null) {
+            send(sender, "{\"error\":\"world not loaded\",\"dim\":" + dim + "}");
+            return;
+        }
+        BlockPos pos = new BlockPos(x, y, z);
+
+        int progressTarget = -1;
+        if (condition.startsWith("progress=")) {
+            progressTarget = parseIntOr(condition.substring("progress=".length()), -1);
+            condition = "progress";
+        }
+
+        Object lastSeen = "n/a";
+        for (int tick = 0; tick < timeoutTicks; tick++) {
+            TileEntity tile = world.getTileEntity(pos);
+            if (tile == null) {
+                send(sender, "{\"error\":\"no tile entity\",\"pos\":[" + x + "," + y + "," + z + "],\"ticks\":" + tick + "}");
+                return;
+            }
+            try {
+                switch (condition) {
+                    case "complete": {
+                        Object v = tile.getClass().getMethod("isComplete").invoke(tile);
+                        lastSeen = v;
+                        if (Boolean.TRUE.equals(v)) {
+                            send(sender, "{\"matched\":true,\"ticks\":" + tick + ",\"condition\":\"complete\"}");
+                            return;
+                        }
+                        break;
+                    }
+                    case "running": {
+                        Object v = tile.getClass().getMethod("isRunning").invoke(tile);
+                        lastSeen = v;
+                        if (Boolean.TRUE.equals(v)) {
+                            send(sender, "{\"matched\":true,\"ticks\":" + tick + ",\"condition\":\"running\"}");
+                            return;
+                        }
+                        break;
+                    }
+                    case "idle": {
+                        Object v = tile.getClass().getMethod("isRunning").invoke(tile);
+                        lastSeen = v;
+                        if (Boolean.FALSE.equals(v)) {
+                            send(sender, "{\"matched\":true,\"ticks\":" + tick + ",\"condition\":\"idle\"}");
+                            return;
+                        }
+                        break;
+                    }
+                    case "progress": {
+                        Object v = tile.getClass().getMethod("getProgress", int.class).invoke(tile, 0);
+                        lastSeen = v;
+                        if (v instanceof Integer && (Integer) v >= progressTarget) {
+                            send(sender, "{\"matched\":true,\"ticks\":" + tick + ",\"progress\":" + v + "}");
+                            return;
+                        }
+                        break;
+                    }
+                    default:
+                        send(sender, "{\"error\":\"unknown condition\",\"value\":\"" + escapeJson(condition) + "\"}");
+                        return;
+                }
+            } catch (NoSuchMethodException e) {
+                send(sender, "{\"error\":\"tile lacks " + e.getMessage() + "\"}");
+                return;
+            } catch (ReflectiveOperationException e) {
+                send(sender, "{\"error\":\"reflection failed\",\"msg\":\"" + escapeJson(e.getMessage()) + "\"}");
+                return;
+            }
+            try { Thread.sleep(50); } catch (InterruptedException ignored) { Thread.currentThread().interrupt(); }
+        }
+        send(sender, "{\"matched\":false,\"ticks\":" + timeoutTicks + ",\"lastSeen\":\""
+                + escapeJson(String.valueOf(lastSeen)) + "\"}");
     }
 
     // §5.8 Terraforming probe -------------------------------------------------

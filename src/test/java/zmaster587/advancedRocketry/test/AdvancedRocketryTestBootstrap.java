@@ -63,7 +63,14 @@ public class AdvancedRocketryTestBootstrap {
             summary.append(String.format("  %-7s %-12s %-50s%s%n",
                     o.status(), o.category(), o.id(),
                     o.failure() == null ? "" : "  ← " + o.failure().getClass().getSimpleName() + ": "
-                            + truncate(String.valueOf(o.failure().getMessage()), 80)));
+                            + truncate(String.valueOf(o.failure().getMessage()), 200)));
+            // Dump notes for FAILED outcomes — they carry the diagnostic detail
+            // emitted by runScenario via context.note(...).
+            if (o.status() == TestStatus.FAILED && o.notes() != null) {
+                for (String note : o.notes()) {
+                    summary.append("        | ").append(truncate(note, 200)).append('\n');
+                }
+            }
             switch (o.status()) {
                 case PASSED:  passed++; break;
                 case FAILED:  failed++; break;
