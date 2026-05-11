@@ -200,6 +200,15 @@ tasks.test {
     systemProperty("advancedrocketry.tests", "true")
 }
 
+// Tell the reusable test framework (v0.2.0+) which launcher / asset layout to use.
+// Defaults in the framework target RFG/FG4 — these overrides flip it to FG6.
+val fg6HarnessProps = mapOf(
+    "forge.test.launcher.class.server" to "net.minecraftforge.legacydev.MainServer",
+    "forge.test.launcher.class.client" to "mcp.client.Start",
+    "forge.test.assets.dir" to "${gradle.gradleUserHomeDir}/caches/forge_gradle/assets",
+    "forge.test.launcher.legacyArgs" to "false"
+)
+
 // SMART §11 — dedicated task that runs ONLY the AR scenario suite (P0 + P1
 // scenarios composed by AdvancedRocketryTestRegistry). Useful in CI to gate
 // merges on the in-game scenarios separately from the unit tests.
@@ -214,16 +223,78 @@ tasks.register<Test>("testAdvancedRocketryScenarios") {
     group = "verification"
     useJUnit()
     testClassesDirs = sourceSets["test"].output.classesDirs
-    classpath = sourceSets["test"].runtimeClasspath
+    // Augment the test classpath with FG6's runServer classpath so that
+    // RealDedicatedServerHarness has net.minecraftforge.legacydev.MainServer
+    // (and the full MC dev classpath) available when it spawns a subprocess via
+    // System.getProperty("java.class.path"). MinecraftRunTask is package-private
+    // in the FG6 plugin — fetch its classpath reflectively at task-execution time.
+    classpath = sourceSets["test"].runtimeClasspath + files(provider {
+        val runServer = tasks.named("runServer").get()
+        val cpField = runServer.javaClass.methods.firstOrNull { it.name == "getClasspath" && it.parameterCount == 0 }
+                ?: error("runServer task does not expose getClasspath() — FG6 internals changed?")
+        cpField.invoke(runServer) as FileCollection
+    })
     filter {
         includeTestsMatching("zmaster587.advancedRocketry.test.AdvancedRocketryTestBootstrap*")
+        includeTestsMatching("zmaster587.advancedRocketry.test.HarnessDiagnosticTest")
     }
     systemProperty("advancedrocketry.tests", "true")
     systemProperty("advancedrocketry.tests.expectedWeatherMode", weatherMode)
+    // Forward FG6 paths to the test-framework harness (v0.2.0+).
+    fg6HarnessProps.forEach { (k, v) -> systemProperty(k, v) }
+    // Default: enable harness when running the dedicated scenario task. Override
+    // with -Dadvancedrocketry.tests.harness=false to skip server boot.
+    systemProperty("advancedrocketry.tests.harness",
+            (project.findProperty("harness") as? String) ?: "true")
+
+    // FG6's MinecraftRunTask.exec() resolves env+sysprops via a runtime token map
+    // (see RunConfigGenerator.configureTokensLazy). Replicate the same resolution
+    // in doFirst so MainServer gets the env vars (mainClass, tweakClass, MCP_TO_SRG,
+    // etc.) it needs. Without this the spawned server JVM dies with
+    // "Must specify mainClass environment variable".
+    doFirst {
+        val runServer = tasks.named("runServer").get()
+        val runConfig = runServer.javaClass.methods.first { it.name == "getRunConfig" }
+                .invoke(runServer)
+                .let { it.javaClass.getMethod("get").invoke(it) }
+
+        // Resolve the token map via the same package-private path FG6 uses.
+        val rcgClass = Class.forName("net.minecraftforge.gradle.common.util.runs.RunConfigGenerator")
+        val mapModClassesMethod = rcgClass.declaredMethods.first { it.name == "mapModClassesToGradle" }
+        mapModClassesMethod.isAccessible = true
+        val modClassesStream = mapModClassesMethod.invoke(null, project, runConfig)
+        val mcArtifacts = runServer.javaClass.methods.first { it.name == "getMinecraftArtifacts" }.invoke(runServer)
+        val rtArtifacts = runServer.javaClass.methods.first { it.name == "getRuntimeClasspathArtifacts" }.invoke(runServer)
+        val configureTokens = rcgClass.declaredMethods.first { it.name == "configureTokensLazy" }
+        configureTokens.isAccessible = true
+        @Suppress("UNCHECKED_CAST")
+        val tokenMap = configureTokens.invoke(null, project, runConfig, modClassesStream, mcArtifacts, rtArtifacts)
+                as Map<String, java.util.function.Supplier<String>>
+
+        // RunConfig.replace(Map, String) substitutes ${...} / {...} placeholders.
+        val replaceMethod = runConfig.javaClass.getMethod("replace", Map::class.java, String::class.java)
+
+        @Suppress("UNCHECKED_CAST")
+        val rcEnv = runConfig.javaClass.getMethod("getEnvironment").invoke(runConfig) as Map<String, String>
+        rcEnv.forEach { (k, v) ->
+            val resolved = replaceMethod.invoke(runConfig, tokenMap, v) as String
+            environment(k, resolved)
+        }
+        @Suppress("UNCHECKED_CAST")
+        val rcProps = runConfig.javaClass.getMethod("getProperties").invoke(runConfig) as Map<String, String>
+        rcProps.forEach { (k, v) ->
+            val resolved = replaceMethod.invoke(runConfig, tokenMap, v) as String
+            systemProperty(k, resolved)
+        }
+        logger.lifecycle("Forwarded ${rcEnv.size} env vars and ${rcProps.size} system properties from runServer config")
+    }
     testLogging {
         events("failed", "skipped", "passed")
         exceptionFormat = org.gradle.api.tasks.testing.logging.TestExceptionFormat.FULL
     }
+    // Building AR's jar is a soft prereq because runServer's classpath includes it
+    // (and the in-game mod must be present for any AR-specific assertion).
+    dependsOn(tasks.named("jar"))
 }
 
 tasks.processResources {

@@ -75,27 +75,56 @@ framework-native report (`summary.txt` + `summary.json` produced by
 JUnit-managed temp directory of `AdvancedRocketryTestBootstrap.scenarioSuiteRunsAndProducesSummary`
 and is captured in the test-report attachments when running through CI.
 
-## Server harness
+## Server harness (FG6 wiring)
 
-`HarnessBoundScenario` defaults to SKIPPED in `setUp()` because:
+The `testAdvancedRocketryScenarios` Gradle task spins up a **real** Forge
+1.12.2 dedicated server per scenario via the reusable test framework's
+`RealDedicatedServerHarness`. This required two pieces of plumbing:
 
-1. `RealDedicatedServerHarness` requires `GradleStartServer` on the test JVM
-   classpath, which only ForgeGradle's `runServer` task provides — the
-   standard `gradle test` task does not.
-2. The framework hardcodes RetroFutura's MC asset cache layout; AR uses
-   ForgeGradle 6 with a different layout. Direct invocation will time out
-   waiting for the server log line that never arrives.
+1. **Test framework v0.2.0** ([forge-test-framework-0.2.0-dev.jar](../../libs/test/forge-test-framework-0.2.0-dev.jar)) —
+   adds three system properties so the harness can target either RFG or FG6
+   layouts:
+   - `forge.test.launcher.class.server` — main class (default `GradleStartServer`)
+   - `forge.test.assets.dir` — MC assets dir
+   - `forge.test.launcher.legacyArgs` — toggle the RFG-style 20-arg launcher header
 
-To opt INTO real harness invocation:
+   Plus a fast-fail in `TestClient.awaitMarker`: if the server JVM exits before
+   the expected stdout marker, the assertion now reports the crash immediately
+   rather than blocking 3 minutes.
+
+2. **AR build glue** ([build.gradle.kts](../../build.gradle.kts) `tasks.testAdvancedRocketryScenarios`):
+   - Augments the test classpath with FG6's `runServer` classpath (so the spawned
+     JVM has `net.minecraftforge.legacydev.MainServer` + the full MC dev cp)
+   - Forwards the FG6-specific system properties listed above
+   - Reflects out FG6's `RunConfig.environment + properties` and replays them
+     through token-resolution so the server JVM gets `mainClass`, `tweakClass`,
+     `MCP_TO_SRG`, `MCP_MAPPINGS`, `FORGE_VERSION`, `FORGE_GROUP`, `MC_VERSION`,
+     `forge.logging.console.level`, `net.minecraftforge.gradle.GradleStart.csvDir`
+     and `.srg.notch-srg`. Without this the server crashes with
+     `Must specify mainClass environment variable`.
+
+By default the harness is **enabled** when running `testAdvancedRocketryScenarios`
+and **disabled** when running `test` (because the unit-test task lacks the runServer
+classpath). Override with:
 
 ```bash
-./gradlew test -Dadvancedrocketry.tests.harness=true
+./gradlew test -Dadvancedrocketry.tests.harness=true            # not generally useful
+./gradlew testAdvancedRocketryScenarios -Pharness=false         # skip server boot
 ```
 
-Today this will currently SKIP every harness-bound scenario with a clear
-explanation in `summary.txt`. Once a `runServer`-classpath-aware Gradle task
-is added (or once the framework is taught the FG6 cache layout) the same
-scenarios will start producing PASSED/FAILED outcomes.
+### Diagnostic helper
+
+[HarnessDiagnosticTest](java/zmaster587/advancedRocketry/test/HarnessDiagnosticTest.java)
+boots ONE server, dumps the transcript regardless of outcome, and is registered
+in the `testAdvancedRocketryScenarios` filter so you can run it as:
+
+```bash
+./gradlew testAdvancedRocketryScenarios \
+    --tests "zmaster587.advancedRocketry.test.HarnessDiagnosticTest"
+```
+
+Useful when the harness setup is being debugged — output goes to
+`build/reports/tests/testAdvancedRocketryScenarios/...HarnessDiagnosticTest.html`.
 
 ## Test-only `/artest` probe commands
 
@@ -147,3 +176,25 @@ so that a future fix flips them to FAILED and surfaces a tripwire:
 |---|---|
 | `StatsRocketTest.createFromNbtCurrentlyLosesAllFields_documented` | `StatsRocket.createFromNBT(outer)` double-unwraps `rocketStats` and loses every field. Production callers all use `stats.readFromNBT(outer)` directly so the bug is latent. |
 | `DimensionPropertiesTest.getGeodeMultiplierReturnsVolcanoMultiplier_documented` | `DimensionProperties.getGeodeMultiplier()` returns `volcanoFrequencyMultiplier` instead of `geodeFrequencyMultiplier` (copy-paste error). The on-wire NBT field is correct, only the accessor is wrong. |
+
+### Active server-startup bug surfaced by the harness
+
+When the dedicated-server harness is enabled, every `HarnessBoundScenario`
+currently SKIPPED with this message:
+
+```
+Server process exited (code=0) before marker 'For help, type "help" or "?"' appeared.
+…
+NullPointerException at TileElectricArcFurnace.getAllowableWildCardBlocks(TileElectricArcFurnace.java:63)
+  list.addAll(TileMultiBlock.getMapping('O'))   ← null
+  at zmaster587.libVulpes.items.ItemProjector.registerMachine
+  at zmaster587.advancedRocketry.AdvancedRocketry.postInit
+```
+
+`TileMultiBlock.getMapping('O')` returns null at AR `postInit` — likely the
+mapping for that wildcard character is registered later than the arc furnace's
+projector setup expects. **This is an existing AR/libVulpes bug** that no one
+caught earlier because production tests have always run via `runClient` (where
+the call path differs) — the dedicated-server harness exposes it for the first
+time. Per SMART §3 it is documented but not fixed in this PR. Until the bug
+is fixed every scenario reports SKIPPED with the crash transcript.
