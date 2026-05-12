@@ -62,7 +62,7 @@ public class TestProbeCommand extends CommandBase {
     @Override
     @Nonnull
     public String getUsage(@Nonnull ICommandSender sender) {
-        return "/artest <registry|dim|planet|weather|atmosphere|oxygen|rocket|station|satellite|machine|terraforming|worldgen|commands|energy|infra|place|fill>";
+        return "/artest <registry|dim|planet|weather|atmosphere|oxygen|rocket|station|satellite|machine|terraforming|worldgen|commands|energy|infra|place|fill|fixture|tile>";
     }
 
     @Override
@@ -132,6 +132,9 @@ public class TestProbeCommand extends CommandBase {
                     break;
                 case "fixture":
                     handleFixture(server, sender, tail(args));
+                    break;
+                case "tile":
+                    handleTile(server, sender, tail(args));
                     break;
                 default:
                     send(sender, "{\"error\":\"unknown subcommand\",\"sub\":\"" + args[0] + "\"}");
@@ -529,6 +532,34 @@ public class TestProbeCommand extends CommandBase {
     // §5.6 Station probes -----------------------------------------------------
 
     private void handleStation(ICommandSender sender, String[] args) {
+        if (args.length >= 2 && "create".equalsIgnoreCase(args[0])) {
+            int orbitingDim = parseIntOr(args[1], Integer.MIN_VALUE);
+            int stationDim = args.length >= 3 ? parseIntOr(args[2], Integer.MIN_VALUE) : Integer.MIN_VALUE;
+            SpaceStationObject station = new SpaceStationObject();
+            station.setOrbitingBody(orbitingDim);
+            // SpaceStationObject.getOrbitingPlanetId() returns INVALID_PLANET until
+            // `created=true`. setOrbitingBody alone doesn't flip that — production
+            // code does so via beginTransition() / station-assembler success path.
+            // Force the flag here so test-created stations are immediately
+            // queryable by /artest station info.
+            try {
+                java.lang.reflect.Field createdField = SpaceStationObject.class.getDeclaredField("created");
+                createdField.setAccessible(true);
+                createdField.setBoolean(station, true);
+            } catch (ReflectiveOperationException e) {
+                send(sender, "{\"error\":\"could not flip created flag\",\"msg\":\""
+                        + escapeJson(e.getMessage()) + "\"}");
+                return;
+            }
+            if (stationDim == Integer.MIN_VALUE) {
+                SpaceObjectManager.getSpaceManager().registerSpaceObject(station, orbitingDim);
+            } else {
+                SpaceObjectManager.getSpaceManager().registerSpaceObject(station, orbitingDim, stationDim);
+            }
+            send(sender, "{\"ok\":true,\"id\":" + station.getId()
+                    + ",\"orbitingBody\":" + station.getOrbitingPlanetId() + "}");
+            return;
+        }
         if (args.length == 0 || "list".equalsIgnoreCase(args[0])) {
             StringBuilder builder = new StringBuilder("{\"stations\":[");
             boolean first = true;
@@ -574,6 +605,48 @@ public class TestProbeCommand extends CommandBase {
     // §5.6 Satellite probes ---------------------------------------------------
 
     private void handleSatellite(ICommandSender sender, String[] args) {
+        if (args.length >= 3 && "create".equalsIgnoreCase(args[0])) {
+            // satellite create <dim> <typeId> [powerGen] [powerStorage] [maxData] [weight]
+            int dim = parseIntOr(args[1], Integer.MIN_VALUE);
+            String typeId = args[2];
+            int powerGen = args.length >= 4 ? parseIntOr(args[3], 100) : 100;
+            int powerStorage = args.length >= 5 ? parseIntOr(args[4], 1000) : 1000;
+            int maxData = args.length >= 6 ? parseIntOr(args[5], 1000) : 1000;
+            float weight = args.length >= 7 ? Float.parseFloat(args[6]) : 1.0f;
+
+            DimensionProperties props = DimensionManager.getInstance().getDimensionProperties(dim);
+            if (props == null) {
+                send(sender, "{\"error\":\"dim not registered\",\"dim\":" + dim + "}");
+                return;
+            }
+            SatelliteBase sat = zmaster587.advancedRocketry.api.SatelliteRegistry.getNewSatellite(typeId);
+            if (sat == null) {
+                send(sender, "{\"error\":\"unknown satellite type\",\"type\":\"" + escapeJson(typeId) + "\"}");
+                return;
+            }
+            zmaster587.advancedRocketry.api.satellite.SatelliteProperties sp =
+                    new zmaster587.advancedRocketry.api.satellite.SatelliteProperties(
+                            powerGen, powerStorage, typeId, maxData, weight);
+            long satId = System.nanoTime() & 0x7fffffffffffffffL;
+            sp.setId(satId);
+            // SatelliteBase.setProperties only accepts ItemStack; inject the
+            // properties object directly into the private field via reflection.
+            try {
+                java.lang.reflect.Field f = zmaster587.advancedRocketry.api.satellite.SatelliteBase
+                        .class.getDeclaredField("satelliteProperties");
+                f.setAccessible(true);
+                f.set(sat, sp);
+            } catch (ReflectiveOperationException e) {
+                send(sender, "{\"error\":\"failed to inject satelliteProperties\",\"msg\":\""
+                        + escapeJson(e.getMessage()) + "\"}");
+                return;
+            }
+            sat.setDimensionId(dim);
+            props.addSatellite(sat, dim, false);
+            send(sender, "{\"ok\":true,\"id\":" + satId + ",\"type\":\"" + escapeJson(typeId)
+                    + "\",\"dim\":" + dim + ",\"powerGen\":" + powerGen + "}");
+            return;
+        }
         if ("types".equalsIgnoreCase(args[0])) {
             // Reflect SatelliteRegistry.registry (private static HashMap<String, Class>)
             // and return the registered satellite type names.
@@ -687,7 +760,22 @@ public class TestProbeCommand extends CommandBase {
             send(sender, jsonMap(info));
             return;
         }
-        send(sender, "{\"error\":\"unknown atmosphere subcommand — try get <dim> <x> <y> <z>\"}");
+        if (args.length >= 3 && "set-density".equalsIgnoreCase(args[0])) {
+            int dim = parseIntOr(args[1], Integer.MIN_VALUE);
+            int density = parseIntOr(args[2], -1);
+            DimensionProperties props = DimensionManager.getInstance().getDimensionProperties(dim);
+            if (props == null) {
+                send(sender, "{\"error\":\"dim not registered\",\"dim\":" + dim + "}");
+                return;
+            }
+            int oldDensity = props.getAtmosphereDensity();
+            props.setAtmosphereDensity(density);
+            send(sender, "{\"ok\":true,\"dim\":" + dim
+                    + ",\"oldDensity\":" + oldDensity
+                    + ",\"newDensity\":" + props.getAtmosphereDensity() + "}");
+            return;
+        }
+        send(sender, "{\"error\":\"unknown atmosphere subcommand — try get <dim> <x> <y> <z> | set-density <dim> <value>\"}");
     }
 
     // §5.7 Oxygen probe -------------------------------------------------------
@@ -800,7 +888,48 @@ public class TestProbeCommand extends CommandBase {
             send(sender, jsonMap(info));
             return;
         }
-        send(sender, "{\"error\":\"unknown machine subcommand — try info [dim] <x> <y> <z>\"}");
+        if (args.length >= 1 && "recipes-summary".equalsIgnoreCase(args[0])) {
+            // Report recipe counts for every canonical AR multiblock recipe machine
+            // (SMART §7.7). Uses libVulpes' RecipesMachine singleton.
+            String[] machines = {
+                    "zmaster587.advancedRocketry.tile.multiblock.machine.TileCuttingMachine",
+                    "zmaster587.advancedRocketry.tile.multiblock.machine.TilePrecisionAssembler",
+                    "zmaster587.advancedRocketry.tile.multiblock.machine.TileChemicalReactor",
+                    "zmaster587.advancedRocketry.tile.multiblock.machine.TileCrystallizer",
+                    "zmaster587.advancedRocketry.tile.multiblock.machine.TileElectrolyser",
+                    "zmaster587.advancedRocketry.tile.multiblock.machine.TileElectricArcFurnace",
+                    "zmaster587.advancedRocketry.tile.multiblock.machine.TileLathe",
+                    "zmaster587.advancedRocketry.tile.multiblock.machine.TileRollingMachine",
+                    "zmaster587.advancedRocketry.tile.multiblock.machine.TileCentrifuge",
+                    "zmaster587.advancedRocketry.tile.multiblock.machine.TilePrecisionLaserEtcher",
+            };
+            Map<String, Object> recipes = new LinkedHashMap<>();
+            try {
+                Class<?> recipesMachineClass = Class.forName("zmaster587.libVulpes.recipe.RecipesMachine");
+                Object instance = recipesMachineClass.getMethod("getInstance").invoke(null);
+                java.lang.reflect.Method getRecipes = recipesMachineClass.getMethod("getRecipes", Class.class);
+                for (String fqn : machines) {
+                    String shortName = fqn.substring(fqn.lastIndexOf('.') + 1);
+                    try {
+                        Class<?> machineClass = Class.forName(fqn);
+                        Object listObj = getRecipes.invoke(instance, machineClass);
+                        java.util.List<?> list = (java.util.List<?>) listObj;
+                        recipes.put(shortName, list == null ? 0 : list.size());
+                    } catch (ClassNotFoundException missing) {
+                        recipes.put(shortName, "class-missing");
+                    } catch (ReflectiveOperationException re) {
+                        recipes.put(shortName, "error:" + re.getClass().getSimpleName());
+                    }
+                }
+            } catch (ReflectiveOperationException e) {
+                send(sender, "{\"error\":\"RecipesMachine reflection failed\",\"msg\":\""
+                        + escapeJson(e.getMessage()) + "\"}");
+                return;
+            }
+            send(sender, jsonMap(recipes));
+            return;
+        }
+        send(sender, "{\"error\":\"unknown machine subcommand — try info [dim] <x> <y> <z> | recipes-summary\"}");
     }
 
     /**
@@ -965,7 +1094,23 @@ public class TestProbeCommand extends CommandBase {
             send(sender, jsonMap(info));
             return;
         }
-        send(sender, "{\"error\":\"unknown terraforming subcommand — try info <dim>\"}");
+        if (args.length >= 3 && "set-density".equalsIgnoreCase(args[0])) {
+            // terraforming set-density <dim> <newDensity>
+            int dim = parseIntOr(args[1], Integer.MIN_VALUE);
+            int density = parseIntOr(args[2], -1);
+            DimensionProperties props = DimensionManager.getInstance().getDimensionProperties(dim);
+            if (props == null) {
+                send(sender, "{\"error\":\"dim not registered\",\"dim\":" + dim + "}");
+                return;
+            }
+            int before = props.getAtmosphereDensity();
+            props.setAtmosphereDensity(density);
+            send(sender, "{\"ok\":true,\"dim\":" + dim
+                    + ",\"oldDensity\":" + before
+                    + ",\"newDensity\":" + props.getAtmosphereDensity() + "}");
+            return;
+        }
+        send(sender, "{\"error\":\"unknown terraforming subcommand — try info <dim> | set-density <dim> <value>\"}");
     }
 
     // §5.8 Worldgen probe -----------------------------------------------------
@@ -1010,7 +1155,104 @@ public class TestProbeCommand extends CommandBase {
             send(sender, jsonMap(info));
             return;
         }
-        send(sender, "{\"error\":\"unknown worldgen subcommand — try sample <dim> <chunkX> <chunkZ>\"}");
+        if (args.length >= 6 && "ore-stats".equalsIgnoreCase(args[0])) {
+            // ore-stats <dim> <chunkX> <chunkZ> <radiusChunks> <blockId>
+            int dim = parseIntOr(args[1], Integer.MIN_VALUE);
+            int centerCX = parseIntOr(args[2], 0);
+            int centerCZ = parseIntOr(args[3], 0);
+            int radius = parseIntOr(args[4], 1);
+            String blockId = args[5];
+            WorldServer world = server.getWorld(dim);
+            if (world == null) {
+                send(sender, "{\"error\":\"world not loaded\",\"dim\":" + dim + "}");
+                return;
+            }
+            net.minecraft.block.Block target = ForgeRegistries.BLOCKS.getValue(new ResourceLocation(blockId));
+            if (target == null) {
+                send(sender, "{\"error\":\"unknown block id\",\"id\":\"" + escapeJson(blockId) + "\"}");
+                return;
+            }
+            // Soft cap: (2r+1)^2 chunks, 16x16x256 blocks each → (2r+1)^2 * 65536
+            // Refuse r > 4 (9x9 = 81 chunks ~5.3M blocks scan).
+            if (radius > 4) {
+                send(sender, "{\"error\":\"radius too large\",\"radius\":" + radius + ",\"cap\":4}");
+                return;
+            }
+            int chunksScanned = 0;
+            long count = 0;
+            for (int cx = centerCX - radius; cx <= centerCX + radius; cx++) {
+                for (int cz = centerCZ - radius; cz <= centerCZ + radius; cz++) {
+                    Chunk chunk = world.getChunkProvider().provideChunk(cx, cz);
+                    if (chunk == null || !chunk.isLoaded()) continue;
+                    chunksScanned++;
+                    for (int y = 0; y < 256; y++) {
+                        for (int lx = 0; lx < 16; lx++) {
+                            for (int lz = 0; lz < 16; lz++) {
+                                if (chunk.getBlockState(lx, y, lz).getBlock() == target) count++;
+                            }
+                        }
+                    }
+                }
+            }
+            Map<String, Object> info = new LinkedHashMap<>();
+            info.put("dim", dim);
+            info.put("centerChunk", new int[]{centerCX, centerCZ});
+            info.put("radius", radius);
+            info.put("block", blockId);
+            info.put("chunksScanned", chunksScanned);
+            info.put("count", count);
+            send(sender, jsonMap(info));
+            return;
+        }
+        send(sender, "{\"error\":\"unknown worldgen subcommand — try sample <dim> <chunkX> <chunkZ> | ore-stats <dim> <cx> <cz> <radius> <blockId>\"}");
+    }
+
+    // Generic tile ticking probe ----------------------------------------------
+
+    /**
+     * {@code /artest tile force-tick <dim> <x> <y> <z> <ticks>} — directly invokes
+     * {@link net.minecraft.util.ITickable#update()} on a tile entity N times in a
+     * row, bypassing the world tick scheduler. Used by tests that need
+     * deterministic, synchronous machine progress without waiting for the server
+     * thread to schedule a world tick (which it can't during a command since
+     * commands themselves run on the server thread).
+     */
+    private void handleTile(MinecraftServer server, ICommandSender sender, String[] args) {
+        if (args.length >= 6 && "force-tick".equalsIgnoreCase(args[0])) {
+            int dim = parseIntOr(args[1], Integer.MIN_VALUE);
+            int x = parseIntOr(args[2], 0);
+            int y = parseIntOr(args[3], 0);
+            int z = parseIntOr(args[4], 0);
+            int ticks = parseIntOr(args[5], 1);
+            net.minecraft.world.WorldServer world = server.getWorld(dim);
+            if (world == null) {
+                send(sender, "{\"error\":\"world not loaded\",\"dim\":" + dim + "}");
+                return;
+            }
+            BlockPos pos = new BlockPos(x, y, z);
+            TileEntity tile = world.getTileEntity(pos);
+            if (!(tile instanceof net.minecraft.util.ITickable)) {
+                send(sender, "{\"error\":\"tile not ITickable\",\"tile\":\""
+                        + (tile == null ? "null" : tile.getClass().getName()) + "\"}");
+                return;
+            }
+            net.minecraft.util.ITickable tickable = (net.minecraft.util.ITickable) tile;
+            int ticked = 0;
+            try {
+                for (int i = 0; i < ticks; i++) {
+                    tickable.update();
+                    ticked++;
+                }
+            } catch (RuntimeException e) {
+                send(sender, "{\"error\":\"tile.update() threw after " + ticked + " ticks: "
+                        + escapeJson(e.getClass().getSimpleName() + ": " + e.getMessage()) + "\"}");
+                return;
+            }
+            send(sender, "{\"ok\":true,\"ticked\":" + ticked
+                    + ",\"tileClass\":\"" + tile.getClass().getName() + "\"}");
+            return;
+        }
+        send(sender, "{\"error\":\"unknown tile subcommand — try force-tick <dim> <x> <y> <z> <ticks>\"}");
     }
 
     // §5 Commands probe -------------------------------------------------------
@@ -1091,7 +1333,45 @@ public class TestProbeCommand extends CommandBase {
             send(sender, jsonMap(info));
             return;
         }
-        send(sender, "{\"error\":\"unknown energy subcommand — try stored <dim> <x> <y> <z>\"}");
+        if (args.length >= 5 && "inject".equalsIgnoreCase(args[0])) {
+            // energy inject <dim> <x> <y> <z> <amount> [simulate]
+            int dim = parseIntOr(args[1], Integer.MIN_VALUE);
+            int x = parseIntOr(args[2], 0);
+            int y = parseIntOr(args[3], 0);
+            int z = parseIntOr(args[4], 0);
+            int amount = args.length >= 6 ? parseIntOr(args[5], 0) : 0;
+            boolean simulate = args.length >= 7 && Boolean.parseBoolean(args[6]);
+            net.minecraft.world.WorldServer world = server.getWorld(dim);
+            if (world == null) {
+                send(sender, "{\"error\":\"world not loaded\",\"dim\":" + dim + "}");
+                return;
+            }
+            TileEntity tile = world.getTileEntity(new BlockPos(x, y, z));
+            if (tile == null) {
+                send(sender, "{\"error\":\"no tile entity\",\"pos\":[" + x + "," + y + "," + z + "]}");
+                return;
+            }
+            net.minecraftforge.energy.IEnergyStorage es = null;
+            for (net.minecraft.util.EnumFacing dir : net.minecraft.util.EnumFacing.values()) {
+                if (tile.hasCapability(net.minecraftforge.energy.CapabilityEnergy.ENERGY, dir)) {
+                    es = tile.getCapability(net.minecraftforge.energy.CapabilityEnergy.ENERGY, dir);
+                    break;
+                }
+            }
+            if (es == null && tile.hasCapability(net.minecraftforge.energy.CapabilityEnergy.ENERGY, null)) {
+                es = tile.getCapability(net.minecraftforge.energy.CapabilityEnergy.ENERGY, null);
+            }
+            if (es == null) {
+                send(sender, "{\"error\":\"tile has no IEnergyStorage capability\"}");
+                return;
+            }
+            int accepted = es.receiveEnergy(amount, simulate);
+            send(sender, "{\"ok\":true,\"accepted\":" + accepted
+                    + ",\"stored\":" + es.getEnergyStored()
+                    + ",\"max\":" + es.getMaxEnergyStored() + "}");
+            return;
+        }
+        send(sender, "{\"error\":\"unknown energy subcommand — try stored <dim> <x> <y> <z> | inject <dim> <x> <y> <z> <amount>\"}");
     }
 
     // §5.10 Rocket infrastructure probe ---------------------------------------
@@ -1128,7 +1408,55 @@ public class TestProbeCommand extends CommandBase {
             send(sender, jsonMap(info));
             return;
         }
-        send(sender, "{\"error\":\"unknown infra subcommand — try info <dim> <x> <y> <z>\"}");
+        if (args.length >= 6 && "link".equalsIgnoreCase(args[0])) {
+            // infra link <dim> <x> <y> <z> <entityId>
+            int dim = parseIntOr(args[1], Integer.MIN_VALUE);
+            int x = parseIntOr(args[2], 0);
+            int y = parseIntOr(args[3], 0);
+            int z = parseIntOr(args[4], 0);
+            int entityId = parseIntOr(args[5], Integer.MIN_VALUE);
+            net.minecraft.world.WorldServer world = server.getWorld(dim);
+            if (world == null) {
+                send(sender, "{\"error\":\"world not loaded\",\"dim\":" + dim + "}");
+                return;
+            }
+            TileEntity tile = world.getTileEntity(new BlockPos(x, y, z));
+            if (!(tile instanceof zmaster587.advancedRocketry.api.IInfrastructure)) {
+                send(sender, "{\"error\":\"tile not IInfrastructure\",\"tile\":\""
+                        + (tile == null ? "null" : tile.getClass().getName()) + "\"}");
+                return;
+            }
+            EntityRocket rocket = findRocket(server, entityId);
+            if (rocket == null) {
+                send(sender, "{\"error\":\"rocket not found\",\"entityId\":" + entityId + "}");
+                return;
+            }
+            zmaster587.advancedRocketry.api.IInfrastructure infra =
+                    (zmaster587.advancedRocketry.api.IInfrastructure) tile;
+            // EntityRocketBase.linkInfrastructure calls infra.linkRocket(this) and
+            // appends to its protected connectedInfrastructure list on success.
+            int before, after;
+            try {
+                java.lang.reflect.Field f = zmaster587.advancedRocketry.api.EntityRocketBase
+                        .class.getDeclaredField("connectedInfrastructure");
+                f.setAccessible(true);
+                @SuppressWarnings("unchecked")
+                java.util.LinkedList<zmaster587.advancedRocketry.api.IInfrastructure> list =
+                        (java.util.LinkedList<zmaster587.advancedRocketry.api.IInfrastructure>) f.get(rocket);
+                before = list.size();
+                rocket.linkInfrastructure(infra);
+                after = list.size();
+            } catch (ReflectiveOperationException e) {
+                send(sender, "{\"error\":\"connectedInfrastructure access failed\",\"msg\":\""
+                        + escapeJson(e.getMessage()) + "\"}");
+                return;
+            }
+            send(sender, "{\"ok\":true,\"linked\":" + (after > before)
+                    + ",\"connectedCount\":" + after
+                    + ",\"maxDistance\":" + infra.getMaxLinkDistance() + "}");
+            return;
+        }
+        send(sender, "{\"error\":\"unknown infra subcommand — try info <dim> <x> <y> <z> | link <dim> <x> <y> <z> <entityId>\"}");
     }
 
     // §9.2 Fixture-building primitives -----------------------------------------
@@ -1328,7 +1656,7 @@ public class TestProbeCommand extends CommandBase {
             return getListOfStringsMatchingLastWord(args,
                     "registry", "dim", "planet", "weather", "rocket", "station", "satellite",
                     "atmosphere", "oxygen", "machine", "terraforming", "worldgen", "commands",
-                    "energy", "infra", "place", "fill", "fixture");
+                    "energy", "infra", "place", "fill", "fixture", "tile");
         }
         return Collections.emptyList();
     }

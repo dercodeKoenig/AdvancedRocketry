@@ -297,11 +297,33 @@ tasks.register<Test>("testAdvancedRocketryScenarios") {
             val resolved = replaceMethod.invoke(runConfig, tokenMap, v) as String
             environment(k, resolved)
         }
+        // FG6's RunConfig.environment uses ${MC_VERSION} as a placeholder for the
+        // configured MC version; token map doesn't always resolve it (FG6 plugs
+        // it in late, after token resolution). Set it explicitly so the harness
+        // subprocess has the right MC version to find the deobfuscation_data file.
+        environment("MC_VERSION", mcVersion)
         @Suppress("UNCHECKED_CAST")
         val rcProps = runConfig.javaClass.getMethod("getProperties").invoke(runConfig) as Map<String, String>
+        val resolvedProps = mutableMapOf<String, String>()
         rcProps.forEach { (k, v) ->
             val resolved = replaceMethod.invoke(runConfig, tokenMap, v) as String
             systemProperty(k, resolved)
+            resolvedProps[k] = resolved
+        }
+        // The test framework's RealDedicatedServerHarness spawns a child JVM with
+        // a hard-coded arg list — it inherits env vars but NOT the -D properties
+        // FG6 sets on the parent test JVM (MCP_TO_SRG csv dir, srg.notch-srg,
+        // mainClass, tweakClass, etc.). Without those, launchwrapper can't locate
+        // the deobfuscation_data file and FMLDeobfuscatingRemapper.setup NPEs.
+        //
+        // Workaround: pack the same -D flags into JAVA_TOOL_OPTIONS env var, which
+        // every spawned JVM auto-prepends to its CLI. Paths with spaces get
+        // single-quoted (JAVA_TOOL_OPTIONS uses shell-style quoting).
+        val toolOptions = resolvedProps.entries.joinToString(" ") { (k, v) ->
+            if (v.contains(" ")) "-D$k=\"$v\"" else "-D$k=$v"
+        }
+        if (toolOptions.isNotEmpty()) {
+            environment("JAVA_TOOL_OPTIONS", toolOptions)
         }
         logger.lifecycle("Forwarded ${rcEnv.size} env vars and ${rcProps.size} system properties from runServer config")
     }

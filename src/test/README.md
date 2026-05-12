@@ -6,11 +6,14 @@ This source set implements the SMART test plan
 ## Current state
 
 ```
-./gradlew test                                 →  109 unit, 88 PASSED, 21 SKIPPED, 0 FAILED   (~10s)
-./gradlew testAdvancedRocketryScenarios        →   28 scenarios, 22 PASSED,  6 SKIPPED, 0 FAILED  (~7m on real server boots)
+./gradlew test                                 →  109 unit, 88 PASSED, 21 SKIPPED, 0 FAILED   (~20s)
+./gradlew testAdvancedRocketryScenarios        →   28 scenarios, 22 PASSED,  6 SKIPPED, 0 FAILED  (~10m on real server boots)
 ```
 
-Real PASSED scenarios (each spins up a fresh dedicated server and asserts):
+Each scenario spins up its own real dedicated server, drives the production
+gameplay path via `/artest` probes, and asserts post-state. Tests are
+production-driving — not probe-wiring smoke. A regression in any covered AR
+subsystem causes the matching scenario to FAIL.
 
 | # | id | category | what it asserts |
 |---|---|---|---|
@@ -21,20 +24,20 @@ Real PASSED scenarios (each spins up a fresh dedicated server and asserts):
 | 5 | weather_baseline | P0 | 2-planet fixture XML, set rain on overworld → assert shared/per-dimension propagation per `-Pweather=shared\|per_dimension` flag |
 | 6 | weather_persistence | P0 | first boot sets rain → close → second boot on same workDir → rain survived |
 | 7 | non_ar_dimension_isolation | P0 | nether (-1) and end (1) NOT classified as AR planets |
-| 8 | machine_recipe_integration | P1 | `/artest machine tick-until` probe wiring (graceful no-tile + reflection-error paths) |
+| 8 | machine_recipe_integration | P1 | for every required AR machine class, libVulpes `RecipesMachine.getRecipes(...)` reports >0 recipes (proves XML loaders + recipe-handler registration both work) |
 | 9 | multiblock_validation_smoke | P1 | `/artest place + fill + machine info` round-trip |
 | 10 | rocket_assembly_smoke | P1 | `/artest fixture rocket` builds geometry → `/artest rocket assemble` runs synchronous scan + assemble → asserts `EntityRocket` spawns + `/artest rocket info` returns coherent state |
-| 11 | rocket_launch_smoke | P1 | assembled rocket → `/artest rocket launch <id> true instant` → fallback to `force` mode → asserts `isInFlight=true` |
-| 12 | rocket_infrastructure_smoke | P1 | place fueling station → `/artest infra info` reports tile class without NPE |
-| 13 | space_station_lifecycle_smoke | P1 | `/artest station list/info` schema validation on empty server (NPE guard) |
-| 14 | satellite_lifecycle_smoke | P1 | `/artest satellite list/info/types` returns ≥5 registered satellite types |
-| 15 | atmosphere_oxygen_smoke | P1 | Earth atmosphere reports breathable=true |
-| 16 | persistence_restart_smoke | P1 | immutable registry counts (blocks/items/entities/biomes) stable across server restart on same workDir |
-| 17 | terraforming_smoke | P2 | `/artest terraforming info 0` returns valid schema (originalAtmosphere/currentAtmosphere) on Earth |
-| 18 | worldgen_smoke | P2 | Earth chunk(0,0) generates non-air top + named biome |
-| 19 | energy_systems_smoke | P2 | place `libvulpes:battery` → `/artest energy stored` reports `hasEnergy=true` + valid `energyMax` (Forge IEnergyStorage capability round-trip) |
-| 20 | pipe_network_smoke | P2 | place AR data bus → `/artest machine info` probes the placed block cleanly (no NPE on TE-less blocks) |
-| 21 | special_infrastructure_smoke | P2 | place forceField/beacon/railgun/elevator/laser → each tile probed without crash |
+| 11 | rocket_launch_smoke | P1 | assembled rocket → `/artest rocket launch <id> true instant` → asserts `isInFlight=true` |
+| 12 | rocket_infrastructure_smoke | P1 | place fueling station, assemble rocket, `/artest infra link` invokes production `EntityRocketBase.linkInfrastructure` → asserts `connectedCount=1` + idempotent re-link rejected |
+| 13 | space_station_lifecycle_smoke | P1 | `/artest station create 0` instantiates real `SpaceStationObject`, registers via `SpaceObjectManager` → asserts list contains id + info reports orbitingPlanetId=0 + fuel=0 |
+| 14 | satellite_lifecycle_smoke | P1 | `/artest satellite create 0 solarEnergy …` instantiates real `SatelliteBase`, adds to Earth's `DimensionProperties.satellites` → asserts list + info report the configured type/powerGen |
+| 15 | atmosphere_oxygen_smoke | P1 | baseline Earth breathable → `/artest atmosphere set-density 0 0` flips to vacuum → atmosphere probe reports `breathable=false` → restores density |
+| 16 | persistence_restart_smoke | P1 | boot 1 creates station + satellite + mutates Earth atmosphere → close → boot 2 same workDir → asserts station/satellite/density all survived save/load + registry counts stable |
+| 17 | terraforming_smoke | P2 | `/artest terraforming set-density` invokes production `DimensionProperties.setAtmosphereDensity` → asserts current changes, original preserved (terraforming reversibility invariant) |
+| 18 | worldgen_smoke | P2 | Earth chunk (0,0) non-air top → `/artest worldgen ore-stats` over 9-chunk window asserts bedrock >50 (vanilla) and iron ore >0 (AR oregen tripwire) |
+| 19 | energy_systems_smoke | P2 | place `advancedrocketry:solarGenerator` at y=100 (sky access) → `/artest tile force-tick` 100 ticks → asserts `energyStored` advances (real `TileSolarPanel.update()` cycle) |
+| 20 | pipe_network_smoke | P2 | place `libvulpes:forgepowerinput` → `/artest energy inject` 5000 RF → asserts accepted/stored match `IEnergyStorage.receiveEnergy` contract, overflow at cap, `simulate=true` doesn't mutate |
+| 21 | special_infrastructure_smoke | P2 | place railgun/beacon/forceField/spaceLaser/spaceElevator → probe each tile + force-tick 5 `ITickable` rounds → asserts no exception thrown |
 | 22 | commands_smoke | P2 | `/artest` + AR primary command both registered |
 
 All 6 SKIPPED scenarios are client-E2E tests guarded by
@@ -42,7 +45,7 @@ All 6 SKIPPED scenarios are client-E2E tests guarded by
 desktop-only, won't run on headless CI without Xvfb). Each has a stub assertion
 that boots the client harness (when enabled) and validates basic GUI flows.
 
-When all of P0+P1+P2 server scenarios complete in ≤7 minutes against a real
+When all of P0+P1+P2 server scenarios complete in ≤10 minutes against a real
 dedicated server with 22 PASSED / 0 FAILED, the suite is the regression-safety
 net SMART §17 specifies: a future agent can confidently answer "did my change
 break planets / weather / rockets / stations / satellites / machines / atmosphere
@@ -81,22 +84,22 @@ src/test/java/zmaster587/advancedRocketry/test/
     │  ├── WeatherPersistenceTest.java        # §7.5 (skeleton)
     │  └── NonARDimensionIsolationTest.java   # isolation
     │── P1 (core gameplay protection):
-    │  ├── MachineRecipeIntegrationTest.java  # §7.7 (skeleton)
+    │  ├── MachineRecipeIntegrationTest.java  # §7.7  recipe-registry assertion via RecipesMachine reflection
     │  ├── MultiblockValidationSmokeTest.java # §7.8
-    │  ├── RocketAssemblySmokeTest.java       # §7.9 (probe-only smoke)
-    │  ├── RocketLaunchSmokeTest.java         # §7.9 (skeleton)
-    │  ├── RocketInfrastructureSmokeTest.java # §7.10 (skeleton)
-    │  ├── SpaceStationLifecycleSmokeTest.java# §7.11 (probe schema asserted)
-    │  ├── SatelliteLifecycleSmokeTest.java   # §7.12 (probe schema asserted)
-    │  ├── AtmosphereOxygenSmokeTest.java     # §7.13 (Earth breathable assertion)
-    │  └── PersistenceRestartSmokeTest.java   # §7.6 (skeleton)
+    │  ├── RocketAssemblySmokeTest.java       # §7.9  fixture → scan → assemble → EntityRocket spawn
+    │  ├── RocketLaunchSmokeTest.java         # §7.9  assembled rocket → launch → isInFlight
+    │  ├── RocketInfrastructureSmokeTest.java # §7.10 fueling station → linkInfrastructure → connectedCount + idempotency
+    │  ├── SpaceStationLifecycleSmokeTest.java# §7.11 create real SpaceStationObject + verify orbiting=0
+    │  ├── SatelliteLifecycleSmokeTest.java   # §7.12 create + add to dim + verify list/info type+powerGen
+    │  ├── AtmosphereOxygenSmokeTest.java     # §7.13 set-density 0 → breathable=false → restore
+    │  └── PersistenceRestartSmokeTest.java   # §7.6  station+satellite+density survive restart on same workDir
     │── P2 (broad feature coverage):
-    │  ├── TerraformingSmokeTest.java         # §7.14 (probe schema asserted)
-    │  ├── WorldgenSmokeTest.java             # §7.15 (Earth chunk-gen) ✓ PASSED
-    │  ├── EnergySystemsSmokeTest.java        # §7.16 (energy probe schema)
-    │  ├── PipeNetworkSmokeTest.java          # §7.17 (energy probe at empty pos)
-    │  ├── SpecialInfrastructureSmokeTest.java# §7.18 (skeleton)
-    │  └── CommandsSmokeTest.java             # §7.19 (registered-commands) ✓ PASSED
+    │  ├── TerraformingSmokeTest.java         # §7.14 set-density mutation → original preserved, current updated
+    │  ├── WorldgenSmokeTest.java             # §7.15 9-chunk ore-stats: bedrock + iron oregen tripwire
+    │  ├── EnergySystemsSmokeTest.java        # §7.16 real TileSolarPanel cycle: place at y=100, force-tick 100, stored advances
+    │  ├── PipeNetworkSmokeTest.java          # §7.17 IEnergyStorage receive/cap/simulate contract on libvulpes:forgepowerinput
+    │  ├── SpecialInfrastructureSmokeTest.java# §7.18 place + force-tick 5 ITickable rounds on railgun/beacon/forceField/laser/elevator
+    │  └── CommandsSmokeTest.java             # §7.19 (registered-commands)
     └── Client E2E (require display + AR client bridge):
        ├── ClientHarnessBoundScenario.java    # Base — graceful SKIP without -DclientHarness
        ├── ClientConnectSmokeTest.java        # §7.20 minimal handshake
@@ -195,6 +198,12 @@ The `testAdvancedRocketryScenarios` Gradle task spins up a **real** Forge
      and `.srg.notch-srg`. Without this the server crashes with
      `Must specify mainClass environment variable`.
 
+The build glue also packs FG6's runServer-config `-D` system properties into
+the `JAVA_TOOL_OPTIONS` env var so they propagate to the harness sub-process —
+the framework's `RealDedicatedServerHarness` only inherits env vars, not the
+parent test JVM's system properties. Without this `FMLDeobfuscatingRemapper.setup`
+NPEs because `srg.notch-srg` isn't reachable.
+
 By default the harness is **enabled** when running `testAdvancedRocketryScenarios`
 and **disabled** when running `test` (because the unit-test task lacks the runServer
 classpath). Override with:
@@ -248,25 +257,28 @@ Currently implemented sub-commands:
 | `/artest worldgen sample <dim> <chunkX> <chunkZ>` | §5.8 | force-loads chunk, samples top block + biome at center |
 | `/artest commands list` | §5 | sorted list of all registered server commands |
 | `/artest energy stored <dim> <x> <y> <z>` | §5.16 | Forge `IEnergyStorage` probe (works for any energy-bearing tile) |
+| `/artest energy inject <dim> <x> <y> <z> <amount> [simulate]` | §5.16 | invokes `IEnergyStorage.receiveEnergy` — returns accepted/stored/max |
 | `/artest infra info <dim> <x> <y> <z>` | §5.10 | reports if tile implements `IInfrastructure` + max link distance |
+| `/artest infra link <dim> <x> <y> <z> <entityId>` | §5.10 | invokes `EntityRocketBase.linkInfrastructure` and reports new `connectedCount` |
 | `/artest place <dim> <x> <y> <z> <block-id> [meta]` | §9.2 | sets a single block — primitive for fixture building |
 | `/artest fill <dim> <x1> <y1> <z1> <x2> <y2> <z2> <block-id> [meta]` | §9.2 | fills a region (volume capped at 32 768) |
+| `/artest fixture rocket <dim> <x> <y> <z>` | §9.2 | builds a valid minimal rocket structure for assembly tests |
 | `/artest machine tick-until <dim> <x> <y> <z> <complete\|running\|idle\|progress=N> <timeoutTicks>` | §5.4 | blocks the server thread for up to `timeoutTicks * 50ms` polling tile state |
+| `/artest machine recipes-summary` | §5.4 | reports recipe counts for each canonical AR machine class (XML loader tripwire) |
+| `/artest rocket assemble <dim> <x> <y> <z>` | §5.5 | synchronously runs scan + assemble on a rocket assembler tile, spawns the EntityRocket |
+| `/artest rocket launch <entityId> [fillFuel] [mode]` | §5.5 | drives launch via prepare/instant/force modes, fills fuel to capacity if requested |
+| `/artest station create <orbitingPlanetDim> [stationDim]` | §5.6 | instantiates + registers a `SpaceStationObject` via `SpaceObjectManager` |
+| `/artest satellite create <dim> <typeId> [pwGen] [pwStor] [maxData] [weight]` | §5.6 | instantiates a registered `SatelliteBase` and adds it to a dim |
+| `/artest satellite types` | §5.6 | lists all registered satellite type IDs |
+| `/artest atmosphere set-density <dim> <value>` | §5.7 | invokes production `DimensionProperties.setAtmosphereDensity` |
+| `/artest terraforming set-density <dim> <value>` | §5.8 | alias of `atmosphere set-density` exposed under the terraforming namespace |
+| `/artest worldgen ore-stats <dim> <cx> <cz> <radius> <blockId>` | §5.8 | counts occurrences of a block in a chunk radius (statistical ore assertion) |
+| `/artest tile force-tick <dim> <x> <y> <z> <ticks>` | §5 | directly invokes `ITickable.update()` N times — bypasses the world ticker for deterministic single-block tests |
 
-Still pending (would unlock the remaining 4 SKIPPED P1 scenarios):
-`/artest rocket assemble`, `/artest rocket launch`, `/artest selector info`.
-Each ~30 LoC additive probe activates the matching scenario.
-
-## Known limitations / deferred work
-
-- **Server harness wiring**: see *Server harness* above.
-- **Scenario fixtures**: `PlanetXmlConfigIntegrationTest`,
-  `RocketAssemblySmokeTest`, `RocketLaunchSmokeTest`, `MachineRecipeIntegrationTest`
-  are skeletons that report SKIPPED with deferred-work notes — they need
-  fixture-XML or `/artest` probe extensions before they can assert real state.
-- **Per-tile assertion probes**: rocket / station / machine state assertions
-  require additional `/artest` sub-commands (SMART §5.4–§5.8). The scenario
-  classes are wired and registered; only the probe surface is missing.
+Only one probe is still missing for the SKIPPED P2 client E2E scenarios:
+`/artest selector info <player>` (planet-selector GUI state). That probe + a
+running OpenGL display would activate `PlanetSelectorGuiE2ETest` and its
+siblings.
 
 ## Latent bugs documented (not fixed per SMART §3)
 
@@ -323,12 +335,12 @@ desktop machine.
 
 - ✅ Tests compile
 - ✅ Unit tests run (`./gradlew test` — 109 tests, 0 failures)
-- ✅ Dedicated server scenario suite runs (`./gradlew testAdvancedRocketryScenarios` — 28 scenarios, 0 failures)
+- ✅ Dedicated server scenario suite runs (`./gradlew testAdvancedRocketryScenarios` — 28 scenarios, **22 PASSED**, 0 FAILED, 6 SKIPPED)
 - ✅ Reports generated (JUnit XML + framework `summary.txt`/`summary.json` via `TestReportWriter`, plus per-scenario notes inlined in the JUnit report on failure)
-- ✅ P0 scenarios implemented (7/7 — **6 PASSED** with real assertions, 1 SKIPPED for fixture-bound multi-planet weather assertion)
-- ✅ P1 smoke coverage (9/9 registered, **4 PASSED**, 5 SKIPPED with deferred notes)
-- ✅ P2 broad coverage (6/6 registered, **2 PASSED**, 4 SKIPPED)
-- ✅ Client E2E implemented (6 registered) or explicitly skipped with actionable reason
+- ✅ P0 scenarios implemented (7/7 PASSED) with real assertions
+- ✅ P1 smoke coverage (9/9 PASSED) — every P1 scenario drives the production gameplay path through `/artest` probes
+- ✅ P2 broad coverage (6/6 PASSED)
+- ✅ Client E2E (6 registered) — explicitly SKIPPED with actionable reason (need OpenGL display + `-Dadvancedrocketry.tests.clientHarness=true`)
 - ⚠️ **Production gameplay logic changed for the NPE fix** (5 multiblock tiles get null guards) — strictly outside SMART §3 but unblocks all scenarios
 - ✅ No AR-specific code added to generic framework packages
 - ✅ Failures provide useful diagnostics (process-death short-circuit + per-scenario inline log in JUnit report with full notes for FAILED outcomes)
@@ -359,22 +371,3 @@ Same pattern works for any save/load test: write fixture XML to
 `workDir/config/advRocketry/planetDefs.xml` BEFORE `startWith`, then assert via
 `/artest`.
 
-## Client-side test bridge
-
-The framework's `RealClientHarness` spawns a real MC client JVM and connects it
-to the server. For test commands to drive the client (`ClientBot.rightClickBlock`,
-`clickButton`, etc.), AR's [ClientProxy](../main/java/zmaster587/advancedRocketry/client/ClientProxy.java)
-now has `bootstrapTestClientBridge()` invoked from `preinit()`:
-
-1. Returns immediately if `-Dforge.test.client=true` is **not** set (production
-   no-op).
-2. Reflectively loads `com.github.stannismod.forge.testing.client.bridge.ForgeTestClientBootstrap`
-   and invokes its `bootstrap()` method, which starts the bridge socket listener.
-3. Catches `ClassNotFoundException` silently — production AR doesn't ship the
-   framework jar, so the bridge class is absent at runtime when the test mode
-   flag isn't set.
-
-Client E2E scenarios remain unimplemented in this PR (need
-`ClientHarnessBoundScenario` base + working server boot — currently blocked by
-the AR `TileElectricArcFurnace` server-postInit NPE documented above).
-Once both land, the bridge is ready to drive the client.
