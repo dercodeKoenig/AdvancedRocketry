@@ -62,7 +62,7 @@ public class TestProbeCommand extends CommandBase {
     @Override
     @Nonnull
     public String getUsage(@Nonnull ICommandSender sender) {
-        return "/artest <registry|dim|planet|weather|atmosphere|oxygen|rocket|station|satellite|machine|terraforming|worldgen|commands|energy|infra|place|fill|fixture|tile>";
+        return "/artest <registry|dim|planet|weather|atmosphere|oxygen|rocket|station|satellite|machine|terraforming|worldgen|commands|energy|infra|place|fill|fixture|tile|hatch>";
     }
 
     @Override
@@ -135,6 +135,9 @@ public class TestProbeCommand extends CommandBase {
                     break;
                 case "tile":
                     handleTile(server, sender, tail(args));
+                    break;
+                case "hatch":
+                    handleHatch(server, sender, tail(args));
                     break;
                 default:
                     send(sender, "{\"error\":\"unknown subcommand\",\"sub\":\"" + args[0] + "\"}");
@@ -888,6 +891,140 @@ public class TestProbeCommand extends CommandBase {
             send(sender, jsonMap(info));
             return;
         }
+        if (args.length >= 6 && "set-enabled".equalsIgnoreCase(args[0])) {
+            // set-enabled <dim> <x> <y> <z> <true|false>
+            int dim = parseIntOr(args[1], Integer.MIN_VALUE);
+            int x = parseIntOr(args[2], 0), y = parseIntOr(args[3], 0), z = parseIntOr(args[4], 0);
+            boolean value = Boolean.parseBoolean(args[5]);
+            net.minecraft.world.WorldServer world = server.getWorld(dim);
+            if (world == null) {
+                send(sender, "{\"error\":\"world not loaded\",\"dim\":" + dim + "}");
+                return;
+            }
+            TileEntity tile = world.getTileEntity(new BlockPos(x, y, z));
+            if (tile == null) {
+                send(sender, "{\"error\":\"no tile entity\"}");
+                return;
+            }
+            try {
+                java.lang.reflect.Method m = tile.getClass().getMethod("setMachineEnabled", boolean.class);
+                m.invoke(tile, value);
+                java.lang.reflect.Method ge = tile.getClass().getMethod("getMachineEnabled");
+                boolean readBack = (Boolean) ge.invoke(tile);
+                send(sender, "{\"ok\":true,\"enabled\":" + readBack + "}");
+            } catch (NoSuchMethodException e) {
+                send(sender, "{\"error\":\"tile lacks setMachineEnabled\"}");
+            } catch (ReflectiveOperationException e) {
+                send(sender, "{\"error\":\"reflection failed\",\"msg\":\""
+                        + escapeJson(e.getMessage()) + "\"}");
+            }
+            return;
+        }
+        if (args.length >= 5 && "try-complete".equalsIgnoreCase(args[0])) {
+            // try-complete <dim> <x> <y> <z> — invoke libVulpes' attemptCompleteStructure
+            // on the controller tile to trigger validation without needing a player +
+            // hammer interaction.
+            int dim = parseIntOr(args[1], Integer.MIN_VALUE);
+            int x = parseIntOr(args[2], 0), y = parseIntOr(args[3], 0), z = parseIntOr(args[4], 0);
+            net.minecraft.world.WorldServer world = server.getWorld(dim);
+            if (world == null) {
+                send(sender, "{\"error\":\"world not loaded\",\"dim\":" + dim + "}");
+                return;
+            }
+            BlockPos pos = new BlockPos(x, y, z);
+            TileEntity tile = world.getTileEntity(pos);
+            if (tile == null) {
+                send(sender, "{\"error\":\"no tile entity\",\"pos\":[" + x + "," + y + "," + z + "]}");
+                return;
+            }
+            try {
+                java.lang.reflect.Method m = tile.getClass().getMethod(
+                        "attemptCompleteStructure", net.minecraft.block.state.IBlockState.class);
+                Object result = m.invoke(tile, world.getBlockState(pos));
+                boolean attempted = result instanceof Boolean && (Boolean) result;
+                // Re-read isComplete after the attempt.
+                java.lang.reflect.Method ic = tile.getClass().getMethod("isComplete");
+                boolean isComplete = (Boolean) ic.invoke(tile);
+                send(sender, "{\"ok\":true,\"attempted\":" + attempted
+                        + ",\"isComplete\":" + isComplete
+                        + ",\"tileClass\":\"" + tile.getClass().getName() + "\"}");
+            } catch (NoSuchMethodException e) {
+                send(sender, "{\"error\":\"tile lacks attemptCompleteStructure/isComplete — not a libVulpes multiblock\",\"tileClass\":\""
+                        + tile.getClass().getName() + "\"}");
+            } catch (ReflectiveOperationException e) {
+                send(sender, "{\"error\":\"reflection failed\",\"msg\":\""
+                        + escapeJson(e.getMessage()) + "\"}");
+            }
+            return;
+        }
+        if (args.length >= 2 && "recipe-info".equalsIgnoreCase(args[0])) {
+            // recipe-info <machineShortClassName> [recipeIndex]
+            String shortName = args[1];
+            int recipeIndex = args.length >= 3 ? parseIntOr(args[2], 0) : 0;
+            try {
+                Class<?> recipesMachineClass = Class.forName("zmaster587.libVulpes.recipe.RecipesMachine");
+                Object instance = recipesMachineClass.getMethod("getInstance").invoke(null);
+                java.lang.reflect.Method getRecipes = recipesMachineClass.getMethod("getRecipes", Class.class);
+                Class<?> machineClass = Class.forName(
+                        "zmaster587.advancedRocketry.tile.multiblock.machine." + shortName);
+                java.util.List<?> recipes = (java.util.List<?>) getRecipes.invoke(instance, machineClass);
+                if (recipes == null || recipes.isEmpty()) {
+                    send(sender, "{\"error\":\"no recipes registered\",\"machine\":\""
+                            + escapeJson(shortName) + "\"}");
+                    return;
+                }
+                if (recipeIndex < 0 || recipeIndex >= recipes.size()) {
+                    send(sender, "{\"error\":\"recipeIndex out of range\",\"index\":" + recipeIndex
+                            + ",\"size\":" + recipes.size() + "}");
+                    return;
+                }
+                Object recipe = recipes.get(recipeIndex);
+                Class<?> recipeClass = recipe.getClass();
+
+                java.util.List<?> ingredients = (java.util.List<?>) recipeClass.getMethod("getIngredients").invoke(recipe);
+                java.util.List<?> outputs = (java.util.List<?>) recipeClass.getMethod("getOutput").invoke(recipe);
+                int time = (Integer) recipeClass.getMethod("getTime").invoke(recipe);
+                int power = (Integer) recipeClass.getMethod("getPower").invoke(recipe);
+
+                StringBuilder builder = new StringBuilder("{\"machine\":\"")
+                        .append(escapeJson(shortName))
+                        .append("\",\"recipeIndex\":").append(recipeIndex)
+                        .append(",\"totalRecipes\":").append(recipes.size())
+                        .append(",\"time\":").append(time)
+                        .append(",\"power\":").append(power);
+
+                // Each ingredient is a List<ItemStack> (oredict alternatives) — emit the first.
+                builder.append(",\"ingredients\":[");
+                for (int i = 0; i < ingredients.size(); i++) {
+                    Object slot = ingredients.get(i);
+                    if (!(slot instanceof java.util.List)) continue;
+                    java.util.List<?> alts = (java.util.List<?>) slot;
+                    if (alts.isEmpty()) continue;
+                    Object first = alts.get(0);
+                    if (!(first instanceof net.minecraft.item.ItemStack)) continue;
+                    net.minecraft.item.ItemStack stack = (net.minecraft.item.ItemStack) first;
+                    if (i > 0) builder.append(',');
+                    appendItemStackJson(builder, stack, i);
+                }
+                builder.append("],\"outputs\":[");
+                for (int i = 0; i < outputs.size(); i++) {
+                    Object out = outputs.get(i);
+                    if (!(out instanceof net.minecraft.item.ItemStack)) continue;
+                    net.minecraft.item.ItemStack stack = (net.minecraft.item.ItemStack) out;
+                    if (i > 0) builder.append(',');
+                    appendItemStackJson(builder, stack, i);
+                }
+                builder.append("]}");
+                send(sender, builder.toString());
+            } catch (ClassNotFoundException missing) {
+                send(sender, "{\"error\":\"machine class not found\",\"name\":\""
+                        + escapeJson(shortName) + "\"}");
+            } catch (ReflectiveOperationException re) {
+                send(sender, "{\"error\":\"reflection failed\",\"msg\":\""
+                        + escapeJson(re.getMessage()) + "\"}");
+            }
+            return;
+        }
         if (args.length >= 1 && "recipes-summary".equalsIgnoreCase(args[0])) {
             // Report recipe counts for every canonical AR multiblock recipe machine
             // (SMART §7.7). Uses libVulpes' RecipesMachine singleton.
@@ -929,7 +1066,7 @@ public class TestProbeCommand extends CommandBase {
             send(sender, jsonMap(recipes));
             return;
         }
-        send(sender, "{\"error\":\"unknown machine subcommand — try info [dim] <x> <y> <z> | recipes-summary\"}");
+        send(sender, "{\"error\":\"unknown machine subcommand — try info [dim] <x> <y> <z> | try-complete <dim> <x> <y> <z> | recipes-summary\"}");
     }
 
     /**
@@ -1205,6 +1342,94 @@ public class TestProbeCommand extends CommandBase {
             return;
         }
         send(sender, "{\"error\":\"unknown worldgen subcommand — try sample <dim> <chunkX> <chunkZ> | ore-stats <dim> <cx> <cz> <radius> <blockId>\"}");
+    }
+
+    // Inventory hatch probe ----------------------------------------------------
+
+    /**
+     * {@code /artest hatch fill <dim> <x> <y> <z> <slot> <itemId> [count] [meta]}
+     * — sets a stack into an {@link net.minecraft.inventory.IInventory} slot
+     * (typically a libVulpes input hatch).
+     *
+     * {@code /artest hatch read <dim> <x> <y> <z>} — dumps every non-empty slot
+     * as {@code {"slot":N,"item":"<id>","count":K,"meta":M}}.
+     */
+    private void handleHatch(MinecraftServer server, ICommandSender sender, String[] args) {
+        if (args.length >= 6 && "fill".equalsIgnoreCase(args[0])) {
+            int dim = parseIntOr(args[1], Integer.MIN_VALUE);
+            int x = parseIntOr(args[2], 0);
+            int y = parseIntOr(args[3], 0);
+            int z = parseIntOr(args[4], 0);
+            int slot = parseIntOr(args[5], 0);
+            String itemId = args.length >= 7 ? args[6] : "minecraft:stick";
+            int count = args.length >= 8 ? parseIntOr(args[7], 1) : 1;
+            int meta = args.length >= 9 ? parseIntOr(args[8], 0) : 0;
+            net.minecraft.world.WorldServer world = server.getWorld(dim);
+            if (world == null) {
+                send(sender, "{\"error\":\"world not loaded\",\"dim\":" + dim + "}");
+                return;
+            }
+            TileEntity tile = world.getTileEntity(new BlockPos(x, y, z));
+            if (!(tile instanceof net.minecraft.inventory.IInventory)) {
+                send(sender, "{\"error\":\"tile not IInventory\",\"tile\":\""
+                        + (tile == null ? "null" : tile.getClass().getName()) + "\"}");
+                return;
+            }
+            net.minecraft.item.Item item = ForgeRegistries.ITEMS.getValue(new ResourceLocation(itemId));
+            if (item == null) {
+                send(sender, "{\"error\":\"unknown item id\",\"id\":\"" + escapeJson(itemId) + "\"}");
+                return;
+            }
+            net.minecraft.inventory.IInventory inv = (net.minecraft.inventory.IInventory) tile;
+            if (slot < 0 || slot >= inv.getSizeInventory()) {
+                send(sender, "{\"error\":\"slot out of range\",\"slot\":" + slot
+                        + ",\"size\":" + inv.getSizeInventory() + "}");
+                return;
+            }
+            net.minecraft.item.ItemStack stack = new net.minecraft.item.ItemStack(item, count, meta);
+            inv.setInventorySlotContents(slot, stack);
+            // libVulpes' hatches typically callback the host machine via onInventoryUpdate.
+            // setInventorySlotContents alone is enough for the host's next-tick scan.
+            send(sender, "{\"ok\":true,\"slot\":" + slot + ",\"item\":\"" + escapeJson(itemId)
+                    + "\",\"count\":" + count + "}");
+            return;
+        }
+        if (args.length >= 4 && "read".equalsIgnoreCase(args[0])) {
+            int dim = parseIntOr(args[1], Integer.MIN_VALUE);
+            int x = parseIntOr(args[2], 0);
+            int y = parseIntOr(args[3], 0);
+            int z = parseIntOr(args[4], 0);
+            net.minecraft.world.WorldServer world = server.getWorld(dim);
+            if (world == null) {
+                send(sender, "{\"error\":\"world not loaded\",\"dim\":" + dim + "}");
+                return;
+            }
+            TileEntity tile = world.getTileEntity(new BlockPos(x, y, z));
+            if (!(tile instanceof net.minecraft.inventory.IInventory)) {
+                send(sender, "{\"error\":\"tile not IInventory\",\"tile\":\""
+                        + (tile == null ? "null" : tile.getClass().getName()) + "\"}");
+                return;
+            }
+            net.minecraft.inventory.IInventory inv = (net.minecraft.inventory.IInventory) tile;
+            StringBuilder builder = new StringBuilder("{\"size\":")
+                    .append(inv.getSizeInventory()).append(",\"slots\":[");
+            boolean first = true;
+            for (int i = 0; i < inv.getSizeInventory(); i++) {
+                net.minecraft.item.ItemStack stack = inv.getStackInSlot(i);
+                if (stack.isEmpty()) continue;
+                if (!first) builder.append(',');
+                first = false;
+                ResourceLocation regName = stack.getItem().getRegistryName();
+                builder.append("{\"slot\":").append(i)
+                        .append(",\"item\":\"").append(regName == null ? "null" : regName.toString())
+                        .append("\",\"count\":").append(stack.getCount())
+                        .append(",\"meta\":").append(stack.getMetadata()).append('}');
+            }
+            builder.append("]}");
+            send(sender, builder.toString());
+            return;
+        }
+        send(sender, "{\"error\":\"unknown hatch subcommand — try fill <dim> <x> <y> <z> <slot> <itemId> [count] [meta] | read <dim> <x> <y> <z>\"}");
     }
 
     // Generic tile ticking probe ----------------------------------------------
@@ -1643,7 +1868,93 @@ public class TestProbeCommand extends CommandBase {
                     + builderPos.getY() + "," + builderPos.getZ() + "]}");
             return;
         }
-        send(sender, "{\"error\":\"unknown fixture subcommand — try rocket <dim> <x> <y> <z>\"}");
+        if (args.length >= 5 && "machine".equalsIgnoreCase(args[0])
+                && "cutting".equalsIgnoreCase(args[1])) {
+            handleFixtureCuttingMachine(server, sender,
+                    parseIntOr(args[2], Integer.MIN_VALUE),
+                    parseIntOr(args[3], 0),
+                    parseIntOr(args[4], 64),
+                    parseIntOr(args[5], 0));
+            return;
+        }
+        send(sender, "{\"error\":\"unknown fixture subcommand — try rocket <dim> <x> <y> <z> | machine cutting <dim> <x> <y> <z>\"}");
+    }
+
+    /**
+     * Builds a complete cutting-machine multiblock at (x,y,z), controller
+     * NORTH-facing. Per {@link zmaster587.advancedRocketry.tile.multiblock.machine.TileCuttingMachine#getStructure()}
+     * the layout (relative to NORTH-facing controller) is:
+     * <pre>
+     *   z+0:  inputHatch  controller  outputHatch    (cx+1, cx, cx-1)
+     *   z+1:  motor       sawBlade    powerHatch
+     * </pre>
+     * Returns positions of all six placed blocks so the test can probe them.
+     */
+    private void handleFixtureCuttingMachine(MinecraftServer server, ICommandSender sender,
+                                              int dim, int cx, int cy, int cz) {
+        net.minecraft.world.WorldServer world = server.getWorld(dim);
+        if (world == null) {
+            send(sender, "{\"error\":\"world not loaded\",\"dim\":" + dim + "}");
+            return;
+        }
+
+        net.minecraft.block.Block controller =
+                ForgeRegistries.BLOCKS.getValue(new ResourceLocation("advancedrocketry", "cuttingMachine"));
+        net.minecraft.block.Block sawBlade =
+                ForgeRegistries.BLOCKS.getValue(new ResourceLocation("advancedrocketry", "sawBlade"));
+        net.minecraft.block.Block motor =
+                ForgeRegistries.BLOCKS.getValue(new ResourceLocation("libvulpes", "motor"));
+        net.minecraft.block.Block hatch =
+                ForgeRegistries.BLOCKS.getValue(new ResourceLocation("libvulpes", "hatch"));
+        net.minecraft.block.Block powerInput =
+                ForgeRegistries.BLOCKS.getValue(new ResourceLocation("libvulpes", "forgepowerinput"));
+
+        if (controller == null || sawBlade == null || motor == null
+                || hatch == null || powerInput == null) {
+            send(sender, "{\"error\":\"missing block(s)\",\"controller\":"
+                    + (controller != null) + ",\"sawBlade\":" + (sawBlade != null)
+                    + ",\"motor\":" + (motor != null) + ",\"hatch\":" + (hatch != null)
+                    + ",\"powerInput\":" + (powerInput != null) + "}");
+            return;
+        }
+
+        // Controller NORTH-facing.
+        net.minecraft.block.state.IBlockState controllerState = controller.getDefaultState();
+        try {
+            controllerState = controllerState.withProperty(
+                    zmaster587.libVulpes.block.RotatableBlock.FACING,
+                    net.minecraft.util.EnumFacing.NORTH);
+        } catch (IllegalArgumentException ignored) {
+            // Property absent — fall back to default state.
+        }
+
+        BlockPos controllerPos = new BlockPos(cx, cy, cz);
+        BlockPos inputPos = new BlockPos(cx + 1, cy, cz);
+        BlockPos outputPos = new BlockPos(cx - 1, cy, cz);
+        BlockPos motorPos = new BlockPos(cx + 1, cy, cz + 1);
+        BlockPos sawBladePos = new BlockPos(cx, cy, cz + 1);
+        BlockPos powerPos = new BlockPos(cx - 1, cy, cz + 1);
+
+        world.setBlockState(controllerPos, controllerState);
+        @SuppressWarnings("deprecation") net.minecraft.block.state.IBlockState inputState =
+                hatch.getStateFromMeta(0);   // meta 0 = TileInputHatch
+        @SuppressWarnings("deprecation") net.minecraft.block.state.IBlockState outputState =
+                hatch.getStateFromMeta(1);   // meta 1 = TileOutputHatch
+        world.setBlockState(inputPos, inputState);
+        world.setBlockState(outputPos, outputState);
+        world.setBlockState(motorPos, motor.getDefaultState());
+        world.setBlockState(sawBladePos, sawBlade.getDefaultState());
+        world.setBlockState(powerPos, powerInput.getDefaultState());
+
+        Map<String, Object> info = new LinkedHashMap<>();
+        info.put("ok", true);
+        info.put("controllerPos", new int[]{controllerPos.getX(), controllerPos.getY(), controllerPos.getZ()});
+        info.put("inputPos",      new int[]{inputPos.getX(),      inputPos.getY(),      inputPos.getZ()});
+        info.put("outputPos",     new int[]{outputPos.getX(),     outputPos.getY(),     outputPos.getZ()});
+        info.put("motorPos",      new int[]{motorPos.getX(),      motorPos.getY(),      motorPos.getZ()});
+        info.put("sawBladePos",   new int[]{sawBladePos.getX(),   sawBladePos.getY(),   sawBladePos.getZ()});
+        info.put("powerPos",      new int[]{powerPos.getX(),      powerPos.getY(),      powerPos.getZ()});
+        send(sender, jsonMap(info));
     }
 
     // ---- helpers -------------------------------------------------------------
@@ -1656,7 +1967,7 @@ public class TestProbeCommand extends CommandBase {
             return getListOfStringsMatchingLastWord(args,
                     "registry", "dim", "planet", "weather", "rocket", "station", "satellite",
                     "atmosphere", "oxygen", "machine", "terraforming", "worldgen", "commands",
-                    "energy", "infra", "place", "fill", "fixture", "tile");
+                    "energy", "infra", "place", "fill", "fixture", "tile", "hatch");
         }
         return Collections.emptyList();
     }
@@ -1688,6 +1999,15 @@ public class TestProbeCommand extends CommandBase {
         sender.sendMessage(new TextComponentString(text));
     }
 
+    private static void appendItemStackJson(StringBuilder out, net.minecraft.item.ItemStack stack, int slot) {
+        ResourceLocation regName = stack.getItem().getRegistryName();
+        out.append("{\"slot\":").append(slot)
+                .append(",\"item\":\"").append(regName == null ? "null" : regName.toString())
+                .append("\",\"count\":").append(stack.getCount())
+                .append(",\"meta\":").append(stack.getMetadata())
+                .append('}');
+    }
+
     private static String jsonMap(Map<String, ?> map) {
         StringBuilder builder = new StringBuilder("{");
         boolean first = true;
@@ -1700,6 +2020,14 @@ public class TestProbeCommand extends CommandBase {
                 builder.append("null");
             } else if (v instanceof Number || v instanceof Boolean) {
                 builder.append(v);
+            } else if (v instanceof int[]) {
+                int[] arr = (int[]) v;
+                builder.append('[');
+                for (int i = 0; i < arr.length; i++) {
+                    if (i > 0) builder.append(',');
+                    builder.append(arr[i]);
+                }
+                builder.append(']');
             } else {
                 builder.append('"').append(escapeJson(v.toString())).append('"');
             }

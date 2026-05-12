@@ -215,6 +215,14 @@ tasks.test {
     }
     // Test-only flag gating /artest probe commands and other test-only behavior
     systemProperty("advancedrocketry.tests", "true")
+    // `test` runs only the fast pyramid layers: pure unit (SMART §2.1) and
+    // lightweight integration with MC bootstrap in the same JVM (SMART §2.2).
+    // Server/client-harness suites live under separate tasks because they
+    // require the FG6 runServer classpath and a forked dedicated-server JVM.
+    filter {
+        includeTestsMatching("zmaster587.advancedRocketry.test.unit.*")
+        includeTestsMatching("zmaster587.advancedRocketry.test.integration.*")
+    }
 }
 
 // Tell the reusable test framework (v0.2.0+) which launcher / asset layout to use.
@@ -235,7 +243,7 @@ val fg6HarnessProps = mapOf(
 //   ./gradlew testAdvancedRocketryScenarios -Pweather=per_dimension
 val weatherMode: String = (project.findProperty("weather") as? String) ?: "shared"
 
-val parallelForks: Int = (project.findProperty("forks") as? String)?.toIntOrNull() ?: 6
+val parallelForks: Int = (project.findProperty("forks") as? String)?.toIntOrNull() ?: 3
 
 tasks.register<Test>("testAdvancedRocketryScenarios") {
     description = "Runs the AR-specific scenario suite (SMART §7 P0+P1+P2) in parallel."
@@ -254,10 +262,11 @@ tasks.register<Test>("testAdvancedRocketryScenarios") {
         cpField.invoke(runServer) as FileCollection
     })
     filter {
-        // All scenario classes are JUnit-native: each *SmokeTest / *E2ETest /
-        // diagnostic class has its own @Test methods. No more custom bootstrap.
-        includeTestsMatching("zmaster587.advancedRocketry.test.scenario.*")
-        includeTestsMatching("zmaster587.advancedRocketry.test.HarnessDiagnosticTest")
+        // SMART §2.3 server-harness e2e + §2.4 client-harness e2e. Each test
+        // class is plain JUnit + an `AbstractHeadlessServerTest`/`AbstractClientE2ETest`
+        // base; gradle filter just routes by package.
+        includeTestsMatching("zmaster587.advancedRocketry.test.server.*")
+        includeTestsMatching("zmaster587.advancedRocketry.test.client.*")
     }
     systemProperty("advancedrocketry.tests", "true")
     systemProperty("advancedrocketry.tests.expectedWeatherMode", weatherMode)

@@ -6,11 +6,12 @@ This source set implements the SMART test plan
 ## Current state
 
 ```
-./gradlew test                                 →  109 unit, 88 PASSED, 21 SKIPPED, 0 FAILED   (~20s)
+./gradlew test                                 →   §2.1 unit + §2.2 integration: 109 tests, 0 FAILED, 21 SKIPPED (@Ignore stubs)  (~47s)
+./gradlew testAdvancedRocketryScenarios        →   §2.3 server + §2.4 client: 25 PASSED, 6 SKIPPED, 0 FAILED  (~9m wall at default -Pforks=3)
 ./gradlew testAdvancedRocketryScenarios -Pforks=6
-                                               →   29 scenarios, 23 PASSED, 6 SKIPPED, 0 FAILED  (~4m40s wall — 2.4× over serial)
+                                               →   same outcome, ~7m wall (needs ≥12 GB RAM)
 ./gradlew testAdvancedRocketryScenarios -Pforks=1
-                                               →   29 scenarios, 23 PASSED, 6 SKIPPED, 0 FAILED  (~11m20s wall, sequential baseline)
+                                               →   sequential baseline ~11m wall
 ```
 
 Each scenario class is a JUnit 4 `@Test` extending `AbstractHeadlessServerTest`
@@ -32,8 +33,8 @@ test to FAIL.
 | 5 | weather_baseline | P0 | 2-planet fixture XML, set rain on overworld → assert shared/per-dimension propagation per `-Pweather=shared\|per_dimension` flag |
 | 6 | weather_persistence | P0 | first boot sets rain → close → second boot on same workDir → rain survived |
 | 7 | non_ar_dimension_isolation | P0 | nether (-1) and end (1) NOT classified as AR planets |
-| 8 | machine_recipe_integration | P1 | for every required AR machine class, libVulpes `RecipesMachine.getRecipes(...)` reports >0 recipes (proves XML loaders + recipe-handler registration both work) |
-| 9 | multiblock_validation_smoke | P1 | `/artest place + fill + machine info` round-trip |
+| 8 | machine_recipe_integration | P1 | (3 @Test methods) `recipes-summary` registry check, probe-wiring smoke, **full recipe end-to-end**: `fixture machine cutting` → `try-complete` → `recipe-info` resolves first recipe → `hatch fill` input → `energy inject` power → `machine set-enabled true` → `tile force-tick` 300 → assert expected output appears in output hatch |
+| 9 | multiblock_validation_smoke | P1 | **real multiblock cycle**: `fixture machine cutting` → `try-complete` reports `isComplete=true` → break sawblade → `try-complete` reports `isComplete=false` → restore → `isComplete=true` again |
 | 10 | rocket_assembly_smoke | P1 | `/artest fixture rocket` builds geometry → `/artest rocket assemble` runs synchronous scan + assemble → asserts `EntityRocket` spawns + `/artest rocket info` returns coherent state |
 | 11 | rocket_launch_smoke | P1 | assembled rocket → `/artest rocket launch <id> true instant` → asserts `isInFlight=true` |
 | 12 | rocket_infrastructure_smoke | P1 | place fueling station, assemble rocket, `/artest infra link` invokes production `EntityRocketBase.linkInfrastructure` → asserts `connectedCount=1` + idempotent re-link rejected |
@@ -61,59 +62,81 @@ break planets / weather / rockets / stations / satellites / machines / atmospher
 
 ## Layout
 
+Tests are split by the four SMART §2 pyramid layers. Each layer lives in its
+own package so IDEs can "Run all tests in directory" without flags.
+
 ```
 src/test/java/zmaster587/advancedRocketry/test/
-├── AdvancedRocketryTestConstants.java     # Shared constants and -D flag names
-├── HarnessDiagnosticTest.java             # @Test — boots one server, dumps transcript
-├── MinecraftBootstrap.java                # Idempotent MC + AR proxy init for unit tests
-├── unit/                                  # Pure-Java / lightweight bootstrap unit tests (§6)
+├── AdvancedRocketryTestConstants.java     # shared
+├── MinecraftBootstrap.java                # MC + AR proxy bootstrap helper for integration/
+│
+├── unit/                                  # §2.1 — pure JVM, no MC runtime
 │   ├── ARConfigurationTest.java
 │   ├── AstronomicalBodyHelperTest.java
-│   ├── AtmosphereLogicTest.java
-│   ├── DimensionPropertiesTest.java
 │   ├── FuelRegistryTest.java
 │   ├── PacketSerializationTest.java
 │   ├── PlanetWeatherStateTest.java        # @Ignore stubs for future B1 model
 │   ├── SatellitePropertiesTest.java
-│   ├── SealableBlockHandlerTest.java
 │   ├── SpacePositionTest.java
 │   ├── StatsRocketTest.java
 │   └── XMLPlanetLoaderTest.java
-└── scenario/                              # JUnit @Test scenarios (§7)
-    │── extends AbstractHeadlessServerTest (single fresh harness per @Test):
-    │  ├── ServerStartupSmokeTest.java        # §7.1
-    │  ├── RegistrySmokeTest.java             # §7.2
-    │  ├── PlanetDimensionLoadTest.java       # §7.3
-    │  ├── NonARDimensionIsolationTest.java   # §8 P0.7
-    │  ├── MachineRecipeIntegrationTest.java  # §7.7
-    │  ├── MultiblockValidationSmokeTest.java # §7.8
-    │  ├── RocketAssemblySmokeTest.java       # §7.9
-    │  ├── RocketLaunchSmokeTest.java         # §7.9
-    │  ├── RocketInfrastructureSmokeTest.java # §7.10
-    │  ├── SpaceStationLifecycleSmokeTest.java# §7.11
-    │  ├── SatelliteLifecycleSmokeTest.java   # §7.12
-    │  ├── AtmosphereOxygenSmokeTest.java     # §7.13
-    │  ├── TerraformingSmokeTest.java         # §7.14
-    │  ├── WorldgenSmokeTest.java             # §7.15
-    │  ├── EnergySystemsSmokeTest.java        # §7.16
-    │  ├── PipeNetworkSmokeTest.java          # §7.17
-    │  ├── SpecialInfrastructureSmokeTest.java# §7.18
-    │  └── CommandsSmokeTest.java             # §7.19
-    │── plain @Test (two-boot persistence tests):
-    │  ├── PlanetXmlConfigIntegrationTest.java# §7.4  fixture XML → startWith(workDir)
-    │  ├── WeatherBaselineTest.java           # §7.5  2-planet fixture → startWith(workDir)
-    │  ├── WeatherPersistenceTest.java        # §7.5  boot → set rain → close → reboot → assert
-    │  └── PersistenceRestartSmokeTest.java   # §7.6  boot → mutate → close → reboot → assert
-    └── extends AbstractClientE2ETest (server + client harness):
-       ├── ClientConnectSmokeTest.java        # §7.20 minimal handshake
-       ├── PlanetSelectorGuiE2ETest.java      # §7.20 @Ignore (deferred — needs selector probe)
-       ├── GuidanceComputerGuiE2ETest.java    # §7.20 @Ignore (deferred)
-       ├── RocketBuilderGuiE2ETest.java       # §7.20 @Ignore (deferred)
-       ├── WeatherClientSyncE2ETest.java      # §7.20 @Ignore (post-B1)
-       └── OxygenSuitClientStateE2ETest.java  # §7.20 @Ignore (deferred)
+│
+├── integration/                           # §2.2 — MC bootstrap in-JVM, no harness subprocess
+│   ├── AtmosphereLogicTest.java
+│   ├── DimensionPropertiesTest.java
+│   └── SealableBlockHandlerTest.java
+│
+├── server/                                # §2.3 — real dedicated server harness
+│   ├── HarnessDiagnosticTest.java         # @Test — boots one server, dumps transcript
+│   │
+│   │── extends AbstractHeadlessServerTest (fresh harness per @Test):
+│   ├── ServerStartupSmokeTest.java        # §7.1
+│   ├── RegistrySmokeTest.java             # §7.2
+│   ├── PlanetDimensionLoadTest.java       # §7.3
+│   ├── NonARDimensionIsolationTest.java   # §8 P0.7
+│   ├── MachineRecipeIntegrationTest.java  # §7.7 (3 @Test methods)
+│   ├── MultiblockValidationSmokeTest.java # §7.8
+│   ├── RocketAssemblySmokeTest.java       # §7.9
+│   ├── RocketLaunchSmokeTest.java         # §7.9
+│   ├── RocketInfrastructureSmokeTest.java # §7.10
+│   ├── SpaceStationLifecycleSmokeTest.java# §7.11
+│   ├── SatelliteLifecycleSmokeTest.java   # §7.12
+│   ├── AtmosphereOxygenSmokeTest.java     # §7.13
+│   ├── TerraformingSmokeTest.java         # §7.14
+│   ├── WorldgenSmokeTest.java             # §7.15
+│   ├── EnergySystemsSmokeTest.java        # §7.16
+│   ├── PipeNetworkSmokeTest.java          # §7.17
+│   ├── SpecialInfrastructureSmokeTest.java# §7.18
+│   ├── CommandsSmokeTest.java             # §7.19
+│   │
+│   │── plain @Test (two-boot persistence tests):
+│   ├── PlanetXmlConfigIntegrationTest.java# §7.4  fixture XML → startWith(workDir)
+│   ├── WeatherBaselineTest.java           # §7.5  2-planet fixture → startWith(workDir)
+│   ├── WeatherPersistenceTest.java        # §7.5  boot → set rain → close → reboot → assert
+│   └── PersistenceRestartSmokeTest.java   # §7.6  boot → mutate → close → reboot → assert
+│
+└── client/                                # §2.4 — server + client harness
+    ├── ClientConnectSmokeTest.java        # §7.20 minimal handshake
+    ├── PlanetSelectorGuiE2ETest.java      # §7.20 @Ignore (deferred — needs selector probe)
+    ├── GuidanceComputerGuiE2ETest.java    # §7.20 @Ignore (deferred)
+    ├── RocketBuilderGuiE2ETest.java       # §7.20 @Ignore (deferred)
+    ├── WeatherClientSyncE2ETest.java      # §7.20 @Ignore (post-B1)
+    └── OxygenSuitClientStateE2ETest.java  # §7.20 @Ignore (deferred)
 ```
 
-**Total**: 29 JUnit `@Test` classes. SMART §12 measurable #5 minimum is 8.
+### Gradle task routing
+
+| Task | Includes | Notes |
+|---|---|---|
+| `test` | `unit.*` + `integration.*` | Fast (~47s). No harness, no MC subprocess. Runnable from a plain Gradle clone without FG6's runServer classpath. |
+| `testAdvancedRocketryScenarios` | `server.*` + `client.*` | Heavy (~9m at `-Pforks=3`). Spawns real dedicated server JVM per test class; client tests additionally spawn an MC client. |
+
+### IDE workflow
+
+Right-click on `unit/`, `integration/`, `server/`, or `client/` → **Run All
+Tests in Directory** — no command-line flags required. The harness wiring
+(forge.test.harness.enabled, runServer classpath) is configured on the parent
+Gradle task automatically.
 
 The reusable test framework is consumed as a Maven artifact:
 
@@ -140,17 +163,23 @@ stay free of AR imports.
 ## Running
 
 ```bash
-# Unit tests only (no harness).
+# Fast: unit (§2.1) + integration (§2.2) — no harness, ~47s.
 ./gradlew test
 
-# Scenario suite — parallel (6 forked JVMs by default).
+# Heavy: server (§2.3) + client (§2.4) — 3 parallel harnesses by default.
 ./gradlew testAdvancedRocketryScenarios
 
-# Sequential baseline for benchmarking / debugging interaction issues.
-./gradlew testAdvancedRocketryScenarios -Pforks=1
+# Lower the parallelism if 3 server JVMs at once is too much RAM.
+./gradlew testAdvancedRocketryScenarios -Pforks=1   # ~11m, ~3 GB peak
 
-# Pick a specific scenario class.
-./gradlew testAdvancedRocketryScenarios --tests "*.RocketAssemblySmokeTest"
+# Or raise it if RAM allows.
+./gradlew testAdvancedRocketryScenarios -Pforks=6   # ~7m, ~12 GB peak
+
+# Pick a specific class / category.
+./gradlew testAdvancedRocketryScenarios --tests "*.server.RocketAssemblySmokeTest"
+./gradlew testAdvancedRocketryScenarios --tests "*.client.*"     # only client E2E
+./gradlew test --tests "*.unit.*"                                # only unit
+./gradlew test --tests "*.integration.*"                         # only integration
 
 # Override expected weather mode for §7.5 baseline scenario.
 ./gradlew testAdvancedRocketryScenarios -Pweather=shared          # default
@@ -158,9 +187,6 @@ stay free of AR imports.
 
 # Skip server boot (every harness-bound test SKIPs via Assume).
 ./gradlew testAdvancedRocketryScenarios -Pharness=false
-
-# Run a unit-test class directly.
-./gradlew test --tests "zmaster587.advancedRocketry.test.unit.SpacePositionTest"
 ```
 
 The Gradle `test` task always passes `-Dadvancedrocketry.tests=true`, which
@@ -279,6 +305,12 @@ Currently implemented sub-commands:
 | `/artest place <dim> <x> <y> <z> <block-id> [meta]` | §9.2 | sets a single block — primitive for fixture building |
 | `/artest fill <dim> <x1> <y1> <z1> <x2> <y2> <z2> <block-id> [meta]` | §9.2 | fills a region (volume capped at 32 768) |
 | `/artest fixture rocket <dim> <x> <y> <z>` | §9.2 | builds a valid minimal rocket structure for assembly tests |
+| `/artest fixture machine cutting <dim> <x> <y> <z>` | §9.2 | builds a complete cutting-machine multiblock (controller + 2 hatches + motor + sawblade + power input), returns positions of all six placed blocks |
+| `/artest machine try-complete <dim> <x> <y> <z>` | §5.4 | invokes libVulpes' `attemptCompleteStructure` reflectively, returns `isComplete=true/false` |
+| `/artest machine set-enabled <dim> <x> <y> <z> <true\|false>` | §5.4 | flips `setMachineEnabled` (machines default to OFF without GUI interaction) |
+| `/artest machine recipe-info <machineShortName> [recipeIndex]` | §5.4 | returns first ingredient + first output ItemStack for a registered recipe |
+| `/artest hatch fill <dim> <x> <y> <z> <slot> <itemId> [count] [meta]` | §5.4 | sets stack into a hatch's `IInventory` slot |
+| `/artest hatch read <dim> <x> <y> <z>` | §5.4 | dumps non-empty slots from a hatch as JSON |
 | `/artest machine tick-until <dim> <x> <y> <z> <complete\|running\|idle\|progress=N> <timeoutTicks>` | §5.4 | blocks the server thread for up to `timeoutTicks * 50ms` polling tile state |
 | `/artest machine recipes-summary` | §5.4 | reports recipe counts for each canonical AR machine class (XML loader tripwire) |
 | `/artest rocket assemble <dim> <x> <y> <z>` | §5.5 | synchronously runs scan + assemble on a rocket assembler tile, spawns the EntityRocket |
