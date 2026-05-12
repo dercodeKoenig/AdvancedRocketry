@@ -7,7 +7,7 @@ This source set implements the SMART test plan
 
 ```
 ./gradlew test                                 →   §2.1 unit + §2.2 integration: 102 PASSED, 0 SKIPPED, 0 FAILED  (~30s)
-./gradlew testAdvancedRocketryScenarios        →   §2.3 server + §2.4 client: 25 PASSED, 6 SKIPPED, 0 FAILED  (~9m wall at default -Pforks=3)
+./gradlew testAdvancedRocketryScenarios        →   §2.3 server + §2.4 client: 27 PASSED, 6 SKIPPED, 0 FAILED  (~9m wall at default -Pforks=3)
 ./gradlew testAdvancedRocketryScenarios -Pforks=6
                                                →   same outcome, ~7m wall (needs ≥12 GB RAM)
 ./gradlew testAdvancedRocketryScenarios -Pforks=1
@@ -109,6 +109,7 @@ src/test/java/zmaster587/advancedRocketry/test/
 │   ├── PipeNetworkSmokeTest.java          # §7.17
 │   ├── SpecialInfrastructureSmokeTest.java# §7.18
 │   ├── CommandsSmokeTest.java             # §7.19
+│   ├── SelectorServerSmokeTest.java       # §7.20 server-side: place selector → simulate-click → dimCache verify
 │   │
 │   │── plain @Test (two-boot persistence tests):
 │   ├── PlanetXmlConfigIntegrationTest.java# §7.4  fixture XML → startWith(workDir)
@@ -118,7 +119,7 @@ src/test/java/zmaster587/advancedRocketry/test/
 │
 └── client/                                # §2.4 — server + client harness
     ├── ClientConnectSmokeTest.java        # §7.20 minimal handshake
-    ├── PlanetSelectorGuiE2ETest.java      # §7.20 @Ignore (deferred — needs selector probe)
+    ├── PlanetSelectorGuiE2ETest.java      # §7.20 right-click → reportState shows GUI → closeScreen
     ├── GuidanceComputerGuiE2ETest.java    # §7.20 @Ignore (deferred)
     ├── RocketBuilderGuiE2ETest.java       # §7.20 @Ignore (deferred)
     ├── WeatherClientSyncE2ETest.java      # §7.20 @Ignore (post-B1)
@@ -323,6 +324,8 @@ Currently implemented sub-commands:
 | `/artest terraforming set-density <dim> <value>` | §5.8 | alias of `atmosphere set-density` exposed under the terraforming namespace |
 | `/artest worldgen ore-stats <dim> <cx> <cz> <radius> <blockId>` | §5.8 | counts occurrences of a block in a chunk radius (statistical ore assertion) |
 | `/artest tile force-tick <dim> <x> <y> <z> <ticks>` | §5 | directly invokes `ITickable.update()` N times — bypasses the world ticker for deterministic single-block tests |
+| `/artest selector info <dim> <x> <y> <z>` | §5.20 | reads `TilePlanetSelector.dimCache` via reflection — reports `hasSelection`, `selectedDim`, `selectedName` |
+| `/artest selector simulate-click <dim> <x> <y> <z> <planetDim>` | §5.20 | sets `dimCache` directly (mimics the server-side end state of a real GUI click) without needing a client |
 
 Only one probe is still missing for the SKIPPED P2 client E2E scenarios:
 `/artest selector info <player>` (planet-selector GUI state). That probe + a

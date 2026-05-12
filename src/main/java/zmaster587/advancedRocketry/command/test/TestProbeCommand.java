@@ -62,7 +62,7 @@ public class TestProbeCommand extends CommandBase {
     @Override
     @Nonnull
     public String getUsage(@Nonnull ICommandSender sender) {
-        return "/artest <registry|dim|planet|weather|atmosphere|oxygen|rocket|station|satellite|machine|terraforming|worldgen|commands|energy|infra|place|fill|fixture|tile|hatch>";
+        return "/artest <registry|dim|planet|weather|atmosphere|oxygen|rocket|station|satellite|machine|terraforming|worldgen|commands|energy|infra|place|fill|fixture|tile|hatch|selector>";
     }
 
     @Override
@@ -138,6 +138,9 @@ public class TestProbeCommand extends CommandBase {
                     break;
                 case "hatch":
                     handleHatch(server, sender, tail(args));
+                    break;
+                case "selector":
+                    handleSelector(server, sender, tail(args));
                     break;
                 default:
                     send(sender, "{\"error\":\"unknown subcommand\",\"sub\":\"" + args[0] + "\"}");
@@ -1432,6 +1435,97 @@ public class TestProbeCommand extends CommandBase {
         send(sender, "{\"error\":\"unknown hatch subcommand — try fill <dim> <x> <y> <z> <slot> <itemId> [count] [meta] | read <dim> <x> <y> <z>\"}");
     }
 
+    // §5 Planet selector probe --------------------------------------------------
+
+    /**
+     * <ul>
+     *   <li>{@code /artest selector info <dim> <x> <y> <z>} — reads server-side
+     *       {@code TilePlanetSelector.dimCache} via reflection. Returns the
+     *       cached planet's dim id + name, or {@code hasSelection=false}.</li>
+     *   <li>{@code /artest selector simulate-click <dim> <x> <y> <z> <planetDim>}
+     *       — sets {@code dimCache} on the tile to the resolved
+     *       {@link zmaster587.advancedRocketry.dimension.DimensionProperties}.
+     *       Mimics the end-state produced by the {@code PacketMachine} path
+     *       (client GUI click → server {@code useNetworkData} → {@code selectSystem})
+     *       without needing a client.</li>
+     * </ul>
+     */
+    private void handleSelector(MinecraftServer server, ICommandSender sender, String[] args) {
+        if (args.length >= 5 && "info".equalsIgnoreCase(args[0])) {
+            int dim = parseIntOr(args[1], Integer.MIN_VALUE);
+            int x = parseIntOr(args[2], 0), y = parseIntOr(args[3], 0), z = parseIntOr(args[4], 0);
+            net.minecraft.world.WorldServer world = server.getWorld(dim);
+            if (world == null) {
+                send(sender, "{\"error\":\"world not loaded\",\"dim\":" + dim + "}");
+                return;
+            }
+            TileEntity tile = world.getTileEntity(new BlockPos(x, y, z));
+            if (!(tile instanceof zmaster587.advancedRocketry.tile.multiblock.TilePlanetSelector)) {
+                send(sender, "{\"error\":\"tile not TilePlanetSelector\",\"tile\":\""
+                        + (tile == null ? "null" : tile.getClass().getName()) + "\"}");
+                return;
+            }
+            try {
+                java.lang.reflect.Field f = zmaster587.advancedRocketry.tile.multiblock.TilePlanetSelector
+                        .class.getDeclaredField("dimCache");
+                f.setAccessible(true);
+                Object cached = f.get(tile);
+                Map<String, Object> info = new LinkedHashMap<>();
+                info.put("tileClass", tile.getClass().getName());
+                info.put("hasSelection", cached != null);
+                if (cached instanceof DimensionProperties) {
+                    DimensionProperties props = (DimensionProperties) cached;
+                    info.put("selectedDim", props.getId());
+                    info.put("selectedName", props.getName());
+                }
+                send(sender, jsonMap(info));
+            } catch (ReflectiveOperationException e) {
+                send(sender, "{\"error\":\"reflection failed\",\"msg\":\""
+                        + escapeJson(e.getMessage()) + "\"}");
+            }
+            return;
+        }
+        if (args.length >= 6 && "simulate-click".equalsIgnoreCase(args[0])) {
+            int dim = parseIntOr(args[1], Integer.MIN_VALUE);
+            int x = parseIntOr(args[2], 0), y = parseIntOr(args[3], 0), z = parseIntOr(args[4], 0);
+            int planetDim = parseIntOr(args[5], Integer.MIN_VALUE);
+            net.minecraft.world.WorldServer world = server.getWorld(dim);
+            if (world == null) {
+                send(sender, "{\"error\":\"world not loaded\",\"dim\":" + dim + "}");
+                return;
+            }
+            TileEntity tile = world.getTileEntity(new BlockPos(x, y, z));
+            if (!(tile instanceof zmaster587.advancedRocketry.tile.multiblock.TilePlanetSelector)) {
+                send(sender, "{\"error\":\"tile not TilePlanetSelector\",\"tile\":\""
+                        + (tile == null ? "null" : tile.getClass().getName()) + "\"}");
+                return;
+            }
+            // getDimensionProperties falls back to overworldProperties for unknown
+            // dims; use isDimensionCreated for an unambiguous registration check.
+            // Special-case: vanilla overworld (0) IS valid even though it's not
+            // in AR's dimensionList — production allows selecting it.
+            if (planetDim != 0 && !DimensionManager.getInstance().isDimensionCreated(planetDim)) {
+                send(sender, "{\"error\":\"planet dim not registered\",\"planetDim\":" + planetDim + "}");
+                return;
+            }
+            DimensionProperties target = DimensionManager.getInstance().getDimensionProperties(planetDim);
+            try {
+                java.lang.reflect.Field f = zmaster587.advancedRocketry.tile.multiblock.TilePlanetSelector
+                        .class.getDeclaredField("dimCache");
+                f.setAccessible(true);
+                f.set(tile, target);
+                tile.markDirty();
+                send(sender, "{\"ok\":true,\"planetDim\":" + planetDim
+                        + ",\"name\":\"" + escapeJson(target.getName()) + "\"}");
+            } catch (ReflectiveOperationException e) {
+                send(sender, "{\"error\":\"reflection failed\",\"msg\":\""
+                        + escapeJson(e.getMessage()) + "\"}");
+            }
+            return;
+        }
+        send(sender, "{\"error\":\"unknown selector subcommand — try info <dim> <x> <y> <z> | simulate-click <dim> <x> <y> <z> <planetDim>\"}");
+    }
+
     // Generic tile ticking probe ----------------------------------------------
 
     /**
@@ -1967,7 +2061,7 @@ public class TestProbeCommand extends CommandBase {
             return getListOfStringsMatchingLastWord(args,
                     "registry", "dim", "planet", "weather", "rocket", "station", "satellite",
                     "atmosphere", "oxygen", "machine", "terraforming", "worldgen", "commands",
-                    "energy", "infra", "place", "fill", "fixture", "tile", "hatch");
+                    "energy", "infra", "place", "fill", "fixture", "tile", "hatch", "selector");
         }
         return Collections.emptyList();
     }
