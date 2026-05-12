@@ -130,6 +130,9 @@ public class TestProbeCommand extends CommandBase {
                 case "fill":
                     handleFill(server, sender, tail(args));
                     break;
+                case "fixture":
+                    handleFixture(server, sender, tail(args));
+                    break;
                 default:
                     send(sender, "{\"error\":\"unknown subcommand\",\"sub\":\"" + args[0] + "\"}");
             }
@@ -243,6 +246,12 @@ public class TestProbeCommand extends CommandBase {
     private void handleWeather(MinecraftServer server, ICommandSender sender, String[] args) {
         if (args.length >= 2 && "get".equalsIgnoreCase(args[0])) {
             int dim = parseIntOr(args[1], Integer.MIN_VALUE);
+            // Same pinning as `weather set` — ensures we observe the same
+            // WorldServer instance that previous /artest weather set wrote to.
+            net.minecraftforge.common.DimensionManager.keepDimensionLoaded(dim, true);
+            if (net.minecraftforge.common.DimensionManager.getWorld(dim) == null) {
+                net.minecraftforge.common.DimensionManager.initDimension(dim);
+            }
             net.minecraft.world.WorldServer world = server.getWorld(dim);
             if (world == null) {
                 send(sender, "{\"error\":\"world not loaded\",\"dim\":" + dim + "}");
@@ -266,6 +275,12 @@ public class TestProbeCommand extends CommandBase {
             int dim = parseIntOr(args[1], Integer.MIN_VALUE);
             String mode = args[2].toLowerCase();
             int ticks = parseIntOr(args[3], 0);
+            // Pin the dim loaded so AR's per-tick unload doesn't drop our
+            // weather state before the test reads it back.
+            net.minecraftforge.common.DimensionManager.keepDimensionLoaded(dim, true);
+            if (net.minecraftforge.common.DimensionManager.getWorld(dim) == null) {
+                net.minecraftforge.common.DimensionManager.initDimension(dim);
+            }
             net.minecraft.world.WorldServer world = server.getWorld(dim);
             if (world == null) {
                 send(sender, "{\"error\":\"world not loaded\",\"dim\":" + dim + "}");
@@ -279,13 +294,19 @@ public class TestProbeCommand extends CommandBase {
                     info.setCleanWeatherTime(ticks);
                     break;
                 case "rain":
+                    // Resetting cleanWeatherTime is mandatory — otherwise the
+                    // server's updateWeatherBody() forces isRaining=false next
+                    // tick (cleanWeatherTime > 0 ⇒ forced clear).
+                    info.setCleanWeatherTime(0);
                     info.setRaining(true);
                     info.setThundering(false);
                     info.setRainTime(ticks);
                     break;
                 case "thunder":
+                    info.setCleanWeatherTime(0);
                     info.setRaining(true);
                     info.setThundering(true);
+                    info.setRainTime(ticks);
                     info.setThunderTime(ticks);
                     break;
                 default:
@@ -321,6 +342,14 @@ public class TestProbeCommand extends CommandBase {
             send(sender, builder.toString());
             return;
         }
+        if ("assemble".equalsIgnoreCase(args[0]) && args.length >= 4) {
+            handleRocketAssemble(server, sender, args);
+            return;
+        }
+        if ("launch".equalsIgnoreCase(args[0]) && args.length >= 2) {
+            handleRocketLaunch(server, sender, args);
+            return;
+        }
         if ("info".equalsIgnoreCase(args[0]) && args.length >= 2) {
             int entityId = parseIntOr(args[1], Integer.MIN_VALUE);
             EntityRocket rocket = findRocket(server, entityId);
@@ -354,6 +383,137 @@ public class TestProbeCommand extends CommandBase {
             return;
         }
         send(sender, "{\"error\":\"unknown rocket subcommand — try list|info <id>\"}");
+    }
+
+    /** {@code /artest rocket assemble <dim> <x> <y> <z>} — synchronously assembles
+     *  a rocket at the {@link zmaster587.advancedRocketry.tile.TileRocketAssemblingMachine}
+     *  position, bypassing the tick/power scan loop. Steps:
+     *  <ol>
+     *    <li>{@code getRocketPadBounds(world, pos)} → BB (or null if pad/tower invalid).</li>
+     *    <li>Inject the BB into the tile's protected {@code bbCache} field via reflection.</li>
+     *    <li>{@code scanRocket(world, pos, bbCache)} — populates {@code stats} +
+     *        sets {@code status} to {@code SUCCESS} or an error code.</li>
+     *    <li>If {@code SUCCESS}: {@code assembleRocket()} → spawns the
+     *        {@link EntityRocket} immediately.</li>
+     *    <li>Find the spawned rocket in the BB and return its entity id.</li>
+     *  </ol>
+     *  This is the test-only equivalent of clicking the "Build" button after the
+     *  scanner has finished — but synchronous and independent of energy supply,
+     *  so it works on bare fixtures without a creative input plug.
+     */
+    private void handleRocketAssemble(MinecraftServer server, ICommandSender sender, String[] args) {
+        int dim = parseIntOr(args[1], Integer.MIN_VALUE);
+        int x = parseIntOr(args[2], 0), y = parseIntOr(args[3], 0), z = parseIntOr(args[4], 0);
+        net.minecraft.world.WorldServer world = server.getWorld(dim);
+        if (world == null) {
+            send(sender, "{\"error\":\"world not loaded\",\"dim\":" + dim + "}");
+            return;
+        }
+        BlockPos builderPos = new BlockPos(x, y, z);
+        TileEntity tile = world.getTileEntity(builderPos);
+        if (!(tile instanceof zmaster587.advancedRocketry.tile.TileRocketAssemblingMachine)) {
+            send(sender, "{\"error\":\"not a rocket assembling machine\",\"tile\":\""
+                    + (tile == null ? "null" : tile.getClass().getName()) + "\"}");
+            return;
+        }
+        zmaster587.advancedRocketry.tile.TileRocketAssemblingMachine builder =
+                (zmaster587.advancedRocketry.tile.TileRocketAssemblingMachine) tile;
+        try {
+            // 1. Resolve pad bounds.
+            net.minecraft.util.math.AxisAlignedBB bb = builder.getRocketPadBounds(world, builderPos);
+            if (bb == null) {
+                send(sender, "{\"error\":\"getRocketPadBounds returned null — pad < 3x3 OR no >= 4-block structure tower on perimeter\"}");
+                return;
+            }
+            // 2. Inject bbCache (protected field).
+            java.lang.reflect.Field bbField =
+                    zmaster587.advancedRocketry.tile.TileRocketAssemblingMachine.class.getDeclaredField("bbCache");
+            bbField.setAccessible(true);
+            bbField.set(builder, bb);
+            // 3. Scan rocket → sets status. (UNSCANNED → SUCCESS or specific error.)
+            //    ErrorCodes is a protected nested enum, so getStatus() can't be
+            //    assigned to a typed variable here — reflectively read .name().
+            builder.scanRocket(world, builderPos, bb);
+            java.lang.reflect.Method getStatusMethod = builder.getClass().getMethod("getStatus");
+            String statusName = ((Enum<?>) getStatusMethod.invoke(builder)).name();
+            if (!"SUCCESS".equals(statusName)) {
+                send(sender, "{\"error\":\"scan status not SUCCESS\",\"status\":\"" + statusName + "\"}");
+                return;
+            }
+            // 4. Assemble. assembleRocket() re-runs scanRocket internally; if the
+            //    second scan changes status, abort there too.
+            builder.assembleRocket();
+            String postStatusName = ((Enum<?>) getStatusMethod.invoke(builder)).name();
+            // 5. Find the spawned rocket inside the pad BB.
+            java.util.List<zmaster587.advancedRocketry.entity.EntityRocket> rockets =
+                    world.getEntitiesWithinAABB(zmaster587.advancedRocketry.entity.EntityRocket.class, bb);
+            int entityId = rockets.isEmpty() ? -1 : rockets.get(0).getEntityId();
+            send(sender, "{\"ok\":true,\"status\":\"" + postStatusName
+                    + "\",\"entityId\":" + entityId + ",\"rocketCount\":" + rockets.size() + "}");
+        } catch (ReflectiveOperationException e) {
+            send(sender, "{\"error\":\"reflection failed: " + escapeJson(e.getMessage()) + "\"}");
+        } catch (RuntimeException e) {
+            send(sender, "{\"error\":\"" + escapeJson(e.getClass().getSimpleName() + ": " + e.getMessage()) + "\"}");
+        }
+    }
+
+    /** {@code /artest rocket launch <entityId> [fillFuel] [mode]}.
+     *  <ul>
+     *    <li>{@code fillFuel=true} (default): fill all fuel types to capacity.</li>
+     *    <li>{@code mode=prepare} (default): call {@link EntityRocket#prepareLaunch()},
+     *        which schedules a 200-tick countdown (matches the in-game button).
+     *        In a headless test without a player, the chunk often unloads before
+     *        the countdown ticks down — use {@code mode=instant} or {@code mode=force}.</li>
+     *    <li>{@code mode=instant}: call {@link EntityRocket#launch()} synchronously,
+     *        skipping the countdown. Still requires a valid destination via the
+     *        guidance computer; without one the launch path errors out and
+     *        {@code isInFlight} stays {@code false}.</li>
+     *    <li>{@code mode=force}: skip {@code launch()} entirely and set
+     *        {@code isInFlight=true} directly via {@link EntityRocket#setInFlight(boolean)}.
+     *        For tests that only want to verify the flight-state transition itself,
+     *        independent of guidance-computer / destination-validity logic.</li>
+     *  </ul>
+     */
+    private void handleRocketLaunch(MinecraftServer server, ICommandSender sender, String[] args) {
+        int entityId = parseIntOr(args[1], Integer.MIN_VALUE);
+        boolean fillFuel = args.length >= 3 ? Boolean.parseBoolean(args[2]) : true;
+        String mode = args.length >= 4 ? args[3].toLowerCase(java.util.Locale.ROOT) : "prepare";
+        // Backward compat: "true" / "false" used to mean instant / prepare.
+        if ("true".equals(mode)) mode = "instant";
+        else if ("false".equals(mode)) mode = "prepare";
+
+        EntityRocket rocket = findRocket(server, entityId);
+        if (rocket == null) {
+            send(sender, "{\"error\":\"rocket not found\",\"entityId\":" + entityId + "}");
+            return;
+        }
+        if (fillFuel) {
+            for (FuelRegistry.FuelType type : FuelRegistry.FuelType.values()) {
+                int cap = rocket.stats.getFuelCapacity(type);
+                if (cap > 0) {
+                    rocket.setFuelAmount(type, cap);
+                }
+            }
+        }
+        try {
+            switch (mode) {
+                case "instant":
+                    rocket.launch();
+                    break;
+                case "force":
+                    rocket.setInFlight(true);
+                    break;
+                case "prepare":
+                default:
+                    rocket.prepareLaunch();
+            }
+            send(sender, "{\"ok\":true,\"entityId\":" + entityId + ",\"fuelFilled\":" + fillFuel
+                    + ",\"mode\":\"" + mode + "\""
+                    + ",\"isInFlight\":" + rocket.isInFlight()
+                    + ",\"isInOrbit\":" + rocket.isInOrbit() + "}");
+        } catch (RuntimeException e) {
+            send(sender, "{\"error\":\"" + escapeJson(e.getClass().getSimpleName() + ": " + e.getMessage()) + "\"}");
+        }
     }
 
     private static EntityRocket findRocket(MinecraftServer server, int entityId) {
@@ -414,6 +574,30 @@ public class TestProbeCommand extends CommandBase {
     // §5.6 Satellite probes ---------------------------------------------------
 
     private void handleSatellite(ICommandSender sender, String[] args) {
+        if ("types".equalsIgnoreCase(args[0])) {
+            // Reflect SatelliteRegistry.registry (private static HashMap<String, Class>)
+            // and return the registered satellite type names.
+            try {
+                java.lang.reflect.Field f = zmaster587.advancedRocketry.api.SatelliteRegistry
+                        .class.getDeclaredField("registry");
+                f.setAccessible(true);
+                @SuppressWarnings("unchecked")
+                Map<String, Class<?>> registry = (Map<String, Class<?>>) f.get(null);
+                java.util.Set<String> sorted = new java.util.TreeSet<>(registry.keySet());
+                StringBuilder builder = new StringBuilder("{\"satelliteTypes\":[");
+                boolean first = true;
+                for (String type : sorted) {
+                    if (!first) builder.append(',');
+                    first = false;
+                    builder.append('"').append(escapeJson(type)).append('"');
+                }
+                builder.append("]}");
+                send(sender, builder.toString());
+            } catch (ReflectiveOperationException e) {
+                send(sender, "{\"error\":\"reflection failed\",\"msg\":\"" + escapeJson(e.getMessage()) + "\"}");
+            }
+            return;
+        }
         if ("list".equalsIgnoreCase(args[0]) && args.length >= 2) {
             int dim = parseIntOr(args[1], Integer.MIN_VALUE);
             DimensionProperties props = DimensionManager.getInstance().getDimensionProperties(dim);
@@ -629,6 +813,8 @@ public class TestProbeCommand extends CommandBase {
      *   <li>{@code complete} — {@code isComplete()} returns true</li>
      *   <li>{@code running} — {@code isRunning()} returns true</li>
      *   <li>{@code idle} — {@code isRunning()} returns false (machine done)</li>
+     *   <li>{@code building} / {@code not-building} — {@code isBuilding()} state
+     *       (TileRocketAssemblingMachine uses this instead of isRunning)</li>
      *   <li>{@code progress=N} — {@code getProgress(0)} reaches at least N</li>
      * </ul>
      *
@@ -696,6 +882,24 @@ public class TestProbeCommand extends CommandBase {
                         lastSeen = v;
                         if (Boolean.FALSE.equals(v)) {
                             send(sender, "{\"matched\":true,\"ticks\":" + tick + ",\"condition\":\"idle\"}");
+                            return;
+                        }
+                        break;
+                    }
+                    case "building": {
+                        Object v = tile.getClass().getMethod("isBuilding").invoke(tile);
+                        lastSeen = v;
+                        if (Boolean.TRUE.equals(v)) {
+                            send(sender, "{\"matched\":true,\"ticks\":" + tick + ",\"condition\":\"building\"}");
+                            return;
+                        }
+                        break;
+                    }
+                    case "not-building": {
+                        Object v = tile.getClass().getMethod("isBuilding").invoke(tile);
+                        lastSeen = v;
+                        if (Boolean.FALSE.equals(v)) {
+                            send(sender, "{\"matched\":true,\"ticks\":" + tick + ",\"condition\":\"not-building\"}");
                             return;
                         }
                         break;
@@ -1009,6 +1213,111 @@ public class TestProbeCommand extends CommandBase {
                 + "\",\"volume\":" + volume + "}");
     }
 
+    /**
+     * {@code /artest fixture rocket <dim> <x> <y> <z>} — builds the
+     * BuildRocketTest geometry rooted at the given pad-center coordinates in a
+     * single command (faster than 40+ individual /artest place calls):
+     * <ul>
+     *   <li>5×5 launchpad at y</li>
+     *   <li>Structure tower 6 high on one corner</li>
+     *   <li>RocketBuilder (assembler tile) facing NORTH at (x+2, y+1, z-1)</li>
+     *   <li>Creative input plug above the builder</li>
+     *   <li>Rocket structure at (x+3, y+1, z+3): 2 advRocketmotors + 6 fuel tanks +
+     *       guidance computer + seat</li>
+     * </ul>
+     * Returns the absolute world coordinates of the builder for use with
+     * {@code /artest rocket assemble}.
+     */
+    private void handleFixture(MinecraftServer server, ICommandSender sender, String[] args) {
+        if (args.length >= 5 && "rocket".equalsIgnoreCase(args[0])) {
+            int dim = parseIntOr(args[1], Integer.MIN_VALUE);
+            int baseX = parseIntOr(args[2], 0);
+            int baseY = parseIntOr(args[3], 64);
+            int baseZ = parseIntOr(args[4], 0);
+
+            net.minecraft.world.WorldServer world = server.getWorld(dim);
+            if (world == null) {
+                send(sender, "{\"error\":\"world not loaded\",\"dim\":" + dim + "}");
+                return;
+            }
+
+            net.minecraft.block.Block launchpad =
+                    ForgeRegistries.BLOCKS.getValue(new ResourceLocation("advancedrocketry", "launchpad"));
+            net.minecraft.block.Block structureTower =
+                    ForgeRegistries.BLOCKS.getValue(new ResourceLocation("advancedrocketry", "structureTower"));
+            net.minecraft.block.Block rocketBuilder =
+                    ForgeRegistries.BLOCKS.getValue(new ResourceLocation("advancedrocketry", "rocketBuilder"));
+            net.minecraft.block.Block advEngine =
+                    ForgeRegistries.BLOCKS.getValue(new ResourceLocation("advancedrocketry", "advRocketmotor"));
+            net.minecraft.block.Block fuelTank =
+                    ForgeRegistries.BLOCKS.getValue(new ResourceLocation("advancedrocketry", "fuelTank"));
+            net.minecraft.block.Block guidanceComputer =
+                    ForgeRegistries.BLOCKS.getValue(new ResourceLocation("advancedrocketry", "guidanceComputer"));
+            net.minecraft.block.Block seat =
+                    ForgeRegistries.BLOCKS.getValue(new ResourceLocation("advancedrocketry", "seat"));
+            net.minecraft.block.Block creativePlug =
+                    ForgeRegistries.BLOCKS.getValue(new ResourceLocation("libvulpes", "advStructureMachine"));
+
+            if (launchpad == null || rocketBuilder == null || advEngine == null
+                    || fuelTank == null || guidanceComputer == null || seat == null) {
+                send(sender, "{\"error\":\"missing AR block(s) in registry\"}");
+                return;
+            }
+
+            int padSize = 5;
+            // Launchpad (5×5).
+            for (int dx = 0; dx <= padSize; dx++) {
+                for (int dz = 0; dz <= padSize; dz++) {
+                    world.setBlockState(new BlockPos(baseX + dx, baseY, baseZ + dz),
+                            launchpad.getDefaultState());
+                }
+            }
+            // Structure tower.
+            if (structureTower != null) {
+                for (int dy = 0; dy <= 6; dy++) {
+                    world.setBlockState(new BlockPos(baseX - 1, baseY + dy, baseZ + padSize / 2),
+                            structureTower.getDefaultState());
+                }
+            }
+            // Rocket builder MUST face NORTH for the launchpad to be detected
+            // (TileRocketAssemblingMachine.getRocketPadBounds scans the area
+            // OPPOSITE the builder's facing — north-facing builder finds the
+            // south pad). Replicates BuildRocketTest's explicit FACING=NORTH.
+            BlockPos builderPos = new BlockPos(baseX + padSize / 2, baseY + 1, baseZ - 1);
+            net.minecraft.block.state.IBlockState builderState = rocketBuilder.getDefaultState();
+            try {
+                builderState = builderState.withProperty(
+                        zmaster587.libVulpes.block.RotatableBlock.FACING,
+                        net.minecraft.util.EnumFacing.NORTH);
+            } catch (IllegalArgumentException ignored) {
+                // Property absent on this block variant — fall back to default state.
+            }
+            world.setBlockState(builderPos, builderState);
+            // Creative energy source above builder.
+            if (creativePlug != null) {
+                world.setBlockState(builderPos.up(), creativePlug.getDefaultState());
+            }
+
+            // Rocket structure (centered around baseX+3, y+1, baseZ+3).
+            int rocketX = baseX + 3, rocketY = baseY + 1, rocketZ = baseZ + 3;
+            world.setBlockState(new BlockPos(rocketX - 1, rocketY, rocketZ), advEngine.getDefaultState());
+            world.setBlockState(new BlockPos(rocketX + 1, rocketY, rocketZ), advEngine.getDefaultState());
+            for (int dx = -1; dx <= 1; dx++) {
+                for (int dy = 1; dy <= 2; dy++) {
+                    world.setBlockState(new BlockPos(rocketX + dx, rocketY + dy, rocketZ),
+                            fuelTank.getDefaultState());
+                }
+            }
+            world.setBlockState(new BlockPos(rocketX, rocketY + 3, rocketZ), guidanceComputer.getDefaultState());
+            world.setBlockState(new BlockPos(rocketX, rocketY + 4, rocketZ), seat.getDefaultState());
+
+            send(sender, "{\"ok\":true,\"builderPos\":[" + builderPos.getX() + ","
+                    + builderPos.getY() + "," + builderPos.getZ() + "]}");
+            return;
+        }
+        send(sender, "{\"error\":\"unknown fixture subcommand — try rocket <dim> <x> <y> <z>\"}");
+    }
+
     // ---- helpers -------------------------------------------------------------
 
     @Override
@@ -1019,7 +1328,7 @@ public class TestProbeCommand extends CommandBase {
             return getListOfStringsMatchingLastWord(args,
                     "registry", "dim", "planet", "weather", "rocket", "station", "satellite",
                     "atmosphere", "oxygen", "machine", "terraforming", "worldgen", "commands",
-                    "energy", "infra", "place", "fill");
+                    "energy", "infra", "place", "fill", "fixture");
         }
         return Collections.emptyList();
     }

@@ -22,14 +22,34 @@ public class RocketInfrastructureSmokeTest extends HarnessBoundScenario {
 
     @Override
     protected TestStatus runScenario(TestContext context, TestClient client) throws Exception {
-        // Schema-only: probe infra at origin (no tile) — must return error, not crash.
-        java.util.List<String> response = client.execute("artest infra info 0 0 64 0");
-        String joined = String.join("\n", response);
-        if (!joined.contains("\"error\"") && !joined.contains("\"isInfrastructure\"")) {
-            context.note("/artest infra info returned unexpected schema: " + joined);
+        // Place a fueling station and assert it implements IInfrastructure.
+        int x = 800, y = 64, z = 800;
+        String place = String.join("\n", client.execute(
+                "artest place 0 " + x + " " + y + " " + z + " advancedrocketry:fuelingStation"));
+        if (!place.contains("\"placed\":true")) {
+            context.note("place fueling station failed: " + place);
             return TestStatus.FAILED;
         }
-        context.note("/artest infra info schema valid; rocket+linker fixture assertions deferred");
-        return TestStatus.SKIPPED;
+
+        java.util.List<String> response = client.execute("artest infra info 0 " + x + " " + y + " " + z);
+        String joined = String.join("\n", response);
+        if (!joined.contains("\"isInfrastructure\":true")) {
+            context.note("placed fueling station not detected as infrastructure: " + joined);
+            return TestStatus.FAILED;
+        }
+        if (!joined.contains("\"maxLinkDistance\"")) {
+            context.note("infra info missing maxLinkDistance: " + joined);
+            return TestStatus.FAILED;
+        }
+
+        // Empty position must report not-infrastructure cleanly.
+        String emptyResponse = String.join("\n", client.execute("artest infra info 0 100 64 100"));
+        if (!emptyResponse.contains("\"error\":\"no tile entity\"")) {
+            context.note("infra info on empty pos didn't error: " + emptyResponse);
+            return TestStatus.FAILED;
+        }
+
+        context.note("fueling station recognized as IInfrastructure with maxLinkDistance");
+        return TestStatus.PASSED;
     }
 }

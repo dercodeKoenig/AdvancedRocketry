@@ -23,6 +23,7 @@ public class SatelliteLifecycleSmokeTest extends HarnessBoundScenario {
 
     @Override
     protected TestStatus runScenario(TestContext context, TestClient client) throws Exception {
+        // Schema validation paths.
         List<String> satList = client.execute("artest satellite list 0");
         String joined = String.join("\n", satList);
         if (!joined.contains("\"satellites\":")) {
@@ -37,7 +38,36 @@ public class SatelliteLifecycleSmokeTest extends HarnessBoundScenario {
             return TestStatus.FAILED;
         }
 
-        context.note("satellite probes schema-valid; mission lifecycle assertions deferred");
-        return TestStatus.SKIPPED;
+        // SatelliteRegistry must contain the canonical AR satellite types.
+        List<String> types = client.execute("artest satellite types");
+        String typesJoined = String.join("\n", types);
+        if (!typesJoined.contains("\"satelliteTypes\":[")) {
+            context.note("/artest satellite types schema invalid: " + typesJoined);
+            return TestStatus.FAILED;
+        }
+        // SMART §6.6 lists: optical, density, composition, mass, asteroidMiner,
+        // gasCollection, solarEnergy, microwave, oreScanner, biomeChanger,
+        // weatherController. The exact registry-name strings used by AR may differ;
+        // validate via count rather than exact names — at least 5 types registered.
+        int typeCount = countOccurrences(typesJoined, "\"") - 2; // 2 quotes per type, minus the "satelliteTypes":["...", ..."] outer
+        // Actually each type adds 2 quotes. typeCount = (totalQuotes - 2) / 2.
+        int totalQuotes = countOccurrences(typesJoined, "\"");
+        int actualCount = (totalQuotes - 2) / 2;  // -2 for the "satelliteTypes" key
+        if (actualCount < 5) {
+            context.note("expected ≥5 satellite types registered, got " + actualCount + ": " + typesJoined);
+            return TestStatus.FAILED;
+        }
+
+        context.note("satellite probes schema-valid; " + actualCount + " types registered");
+        return TestStatus.PASSED;
+    }
+
+    private static int countOccurrences(String s, String needle) {
+        int count = 0, idx = 0;
+        while ((idx = s.indexOf(needle, idx)) != -1) {
+            count++;
+            idx += needle.length();
+        }
+        return count;
     }
 }

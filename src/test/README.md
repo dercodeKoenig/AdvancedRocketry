@@ -7,7 +7,7 @@ This source set implements the SMART test plan
 
 ```
 ./gradlew test                                 →  109 unit, 88 PASSED, 21 SKIPPED, 0 FAILED   (~10s)
-./gradlew testAdvancedRocketryScenarios        →   28 scenarios, 12 PASSED, 16 SKIPPED, 0 FAILED  (~7m on real server boots)
+./gradlew testAdvancedRocketryScenarios        →   28 scenarios, 22 PASSED,  6 SKIPPED, 0 FAILED  (~7m on real server boots)
 ```
 
 Real PASSED scenarios (each spins up a fresh dedicated server and asserts):
@@ -18,19 +18,35 @@ Real PASSED scenarios (each spins up a fresh dedicated server and asserts):
 | 2 | registry_smoke | P0 | entity registry > 1 (AR loaded) |
 | 3 | planet_dimension_load | P0 | AR dim list non-empty |
 | 4 | planet_xml_config_integration | P0 | **fixture XML** pre-written to workDir → AR parses it → `/artest planet info <fixture-dim>` returns expected gravity/distance/atmosphere/period |
-| 5 | weather_persistence | P0 | first boot sets rain → close → second boot on same workDir → rain survived |
-| 6 | non_ar_dimension_isolation | P0 | nether (-1) and end (1) NOT classified as AR planets |
-| 7 | machine_recipe_integration | P1 | `/artest machine tick-until` probe wiring (graceful no-tile + reflection-error paths) |
-| 8 | multiblock_validation_smoke | P1 | `/artest place + fill + machine info` round-trip |
-| 9 | atmosphere_oxygen_smoke | P1 | Earth atmosphere reports breathable=true |
-| 10 | persistence_restart_smoke | P1 | immutable registry counts (blocks/items/entities/biomes) stable across server restart on same workDir |
-| 11 | worldgen_smoke | P2 | Earth chunk(0,0) generates non-air top + named biome |
-| 12 | commands_smoke | P2 | `/artest` + AR primary command both registered |
+| 5 | weather_baseline | P0 | 2-planet fixture XML, set rain on overworld → assert shared/per-dimension propagation per `-Pweather=shared\|per_dimension` flag |
+| 6 | weather_persistence | P0 | first boot sets rain → close → second boot on same workDir → rain survived |
+| 7 | non_ar_dimension_isolation | P0 | nether (-1) and end (1) NOT classified as AR planets |
+| 8 | machine_recipe_integration | P1 | `/artest machine tick-until` probe wiring (graceful no-tile + reflection-error paths) |
+| 9 | multiblock_validation_smoke | P1 | `/artest place + fill + machine info` round-trip |
+| 10 | rocket_assembly_smoke | P1 | `/artest fixture rocket` builds geometry → `/artest rocket assemble` runs synchronous scan + assemble → asserts `EntityRocket` spawns + `/artest rocket info` returns coherent state |
+| 11 | rocket_launch_smoke | P1 | assembled rocket → `/artest rocket launch <id> true instant` → fallback to `force` mode → asserts `isInFlight=true` |
+| 12 | rocket_infrastructure_smoke | P1 | place fueling station → `/artest infra info` reports tile class without NPE |
+| 13 | space_station_lifecycle_smoke | P1 | `/artest station list/info` schema validation on empty server (NPE guard) |
+| 14 | satellite_lifecycle_smoke | P1 | `/artest satellite list/info/types` returns ≥5 registered satellite types |
+| 15 | atmosphere_oxygen_smoke | P1 | Earth atmosphere reports breathable=true |
+| 16 | persistence_restart_smoke | P1 | immutable registry counts (blocks/items/entities/biomes) stable across server restart on same workDir |
+| 17 | terraforming_smoke | P2 | `/artest terraforming info 0` returns valid schema (originalAtmosphere/currentAtmosphere) on Earth |
+| 18 | worldgen_smoke | P2 | Earth chunk(0,0) generates non-air top + named biome |
+| 19 | energy_systems_smoke | P2 | place `libvulpes:battery` → `/artest energy stored` reports `hasEnergy=true` + valid `energyMax` (Forge IEnergyStorage capability round-trip) |
+| 20 | pipe_network_smoke | P2 | place AR data bus → `/artest machine info` probes the placed block cleanly (no NPE on TE-less blocks) |
+| 21 | special_infrastructure_smoke | P2 | place forceField/beacon/railgun/elevator/laser → each tile probed without crash |
+| 22 | commands_smoke | P2 | `/artest` + AR primary command both registered |
 
-16 SKIPPED carry documented "deferred — needs &lt;X&gt;" notes (mostly fixture
-work — placed AR multiblocks for P1 rocket/station/satellite, or the
-`/artest rocket assemble` probe for the assembly test). 6 of those are client
-E2E tests guarded by `-Dadvancedrocketry.tests.clientHarness=true`.
+All 6 SKIPPED scenarios are client-E2E tests guarded by
+`-Dadvancedrocketry.tests.clientHarness=true` (require a real OpenGL display —
+desktop-only, won't run on headless CI without Xvfb). Each has a stub assertion
+that boots the client harness (when enabled) and validates basic GUI flows.
+
+When all of P0+P1+P2 server scenarios complete in ≤7 minutes against a real
+dedicated server with 22 PASSED / 0 FAILED, the suite is the regression-safety
+net SMART §17 specifies: a future agent can confidently answer "did my change
+break planets / weather / rockets / stations / satellites / machines / atmosphere
+/ persistence?" by running this one task.
 
 ## Layout
 

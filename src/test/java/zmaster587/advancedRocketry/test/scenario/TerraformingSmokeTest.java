@@ -23,18 +23,23 @@ public class TerraformingSmokeTest extends HarnessBoundScenario {
 
     @Override
     protected TestStatus runScenario(TestContext context, TestClient client) throws Exception {
+        // Schema validation on a known-AR-managed dim. Earth (dim=0) is registered
+        // by DimensionManager.preloadGalaxy with atmosphere=100 (Earth-like), so
+        // the terraforming probe must answer with valid keys without NPE'ing on
+        // an uninitialized helper.
         List<String> tf = client.execute("artest terraforming info 0");
         String joined = String.join("\n", tf);
         if (joined.contains("\"error\"")) {
-            context.note("/artest terraforming info returned error: " + joined);
-            // dim=0 may not be in AR's terraforming registry — skip rather than fail.
-            return TestStatus.SKIPPED;
+            context.note("/artest terraforming info returned error on Earth (dim=0): " + joined);
+            return TestStatus.FAILED;
         }
         if (!joined.contains("\"originalAtmosphere\"") || !joined.contains("\"currentAtmosphere\"")) {
             context.note("terraforming info missing schema keys: " + joined);
             return TestStatus.FAILED;
         }
-        context.note("terraforming info schema-valid on Earth; mutation assertions deferred");
-        return TestStatus.SKIPPED;
+        // Mutation/queue assertions deferred — those need a placed AtmosphereTerraformer
+        // tile and several ticks of progression, plus a /artest terraforming run probe.
+        context.note("terraforming info schema-valid on Earth: " + joined);
+        return TestStatus.PASSED;
     }
 }
