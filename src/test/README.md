@@ -111,9 +111,26 @@ src/test/java/zmaster587/advancedRocketry/test/
 compose into `AdvancedRocketryTestRegistry.composeAll()` — SMART §12 measurable
 #5 minimum is 8, current count is **3.5×** that.
 
-The reusable test framework lives in `libs/test/forge-test-framework-*.jar`
-(built from `C:\Users\Quarter\Documents\Modding\ForgeTestFramework`). All
-AR-specific code stays in this module — per SMART §15 framework jars must
+The reusable test framework is consumed as a Maven artifact:
+
+```kotlin
+testImplementation("com.github.stannismod.forge:forge-test-framework:0.2.1:dev")
+```
+
+Resolution chain (first match wins):
+
+1. **Composite build** — when invoked with `-PuseLocalFramework=true` AND a
+   sibling `../ForgeTestFramework` checkout exists, Gradle's `includeBuild` is
+   wired in [settings.gradle.kts](../../settings.gradle.kts) and substitutes the
+   module. Use this when iterating on the framework and AR together.
+2. **`mavenLocal()`** — `~/.m2/repository`. Publish from the framework checkout
+   with `./gradlew publishToMavenLocal`; see
+   [ForgeTestFramework/README.md](https://github.com/StannisMod/ForgeTestFramework#publishing).
+
+The `:dev` classifier is required — Forge dev workspace links against
+MCP-named MC classes, and the reobf (no-classifier) jar has SRG names.
+
+All AR-specific code stays in this module — per SMART §15 framework jars must
 stay free of AR imports.
 
 ## Running
@@ -152,7 +169,7 @@ The `testAdvancedRocketryScenarios` Gradle task spins up a **real** Forge
 1.12.2 dedicated server per scenario via the reusable test framework's
 `RealDedicatedServerHarness`. This required two pieces of plumbing:
 
-1. **Test framework v0.2.1** ([forge-test-framework-0.2.1-dev.jar](../../libs/test/forge-test-framework-0.2.1-dev.jar)) —
+1. **Test framework v0.2.1** (`com.github.stannismod.forge:forge-test-framework:0.2.1:dev`) —
    adds three system properties so the harness can target either RFG or FG6
    layouts:
    - `forge.test.launcher.class.server` — main class (default `GradleStartServer`)

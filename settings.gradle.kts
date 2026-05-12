@@ -26,3 +26,17 @@ if(file("libVulpes").exists()) {
         }
     }
 }
+
+// Composite-build branch for ForgeTestFramework (sibling checkout).
+// Opt-in via `./gradlew test -PuseLocalFramework=true` so a random sibling repo
+// doesn't get pulled in by accident. Default path = mavenLocal (publishToMavenLocal).
+val useLocalFramework = (settings.providers.gradleProperty("useLocalFramework").orNull == "true")
+val frameworkDir = file("../ForgeTestFramework")
+if (useLocalFramework && frameworkDir.exists()) {
+    includeBuild(frameworkDir) {
+        dependencySubstitution {
+            substitute(module("com.github.stannismod.forge:forge-test-framework"))
+                    .using(project(":"))
+        }
+    }
+}

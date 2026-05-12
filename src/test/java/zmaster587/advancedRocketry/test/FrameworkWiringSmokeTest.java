@@ -17,9 +17,11 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
 /**
- * Verifies that the Forge test framework jar (libs/test/forge-test-framework-*.jar)
- * is correctly wired into the AR test source set, that JUnit 4 runs, and that the
- * orchestrator can execute a no-op scenario and produce summary.txt / summary.json.
+ * Verifies that the Forge test framework
+ * ({@code com.github.stannismod.forge:forge-test-framework:<ver>:dev}, resolved via
+ * mavenLocal or composite build — see {@code settings.gradle.kts}) is correctly
+ * wired into the AR test source set, that JUnit 4 runs, and that the orchestrator
+ * can execute a no-op scenario and produce summary.txt / summary.json.
  *
  * If this test fails, no other AR test can run — fix the build wiring first.
  */

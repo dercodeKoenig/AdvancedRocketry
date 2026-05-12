@@ -135,6 +135,14 @@ fancyGradle {
 
 repositories {
     mavenCentral()
+    // Forge Test Framework — resolved via `publishToMavenLocal` from a sibling
+    // ForgeTestFramework checkout, OR via composite build (see settings.gradle.kts).
+    // Content filter prevents Gradle from poking ~/.m2 for unrelated MC artifacts.
+    mavenLocal {
+        content {
+            includeGroup("com.github.stannismod.forge")
+        }
+    }
     maven {
         name = "mezz.jei"
         url = uri("https://dvs1.progwml6.com/files/maven/")
@@ -184,9 +192,18 @@ dependencies {
 //    implementation ("net.minecraftforge:mergetool:0.2.3.3")
     implementation ("net.minecraftforge:mergetool") { version { strictly("0.2.3.3") } }
 
-    // Test framework (Forge 1.12.2 reusable test framework — see .agent/sops/development/test-framework.md)
+    // Test framework (Forge 1.12.2 reusable test framework — see src/test/README.md).
+    //
+    // Resolution chain (first match wins):
+    //   1. Composite build — settings.gradle.kts substitutes the module if
+    //      `-PuseLocalFramework=true` AND ../ForgeTestFramework exists.
+    //   2. mavenLocal()    — `./gradlew publishToMavenLocal` from ForgeTestFramework.
+    //
+    // The `:dev` classifier is REQUIRED: Forge dev workspace links against
+    // MCP-named MC classes, the reobf (no-classifier) jar has SRG names and
+    // won't compile against the dev classpath.
     testImplementation("junit:junit:4.13.2")
-    testImplementation(fileTree(mapOf("dir" to "libs/test", "include" to listOf("*.jar"))))
+    testImplementation("com.github.stannismod.forge:forge-test-framework:0.2.1:dev")
 }
 
 tasks.test {
