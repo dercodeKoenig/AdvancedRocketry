@@ -2,7 +2,6 @@ package zmaster587.advancedRocketry.test.unit;
 
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
-import org.junit.Ignore;
 import org.junit.Test;
 import zmaster587.advancedRocketry.api.dimension.solar.StellarBody;
 import zmaster587.advancedRocketry.api.satellite.SatelliteProperties;
@@ -219,17 +218,12 @@ public class PacketSerializationTest {
         assertEquals(0xFEEDL, restored.getId());
     }
 
-    @Test @Ignore("PacketDimInfo round-trip needs DimensionManager-bound DimensionProperties — covered in §7.4 scenario tests")
-    public void packetDimInfoRoundTrip() {}
-
-    @Test @Ignore("PacketSatellite needs SatelliteRegistry resolved + DimensionManager — covered in §7.12")
-    public void packetSatelliteRoundTrip() {}
-
-    @Test @Ignore("PacketStationUpdate needs ISpaceObject fixture — covered in §7.11")
-    public void packetStationUpdateRoundTrip() {}
-
-    @Test @Ignore("PacketConfigSync needs full ARConfiguration loadPreInit — covered in §7.1")
-    public void packetConfigSyncRoundTrip() {}
+    // PacketDimInfo / PacketSatellite / PacketStationUpdate / PacketConfigSync
+    // round-trips require live DimensionManager / SatelliteRegistry / ISpaceObject /
+    // ARConfiguration state. They're covered end-to-end through the matching §7
+    // scenario tests (§7.4 / §7.12 / §7.11 / §7.1) which exercise the same wire
+    // format implicitly via /artest probes on real packets between client and
+    // server.
 
     // Convenience to keep callsites clean without leaking the throws clause.
     @SuppressWarnings("unchecked")

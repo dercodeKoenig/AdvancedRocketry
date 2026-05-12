@@ -1,6 +1,5 @@
 package zmaster587.advancedRocketry.test.unit;
 
-import org.junit.Ignore;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
@@ -145,33 +144,8 @@ public class XMLPlanetLoaderTest {
         }
     }
 
-    @Test @Ignore("Full planet+biome+ore parsing requires DimensionManager + AdvancedRocketryBiomes — covered in §7.4 PlanetXmlConfigIntegrationTest")
-    public void parseMinimalGalaxyXml() {}
-
-    @Test @Ignore("Requires DimensionManager.getNextFreeDim() with registered dims — covered in §7.4")
-    public void parsePlanetWithExplicitDimId() {}
-
-    @Test @Ignore("Requires DimensionManager.getNextFreeDim() with registered dims — covered in §7.4")
-    public void parsePlanetWithoutDimIdUsesOffset() {}
-
-    @Test @Ignore("Requires the AR DimensionManager planet hierarchy — covered in §7.4")
-    public void parseParentChildPlanetHierarchy() {}
-
-    @Test @Ignore("Requires planet weather field parsing path that touches DimensionProperties — covered in §7.4")
-    public void parseWeatherFields() {}
-
-    @Test @Ignore("Requires planet weather defaults from XMLPlanetLoader.readPlanetFromNode — covered in §7.4")
-    public void parseWeatherDefaultsWhenMissing() {}
-
-    @Test @Ignore("Requires AR weather marker normalization path — covered in §7.5 WeatherBaselineTest")
-    public void parseInvalidWeatherMarkerFailsOrNormalizesExplicitly() {}
-
-    @Test @Ignore("Requires DimensionProperties.setAtmosphereDensity clamping — covered indirectly in DimensionPropertiesTest + §7.4")
-    public void parseAtmosphereDensityClampedToRange() {}
-
-    @Test @Ignore("Requires DimensionProperties.setGravitationalMultiplier clamping — covered in §7.4")
-    public void parseGravityClampedToRange() {}
-
-    @Test @Ignore("Requires Galaxy fixture with planets — covered in §7.4 round-trip scenario")
-    public void writeThenReadPreservesCriticalFields() {}
+    // Full planet/biome/oregen parsing requires DimensionManager + biome registry
+    // and is covered by §7.4 PlanetXmlConfigIntegrationTest (write fixture XML →
+    // boot server → /artest planet info round-trip). No point keeping @Ignore
+    // stubs here that duplicate that coverage at a worse layer.
 }
