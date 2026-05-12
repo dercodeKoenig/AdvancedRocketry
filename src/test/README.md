@@ -6,7 +6,7 @@ This source set implements the SMART test plan
 ## Current state
 
 ```
-./gradlew test                                 →   §2.1 unit + §2.2 integration: 109 tests, 0 FAILED, 21 SKIPPED (@Ignore stubs)  (~47s)
+./gradlew test                                 →   §2.1 unit + §2.2 integration: 102 PASSED, 0 SKIPPED, 0 FAILED  (~30s)
 ./gradlew testAdvancedRocketryScenarios        →   §2.3 server + §2.4 client: 25 PASSED, 6 SKIPPED, 0 FAILED  (~9m wall at default -Pforks=3)
 ./gradlew testAdvancedRocketryScenarios -Pforks=6
                                                →   same outcome, ~7m wall (needs ≥12 GB RAM)
@@ -74,17 +74,18 @@ src/test/java/zmaster587/advancedRocketry/test/
 │   ├── ARConfigurationTest.java
 │   ├── AstronomicalBodyHelperTest.java
 │   ├── FuelRegistryTest.java
-│   ├── PacketSerializationTest.java
-│   ├── PlanetWeatherStateTest.java        # @Ignore stubs for future B1 model
+│   ├── PacketSerializationTest.java       # 7 packet round-trips that don't need MC
 │   ├── SatellitePropertiesTest.java
 │   ├── SpacePositionTest.java
 │   ├── StatsRocketTest.java
-│   └── XMLPlanetLoaderTest.java
+│   └── XMLPlanetLoaderTest.java           # loadFile / isValid sanity
 │
 ├── integration/                           # §2.2 — MC bootstrap in-JVM, no harness subprocess
 │   ├── AtmosphereLogicTest.java
 │   ├── DimensionPropertiesTest.java
-│   └── SealableBlockHandlerTest.java
+│   ├── PacketSerializationTest.java       # 6 packet round-trips (DimInfo, Satellite, StationUpdate FUEL+ORBIT, ConfigSync)
+│   ├── SealableBlockHandlerTest.java
+│   └── XMLPlanetLoaderTest.java           # 11 deep parsing tests: DIMID resolution, weather fields, defaults, parent/child, clamping
 │
 ├── server/                                # §2.3 — real dedicated server harness
 │   ├── HarnessDiagnosticTest.java         # @Test — boots one server, dumps transcript
