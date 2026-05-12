@@ -1,27 +1,22 @@
 package zmaster587.advancedRocketry.test.scenario;
 
-import com.github.stannismod.forge.testing.TestContext;
-import com.github.stannismod.forge.testing.TestStatus;
-import com.github.stannismod.forge.testing.client.ClientBot;
-import com.github.stannismod.forge.testing.server.TestClient;
+import com.github.stannismod.forge.testing.junit.AbstractClientE2ETest;
+import org.junit.Ignore;
+import org.junit.Test;
 
 /**
  * SMART §7.20 — open rocket assembling machine GUI, click build/scan, verify
  * server reports an assembled rocket via {@code /artest rocket list}.
  *
- * STATUS: skeleton — needs a placed RocketAssemblingMachine + valid rocket
- * structure (in-game {@code BuildRocketTest} provides a programmatic builder
- * but it requires a player; client harness has one but the BuildRocketTest
- * orchestrator is currently chat-driven). Deferred.
+ * <p>Deferred — the server-side {@code /artest fixture rocket} + {@code rocket
+ * assemble} probes cover the headless path; the GUI variant needs explicit
+ * client-side button-click automation that's not yet wired.</p>
  */
-public class RocketBuilderGuiE2ETest extends ClientHarnessBoundScenario {
+@Ignore("Requires GUI button click automation for the assembler — deferred")
+public class RocketBuilderGuiE2ETest extends AbstractClientE2ETest {
 
-    @Override public String id() { return "ar.scenario.rocket_builder_gui_e2e"; }
-    @Override public String category() { return "P2/client-e2e/rocket-builder"; }
-
-    @Override
-    protected TestStatus runScenario(TestContext context, TestClient testClient, ClientBot bot) {
-        context.note("requires placed RocketAssemblingMachine fixture + valid rocket structure — deferred");
-        return TestStatus.SKIPPED;
+    @Test
+    public void clickingBuildButtonAssemblesRocket() throws Exception {
+        // Filled in once the GUI click path lands.
     }
 }

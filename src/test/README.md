@@ -7,13 +7,21 @@ This source set implements the SMART test plan
 
 ```
 ./gradlew test                                 →  109 unit, 88 PASSED, 21 SKIPPED, 0 FAILED   (~20s)
-./gradlew testAdvancedRocketryScenarios        →   28 scenarios, 22 PASSED,  6 SKIPPED, 0 FAILED  (~10m on real server boots)
+./gradlew testAdvancedRocketryScenarios -Pforks=6
+                                               →   29 scenarios, 23 PASSED, 6 SKIPPED, 0 FAILED  (~4m40s wall — 2.4× over serial)
+./gradlew testAdvancedRocketryScenarios -Pforks=1
+                                               →   29 scenarios, 23 PASSED, 6 SKIPPED, 0 FAILED  (~11m20s wall, sequential baseline)
 ```
 
-Each scenario spins up its own real dedicated server, drives the production
-gameplay path via `/artest` probes, and asserts post-state. Tests are
-production-driving — not probe-wiring smoke. A regression in any covered AR
-subsystem causes the matching scenario to FAIL.
+Each scenario class is a JUnit 4 `@Test` extending `AbstractHeadlessServerTest`
+(server-only) or `AbstractClientE2ETest` (server + client). Gradle's
+`maxParallelForks = -Pforks=N` (default 6) runs scenario classes in parallel
+JVMs; each fork holds one harness JVM. Scenarios are independent (separate
+port via `ServerSocket(0)`, separate tempDir) so parallelism is safe.
+
+Tests drive production gameplay paths via `/artest` probes and assert
+post-state. A regression in any covered AR subsystem causes the matching
+test to FAIL.
 
 | # | id | category | what it asserts |
 |---|---|---|---|
@@ -41,7 +49,7 @@ subsystem causes the matching scenario to FAIL.
 | 22 | commands_smoke | P2 | `/artest` + AR primary command both registered |
 
 All 6 SKIPPED scenarios are client-E2E tests guarded by
-`-Dadvancedrocketry.tests.clientHarness=true` (require a real OpenGL display —
+`-Dforge.test.client.enabled=true` (require a real OpenGL display —
 desktop-only, won't run on headless CI without Xvfb). Each has a stub assertion
 that boots the client harness (when enabled) and validates basic GUI flows.
 
@@ -55,11 +63,9 @@ break planets / weather / rockets / stations / satellites / machines / atmospher
 
 ```
 src/test/java/zmaster587/advancedRocketry/test/
-├── AdvancedRocketryTestBootstrap.java     # JUnit + main(String[]) entry-point
-├── AdvancedRocketryTestRegistry.java      # Composes scenario list (P0 + P1)
 ├── AdvancedRocketryTestConstants.java     # Shared constants and -D flag names
+├── HarnessDiagnosticTest.java             # @Test — boots one server, dumps transcript
 ├── MinecraftBootstrap.java                # Idempotent MC + AR proxy init for unit tests
-├── FrameworkWiringSmokeTest.java          # Verifies the framework jar is on the test classpath
 ├── unit/                                  # Pure-Java / lightweight bootstrap unit tests (§6)
 │   ├── ARConfigurationTest.java
 │   ├── AstronomicalBodyHelperTest.java
@@ -73,51 +79,46 @@ src/test/java/zmaster587/advancedRocketry/test/
 │   ├── SpacePositionTest.java
 │   ├── StatsRocketTest.java
 │   └── XMLPlanetLoaderTest.java
-└── scenario/                              # HeadlessGameTest scenarios (§7)
-    ├── HarnessBoundScenario.java          # Base — graceful SKIP when harness disabled
-    │── P0 (must run before weather B1):
+└── scenario/                              # JUnit @Test scenarios (§7)
+    │── extends AbstractHeadlessServerTest (single fresh harness per @Test):
     │  ├── ServerStartupSmokeTest.java        # §7.1
     │  ├── RegistrySmokeTest.java             # §7.2
     │  ├── PlanetDimensionLoadTest.java       # §7.3
-    │  ├── PlanetXmlConfigIntegrationTest.java# §7.4 (probe schema asserted)
-    │  ├── WeatherBaselineTest.java           # §7.5
-    │  ├── WeatherPersistenceTest.java        # §7.5 (skeleton)
-    │  └── NonARDimensionIsolationTest.java   # isolation
-    │── P1 (core gameplay protection):
-    │  ├── MachineRecipeIntegrationTest.java  # §7.7  recipe-registry assertion via RecipesMachine reflection
+    │  ├── NonARDimensionIsolationTest.java   # §8 P0.7
+    │  ├── MachineRecipeIntegrationTest.java  # §7.7
     │  ├── MultiblockValidationSmokeTest.java # §7.8
-    │  ├── RocketAssemblySmokeTest.java       # §7.9  fixture → scan → assemble → EntityRocket spawn
-    │  ├── RocketLaunchSmokeTest.java         # §7.9  assembled rocket → launch → isInFlight
-    │  ├── RocketInfrastructureSmokeTest.java # §7.10 fueling station → linkInfrastructure → connectedCount + idempotency
-    │  ├── SpaceStationLifecycleSmokeTest.java# §7.11 create real SpaceStationObject + verify orbiting=0
-    │  ├── SatelliteLifecycleSmokeTest.java   # §7.12 create + add to dim + verify list/info type+powerGen
-    │  ├── AtmosphereOxygenSmokeTest.java     # §7.13 set-density 0 → breathable=false → restore
-    │  └── PersistenceRestartSmokeTest.java   # §7.6  station+satellite+density survive restart on same workDir
-    │── P2 (broad feature coverage):
-    │  ├── TerraformingSmokeTest.java         # §7.14 set-density mutation → original preserved, current updated
-    │  ├── WorldgenSmokeTest.java             # §7.15 9-chunk ore-stats: bedrock + iron oregen tripwire
-    │  ├── EnergySystemsSmokeTest.java        # §7.16 real TileSolarPanel cycle: place at y=100, force-tick 100, stored advances
-    │  ├── PipeNetworkSmokeTest.java          # §7.17 IEnergyStorage receive/cap/simulate contract on libvulpes:forgepowerinput
-    │  ├── SpecialInfrastructureSmokeTest.java# §7.18 place + force-tick 5 ITickable rounds on railgun/beacon/forceField/laser/elevator
-    │  └── CommandsSmokeTest.java             # §7.19 (registered-commands)
-    └── Client E2E (require display + AR client bridge):
-       ├── ClientHarnessBoundScenario.java    # Base — graceful SKIP without -DclientHarness
+    │  ├── RocketAssemblySmokeTest.java       # §7.9
+    │  ├── RocketLaunchSmokeTest.java         # §7.9
+    │  ├── RocketInfrastructureSmokeTest.java # §7.10
+    │  ├── SpaceStationLifecycleSmokeTest.java# §7.11
+    │  ├── SatelliteLifecycleSmokeTest.java   # §7.12
+    │  ├── AtmosphereOxygenSmokeTest.java     # §7.13
+    │  ├── TerraformingSmokeTest.java         # §7.14
+    │  ├── WorldgenSmokeTest.java             # §7.15
+    │  ├── EnergySystemsSmokeTest.java        # §7.16
+    │  ├── PipeNetworkSmokeTest.java          # §7.17
+    │  ├── SpecialInfrastructureSmokeTest.java# §7.18
+    │  └── CommandsSmokeTest.java             # §7.19
+    │── plain @Test (two-boot persistence tests):
+    │  ├── PlanetXmlConfigIntegrationTest.java# §7.4  fixture XML → startWith(workDir)
+    │  ├── WeatherBaselineTest.java           # §7.5  2-planet fixture → startWith(workDir)
+    │  ├── WeatherPersistenceTest.java        # §7.5  boot → set rain → close → reboot → assert
+    │  └── PersistenceRestartSmokeTest.java   # §7.6  boot → mutate → close → reboot → assert
+    └── extends AbstractClientE2ETest (server + client harness):
        ├── ClientConnectSmokeTest.java        # §7.20 minimal handshake
-       ├── PlanetSelectorGuiE2ETest.java      # §7.20 (skeleton)
-       ├── GuidanceComputerGuiE2ETest.java    # §7.20 (skeleton)
-       ├── RocketBuilderGuiE2ETest.java       # §7.20 (skeleton)
-       ├── WeatherClientSyncE2ETest.java      # §7.20 (post-B1)
-       └── OxygenSuitClientStateE2ETest.java  # §7.20 (skeleton)
+       ├── PlanetSelectorGuiE2ETest.java      # §7.20 @Ignore (deferred — needs selector probe)
+       ├── GuidanceComputerGuiE2ETest.java    # §7.20 @Ignore (deferred)
+       ├── RocketBuilderGuiE2ETest.java       # §7.20 @Ignore (deferred)
+       ├── WeatherClientSyncE2ETest.java      # §7.20 @Ignore (post-B1)
+       └── OxygenSuitClientStateE2ETest.java  # §7.20 @Ignore (deferred)
 ```
 
-**Total registered scenarios**: 28 (7 P0 + 9 P1 + 6 P2 + 6 client E2E). All
-compose into `AdvancedRocketryTestRegistry.composeAll()` — SMART §12 measurable
-#5 minimum is 8, current count is **3.5×** that.
+**Total**: 29 JUnit `@Test` classes. SMART §12 measurable #5 minimum is 8.
 
 The reusable test framework is consumed as a Maven artifact:
 
 ```kotlin
-testImplementation("com.github.stannismod.forge:forge-test-framework:0.2.1:dev")
+testImplementation("com.github.stannismod.forge:forge-test-framework:0.3.0:dev")
 ```
 
 Resolution chain (first match wins):
@@ -139,18 +140,26 @@ stay free of AR imports.
 ## Running
 
 ```bash
-# All tests (unit + scenario suite). Scenario suite runs in "harness disabled"
-# mode by default — see "Server harness" below.
+# Unit tests only (no harness).
 ./gradlew test
 
-# Only the AR scenario suite (P0 + P1):
+# Scenario suite — parallel (6 forked JVMs by default).
 ./gradlew testAdvancedRocketryScenarios
 
-# Override expected weather mode for §7.5 baseline scenario:
+# Sequential baseline for benchmarking / debugging interaction issues.
+./gradlew testAdvancedRocketryScenarios -Pforks=1
+
+# Pick a specific scenario class.
+./gradlew testAdvancedRocketryScenarios --tests "*.RocketAssemblySmokeTest"
+
+# Override expected weather mode for §7.5 baseline scenario.
 ./gradlew testAdvancedRocketryScenarios -Pweather=shared          # default
 ./gradlew testAdvancedRocketryScenarios -Pweather=per_dimension   # post-B1
 
-# Targeted unit-test class:
+# Skip server boot (every harness-bound test SKIPs via Assume).
+./gradlew testAdvancedRocketryScenarios -Pharness=false
+
+# Run a unit-test class directly.
 ./gradlew test --tests "zmaster587.advancedRocketry.test.unit.SpacePositionTest"
 ```
 
@@ -160,11 +169,11 @@ gates the test-only `/artest` server probe commands in
 
 ## Reports
 
-Both JUnit's report (`build/reports/tests/test/index.html`) and the
-framework-native report (`summary.txt` + `summary.json` produced by
-`TestReportWriter`) are written. The framework report ends up in the
-JUnit-managed temp directory of `AdvancedRocketryTestBootstrap.scenarioSuiteRunsAndProducesSummary`
-and is captured in the test-report attachments when running through CI.
+Standard JUnit reports — `build/reports/tests/testAdvancedRocketryScenarios/`
+(HTML) and `build/test-results/testAdvancedRocketryScenarios/` (XML for CI
+parsers). Each `@Test` method shows up individually; failures inline their
+assertion messages in the report. Per-scenario `context.note` (legacy framework
+API) is replaced by JUnit's standard `assertX` messages.
 
 ## Server harness (FG6 wiring)
 
@@ -172,20 +181,17 @@ The `testAdvancedRocketryScenarios` Gradle task spins up a **real** Forge
 1.12.2 dedicated server per scenario via the reusable test framework's
 `RealDedicatedServerHarness`. This required two pieces of plumbing:
 
-1. **Test framework v0.2.1** (`com.github.stannismod.forge:forge-test-framework:0.2.1:dev`) —
-   adds three system properties so the harness can target either RFG or FG6
-   layouts:
+1. **Test framework v0.3.0** (`com.github.stannismod.forge:forge-test-framework:0.3.0:dev`) —
+   provides three system properties to target FG6 layouts:
    - `forge.test.launcher.class.server` — main class (default `GradleStartServer`)
    - `forge.test.assets.dir` — MC assets dir
    - `forge.test.launcher.legacyArgs` — toggle the RFG-style 20-arg launcher header
 
-   Plus a fast-fail in `TestClient.awaitMarker`: if the server JVM exits before
-   the expected stdout marker, the assertion now reports the crash immediately
-   rather than blocking 3 minutes. v0.2.1 adds
-   `RealDedicatedServerHarness.startWith(workDir, cleanupOnClose)` so
-   persistence-restart scenarios can boot a fresh server, mutate world state,
-   close it, and re-boot against the same dir to assert state survived
-   save/load.
+   Plus the `AbstractHeadlessServerTest` / `AbstractClientE2ETest` JUnit base
+   classes that wrap the harness in `@Before` / `@After` so scenarios are
+   plain `@Test` methods. Skipping is via `org.junit.Assume` gated on
+   `forge.test.harness.enabled` / `forge.test.client.enabled` system
+   properties.
 
 2. **AR build glue** ([build.gradle.kts](../../build.gradle.kts) `tasks.testAdvancedRocketryScenarios`):
    - Augments the test classpath with FG6's `runServer` classpath (so the spawned
@@ -197,6 +203,9 @@ The `testAdvancedRocketryScenarios` Gradle task spins up a **real** Forge
      `forge.logging.console.level`, `net.minecraftforge.gradle.GradleStart.csvDir`
      and `.srg.notch-srg`. Without this the server crashes with
      `Must specify mainClass environment variable`.
+   - Sets `maxParallelForks = -Pforks` (default 6) and `forkEvery = 1` — each
+     scenario class runs in a freshly forked test JVM, and up to N forks run
+     in parallel.
 
 The build glue also packs FG6's runServer-config `-D` system properties into
 the `JAVA_TOOL_OPTIONS` env var so they propagate to the harness sub-process —
@@ -205,13 +214,20 @@ parent test JVM's system properties. Without this `FMLDeobfuscatingRemapper.setu
 NPEs because `srg.notch-srg` isn't reachable.
 
 By default the harness is **enabled** when running `testAdvancedRocketryScenarios`
-and **disabled** when running `test` (because the unit-test task lacks the runServer
-classpath). Override with:
+(`-Pharness=true` → `forge.test.harness.enabled=true` for the JUnit base
+classes). Override with `-Pharness=false` to make every harness-bound test
+SKIP via JUnit `Assume`.
 
-```bash
-./gradlew test -Dadvancedrocketry.tests.harness=true            # not generally useful
-./gradlew testAdvancedRocketryScenarios -Pharness=false         # skip server boot
-```
+### Parallelism budget
+
+Each fork holds:
+- 1 test runner JVM (~500 MB heap configured)
+- 1 dedicated-server harness JVM (~1.5 GB heap)
+
+6 parallel forks ≈ 12 GB peak RAM. On constrained machines drop to
+`-Pforks=3` (≈ 6 GB peak) — speedup vs serial drops to ~2× but stays useful.
+Empty CPU cores aren't a bottleneck: each fork is mostly waiting on its
+dedicated-server JVM, so even 2-core machines benefit.
 
 ### Diagnostic helper
 
@@ -325,32 +341,34 @@ now has `bootstrapTestClientBridge()` invoked from `preinit()`:
 3. Catches `ClassNotFoundException` silently — production AR doesn't ship the
    framework jar.
 
-Six client E2E scenarios are wired into the registry via
-`ClientHarnessBoundScenario`. They opt OUT by default (skipping with a clear
-note) because client startup needs an OpenGL-capable display — set
-`-Dadvancedrocketry.tests.clientHarness=true` to enable them when running on a
-desktop machine.
+Six client E2E scenarios extend
+[AbstractClientE2ETest](https://github.com/StannisMod/ForgeTestFramework).
+They SKIP by default via `org.junit.Assume` until both
+`-Pharness=true` (default) and `-PclientHarness=true` are set. Client startup
+needs an OpenGL-capable display, so run on a desktop machine.
 
 ## Definition of Done — SMART §14 checklist
 
 - ✅ Tests compile
 - ✅ Unit tests run (`./gradlew test` — 109 tests, 0 failures)
-- ✅ Dedicated server scenario suite runs (`./gradlew testAdvancedRocketryScenarios` — 28 scenarios, **22 PASSED**, 0 FAILED, 6 SKIPPED)
-- ✅ Reports generated (JUnit XML + framework `summary.txt`/`summary.json` via `TestReportWriter`, plus per-scenario notes inlined in the JUnit report on failure)
+- ✅ Dedicated server scenario suite runs (`./gradlew testAdvancedRocketryScenarios` — 29 scenarios, **23 PASSED**, 0 FAILED, 6 SKIPPED)
+- ✅ Reports generated (standard JUnit XML/HTML; each `@Test` reports individually)
 - ✅ P0 scenarios implemented (7/7 PASSED) with real assertions
 - ✅ P1 smoke coverage (9/9 PASSED) — every P1 scenario drives the production gameplay path through `/artest` probes
 - ✅ P2 broad coverage (6/6 PASSED)
-- ✅ Client E2E (6 registered) — explicitly SKIPPED with actionable reason (need OpenGL display + `-Dadvancedrocketry.tests.clientHarness=true`)
+- ✅ Client E2E (6 registered) — SKIPPED via `@Ignore` (4 deferred) or `Assume` (`forge.test.client.enabled=false` default)
 - ⚠️ **Production gameplay logic changed for the NPE fix** (5 multiblock tiles get null guards) — strictly outside SMART §3 but unblocks all scenarios
 - ✅ No AR-specific code added to generic framework packages
-- ✅ Failures provide useful diagnostics (process-death short-circuit + per-scenario inline log in JUnit report with full notes for FAILED outcomes)
+- ✅ Failures provide useful diagnostics (standard JUnit assertion messages with full state captured by `/artest` probes)
 
 ### Persistence-restart pattern
 
 Scenarios that need to verify state survives save/load (`WeatherPersistenceTest`,
-`PersistenceRestartSmokeTest`) implement `HeadlessGameTest` directly (skip the
-single-harness `HarnessBoundScenario` base) and orchestrate two harness
-instances over the same workDir:
+`PersistenceRestartSmokeTest`, `PlanetXmlConfigIntegrationTest`,
+`WeatherBaselineTest`) don't extend `AbstractHeadlessServerTest` — they
+manage their own harness lifecycle via `@Before`/`@After` because they
+need to write fixture files before startup OR boot twice against the
+same workDir:
 
 ```java
 Path workDir = Files.createTempDirectory("forge-server-persistence-");

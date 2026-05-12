@@ -1,45 +1,28 @@
 package zmaster587.advancedRocketry.test.scenario;
 
-import com.github.stannismod.forge.testing.TestContext;
-import com.github.stannismod.forge.testing.TestStatus;
-import com.github.stannismod.forge.testing.server.TestClient;
+import com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest;
+import org.junit.Test;
 
-import java.util.List;
+import static org.junit.Assert.assertTrue;
 
 /**
  * SMART §7.19 — commands smoke.
  *
- * Asserts the AR-managed and test-only commands are registered on a fresh
- * server: {@code advancedrocketry} (alias {@code advrocketry}/{@code ar}) and
- * {@code artest} (test mode only).
+ * Asserts that both {@code /artest} (test-only) and AR's primary command
+ * ({@code advancedrocketry}/{@code advrocketry}/{@code ar}) are registered on a
+ * fresh server.
  */
-public class CommandsSmokeTest extends HarnessBoundScenario {
+public class CommandsSmokeTest extends AbstractHeadlessServerTest {
 
-    @Override public String id() { return "ar.scenario.commands_smoke"; }
-    @Override public String category() { return "P2/commands"; }
-    @Override public boolean required() { return false; }
-
-    @Override
-    protected TestStatus runScenario(TestContext context, TestClient client) throws Exception {
-        List<String> cmds = client.execute("artest commands list");
-        String joined = String.join("\n", cmds);
-        if (!joined.contains("\"commands\":[")) {
-            context.note("/artest commands list schema invalid: " + joined);
-            return TestStatus.FAILED;
-        }
-        // The probe itself should register, plus AR's primary command.
-        boolean hasArtest = joined.contains("\"artest\"");
+    @Test
+    public void primaryCommandsAreRegistered() throws Exception {
+        String joined = String.join("\n", client().execute("artest commands list"));
+        assertTrue("/artest commands list schema invalid: " + joined,
+                joined.contains("\"commands\":["));
+        assertTrue("/artest itself missing from command list (test mode broken?): " + joined,
+                joined.contains("\"artest\""));
         boolean hasAR = joined.contains("\"advancedrocketry\"") || joined.contains("\"advrocketry\"")
                 || joined.contains("\"ar\"");
-        if (!hasArtest) {
-            context.note("/artest itself missing from command list (test mode broken?): " + joined);
-            return TestStatus.FAILED;
-        }
-        if (!hasAR) {
-            context.note("AR's primary command missing from command list: " + joined);
-            return TestStatus.FAILED;
-        }
-        context.note("AR + /artest commands registered as expected");
-        return TestStatus.PASSED;
+        assertTrue("AR's primary command missing from command list: " + joined, hasAR);
     }
 }

@@ -1,128 +1,69 @@
 package zmaster587.advancedRocketry.test.scenario;
 
-import com.github.stannismod.forge.testing.TestContext;
-import com.github.stannismod.forge.testing.TestStatus;
-import com.github.stannismod.forge.testing.server.TestClient;
+import com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest;
+import org.junit.Test;
 
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
+
 /**
  * SMART §7.17 — energy / data / fluid network transport.
  *
- * <p>Validates Forge {@code IEnergyStorage} contract on a placed
- * {@code libvulpes:forgepowerinput}, which is the transport-layer foundation every AR
- * pipe / hatch chains through:</p>
- *
- * <ol>
- *   <li>Empty position → "no tile entity" (no NPE).</li>
- *   <li>Fresh battery: {@code energyStored=0}, {@code energyMax>0}.</li>
- *   <li>{@code /artest energy inject … 5000} returns
- *       {@code accepted=min(5000,max)}, stored advances.</li>
- *   <li>Second inject of {@code max} pushes battery to capacity and reports
- *       {@code accepted=max-prevStored} (overflow rejected, not double-counted).</li>
- *   <li>{@code /artest energy inject … 1 simulate=true} returns
- *       {@code accepted=1} (or 0 if at cap) without mutating stored —
- *       proves the simulate flag round-trips through receiveEnergy.</li>
- * </ol>
- *
- * <p>Drives the same capability path that {@code TilePowerPipe.transferPower}
- * uses each tick to propagate RF — if this regresses, every pipe network
- * regresses with it.</p>
+ * Validates the Forge {@code IEnergyStorage} contract on
+ * {@code libvulpes:forgepowerinput} — the foundation every pipe network proxies
+ * through.
  */
-public class PipeNetworkSmokeTest extends HarnessBoundScenario {
+public class PipeNetworkSmokeTest extends AbstractHeadlessServerTest {
 
     private static final Pattern STORED = Pattern.compile("\"energyStored\":(\\d+)");
     private static final Pattern MAX = Pattern.compile("\"energyMax\":(\\d+)");
     private static final Pattern ACCEPTED = Pattern.compile("\"accepted\":(-?\\d+)");
-    // Inject probe reports current state as {"stored":N,"max":M} (uses short names
-    // to distinguish from the queried tile's {"energyStored":...}).
     private static final Pattern INJ_STORED = Pattern.compile("\"stored\":(\\d+)");
 
-    @Override public String id() { return "ar.scenario.pipe_network_smoke"; }
-    @Override public String category() { return "P2/networks"; }
-    @Override public boolean required() { return false; }
+    @Test
+    public void forgeEnergyStorageContractMatches() throws Exception {
+        String empty = String.join("\n", client().execute("artest energy stored 0 1200 64 1200"));
+        assertTrue("expected 'no tile entity': " + empty, empty.contains("\"no tile entity\""));
 
-    @Override
-    protected TestStatus runScenario(TestContext context, TestClient client) throws Exception {
-        // 1. Empty-pos NPE guard.
-        String empty = String.join("\n", client.execute("artest energy stored 0 1200 64 1200"));
-        if (!empty.contains("\"no tile entity\"")) {
-            context.note("expected 'no tile entity': " + empty);
-            return TestStatus.FAILED;
-        }
+        String place = String.join("\n", client().execute(
+                "artest place 0 1200 64 1200 libvulpes:forgepowerinput"));
+        assertTrue("could not place libvulpes:forgepowerinput: " + place,
+                place.contains("\"placed\":true"));
 
-        // 2. Place a libvulpes battery (Forge-energy capability provider).
-        String place = String.join("\n",
-                client.execute("artest place 0 1200 64 1200 libvulpes:forgepowerinput"));
-        if (!place.contains("\"placed\":true")) {
-            context.note("could not place libvulpes:forgepowerinput: " + place);
-            return TestStatus.FAILED;
-        }
-        String initial = String.join("\n", client.execute("artest energy stored 0 1200 64 1200"));
-        if (!initial.contains("\"hasEnergy\":true")) {
-            context.note("battery missing IEnergyStorage: " + initial);
-            return TestStatus.FAILED;
-        }
+        String initial = String.join("\n", client().execute("artest energy stored 0 1200 64 1200"));
+        assertTrue("placed block missing IEnergyStorage: " + initial,
+                initial.contains("\"hasEnergy\":true"));
         long storedInit = parseLong(STORED, initial);
         long capacity = parseLong(MAX, initial);
-        if (capacity <= 0L) {
-            context.note("battery capacity unreasonable: " + initial);
-            return TestStatus.FAILED;
-        }
+        assertTrue("placed block capacity unreasonable: " + initial, capacity > 0L);
 
-        // 3. Inject some energy.
         String inj1 = String.join("\n",
-                client.execute("artest energy inject 0 1200 64 1200 5000"));
-        if (!inj1.contains("\"ok\":true")) {
-            context.note("inject 5000 failed: " + inj1);
-            return TestStatus.FAILED;
-        }
+                client().execute("artest energy inject 0 1200 64 1200 5000"));
+        assertTrue("inject 5000 failed: " + inj1, inj1.contains("\"ok\":true"));
         long accepted1 = parseLong(ACCEPTED, inj1);
         long expectedAccept1 = Math.min(5000L, capacity - storedInit);
-        if (accepted1 != expectedAccept1) {
-            context.note("accepted=" + accepted1 + " ≠ expected=" + expectedAccept1 + " — " + inj1);
-            return TestStatus.FAILED;
-        }
+        assertEquals("accepted ≠ expected: " + inj1, expectedAccept1, accepted1);
         long storedAfter1 = parseLong(INJ_STORED, inj1);
-        if (storedAfter1 != storedInit + accepted1) {
-            context.note("stored did not advance correctly: init=" + storedInit
-                    + " accepted=" + accepted1 + " after=" + storedAfter1);
-            return TestStatus.FAILED;
-        }
+        assertEquals("stored did not advance correctly: " + inj1,
+                storedInit + accepted1, storedAfter1);
 
-        // 4. Inject capacity — must cap at max, accepted = remaining.
-        String inj2 = String.join("\n", client.execute(
+        String inj2 = String.join("\n", client().execute(
                 "artest energy inject 0 1200 64 1200 " + capacity));
         long accepted2 = parseLong(ACCEPTED, inj2);
         long storedAfter2 = parseLong(INJ_STORED, inj2);
-        if (storedAfter2 != capacity) {
-            context.note("battery not at capacity after overflow inject: " + inj2);
-            return TestStatus.FAILED;
-        }
-        if (accepted2 != capacity - storedAfter1) {
-            context.note("overflow accepted=" + accepted2 + " ≠ " + (capacity - storedAfter1)
-                    + ": " + inj2);
-            return TestStatus.FAILED;
-        }
+        assertEquals("battery not at cap after overflow: " + inj2, capacity, storedAfter2);
+        assertEquals("overflow accepted wrong: " + inj2,
+                capacity - storedAfter1, accepted2);
 
-        // 5. simulate=true must not mutate. Battery is now at cap; accepted=0.
-        String inj3 = String.join("\n", client.execute(
+        String inj3 = String.join("\n", client().execute(
                 "artest energy inject 0 1200 64 1200 1000 true"));
         long accepted3 = parseLong(ACCEPTED, inj3);
         long storedAfter3 = parseLong(INJ_STORED, inj3);
-        if (storedAfter3 != capacity) {
-            context.note("simulate=true mutated stored: " + inj3);
-            return TestStatus.FAILED;
-        }
-        if (accepted3 != 0L) {
-            context.note("simulate at-cap accepted=" + accepted3 + " (expected 0): " + inj3);
-            return TestStatus.FAILED;
-        }
-
-        context.note("battery cap=" + capacity + ", round-trip stored " + storedInit
-                + " → " + storedAfter2 + " via energy inject");
-        return TestStatus.PASSED;
+        assertEquals("simulate=true mutated stored: " + inj3, capacity, storedAfter3);
+        assertEquals("simulate at-cap accepted should be 0: " + inj3, 0L, accepted3);
     }
 
     private static long parseLong(Pattern p, String s) {

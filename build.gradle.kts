@@ -203,7 +203,7 @@ dependencies {
     // MCP-named MC classes, the reobf (no-classifier) jar has SRG names and
     // won't compile against the dev classpath.
     testImplementation("junit:junit:4.13.2")
-    testImplementation("com.github.stannismod.forge:forge-test-framework:0.2.1:dev")
+    testImplementation("com.github.stannismod.forge:forge-test-framework:0.3.0:dev")
 }
 
 tasks.test {
@@ -235,8 +235,10 @@ val fg6HarnessProps = mapOf(
 //   ./gradlew testAdvancedRocketryScenarios -Pweather=per_dimension
 val weatherMode: String = (project.findProperty("weather") as? String) ?: "shared"
 
+val parallelForks: Int = (project.findProperty("forks") as? String)?.toIntOrNull() ?: 6
+
 tasks.register<Test>("testAdvancedRocketryScenarios") {
-    description = "Runs the AR-specific scenario suite (SMART §7 P0+P1)."
+    description = "Runs the AR-specific scenario suite (SMART §7 P0+P1+P2) in parallel."
     group = "verification"
     useJUnit()
     testClassesDirs = sourceSets["test"].output.classesDirs
@@ -252,17 +254,34 @@ tasks.register<Test>("testAdvancedRocketryScenarios") {
         cpField.invoke(runServer) as FileCollection
     })
     filter {
-        includeTestsMatching("zmaster587.advancedRocketry.test.AdvancedRocketryTestBootstrap*")
+        // All scenario classes are JUnit-native: each *SmokeTest / *E2ETest /
+        // diagnostic class has its own @Test methods. No more custom bootstrap.
+        includeTestsMatching("zmaster587.advancedRocketry.test.scenario.*")
         includeTestsMatching("zmaster587.advancedRocketry.test.HarnessDiagnosticTest")
     }
     systemProperty("advancedrocketry.tests", "true")
     systemProperty("advancedrocketry.tests.expectedWeatherMode", weatherMode)
     // Forward FG6 paths to the test-framework harness (v0.2.0+).
     fg6HarnessProps.forEach { (k, v) -> systemProperty(k, v) }
-    // Default: enable harness when running the dedicated scenario task. Override
-    // with -Dadvancedrocketry.tests.harness=false to skip server boot.
-    systemProperty("advancedrocketry.tests.harness",
-            (project.findProperty("harness") as? String) ?: "true")
+    // Enable the framework's JUnit base classes (AbstractHeadlessServerTest)
+    // by default. Override with -Pharness=false to skip server boot — all
+    // tests then SKIP via JUnit Assume rather than failing.
+    val harnessEnabled = (project.findProperty("harness") as? String) ?: "true"
+    systemProperty("forge.test.harness.enabled", harnessEnabled)
+    systemProperty("forge.test.client.enabled",
+            (project.findProperty("clientHarness") as? String) ?: "false")
+
+    // Parallel execution: one forked JVM per scenario class, up to `parallelForks`
+    // running concurrently. Each scenario is independent (own port via
+    // ServerSocket(0), own tempDir) so cross-fork interference is impossible.
+    //
+    // Budget: each fork holds the test runner JVM (~500 MB) + one harness JVM
+    // (~1.5 GB). 6 forks ≈ 12 GB peak RAM. Tune via -Pforks=N.
+    maxParallelForks = parallelForks
+    setForkEvery(1L)
+    // Per-fork JVM args — keep tight so we don't blow past RAM with 6 forks.
+    minHeapSize = "256m"
+    maxHeapSize = "768m"
 
     // FG6's MinecraftRunTask.exec() resolves env+sysprops via a runtime token map
     // (see RunConfigGenerator.configureTokensLazy). Replicate the same resolution

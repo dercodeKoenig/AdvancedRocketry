@@ -1,26 +1,21 @@
 package zmaster587.advancedRocketry.test.scenario;
 
-import com.github.stannismod.forge.testing.TestContext;
-import com.github.stannismod.forge.testing.TestStatus;
-import com.github.stannismod.forge.testing.client.ClientBot;
-import com.github.stannismod.forge.testing.server.TestClient;
+import com.github.stannismod.forge.testing.junit.AbstractClientE2ETest;
+import org.junit.Ignore;
+import org.junit.Test;
 
 /**
  * SMART §7.20 — open planet selector / holographic selector GUI, click planet,
  * verify selection state propagates to server.
  *
- * STATUS: skeleton — needs a fixture-placed holographic projector + creative
- * inventory hotbar slot for the selector item, plus a {@code /artest selector
- * info} probe to read server-side selection. Deferred.
+ * <p>Deferred until a {@code /artest selector info} probe lands + fixture
+ * holographic projector placement is automated.</p>
  */
-public class PlanetSelectorGuiE2ETest extends ClientHarnessBoundScenario {
+@Ignore("Requires /artest selector info probe + fixture holographic projector — deferred")
+public class PlanetSelectorGuiE2ETest extends AbstractClientE2ETest {
 
-    @Override public String id() { return "ar.scenario.planet_selector_gui_e2e"; }
-    @Override public String category() { return "P2/client-e2e/planet-selector"; }
-
-    @Override
-    protected TestStatus runScenario(TestContext context, TestClient testClient, ClientBot bot) {
-        context.note("requires fixture holographic-projector + selector probe — deferred");
-        return TestStatus.SKIPPED;
+    @Test
+    public void clickingPlanetSetsServerSelection() throws Exception {
+        // Filled in once the selector probe lands.
     }
 }

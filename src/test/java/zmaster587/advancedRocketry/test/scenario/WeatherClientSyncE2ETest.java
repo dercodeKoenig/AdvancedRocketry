@@ -1,33 +1,20 @@
 package zmaster587.advancedRocketry.test.scenario;
 
-import com.github.stannismod.forge.testing.TestContext;
-import com.github.stannismod.forge.testing.TestStatus;
-import com.github.stannismod.forge.testing.client.ClientBot;
-import com.github.stannismod.forge.testing.server.TestClient;
+import com.github.stannismod.forge.testing.junit.AbstractClientE2ETest;
+import org.junit.Ignore;
+import org.junit.Test;
 
 /**
  * SMART §7.20 — multi-planet weather isolation as visible from the client.
  *
- * Sequence (after weather B1 lands):
- * <ol>
- *   <li>Teleport client to AR planet A.</li>
- *   <li>{@code /artest weather set <A> rain 12000}.</li>
- *   <li>Verify client-visible rain via {@code bot.reportState()}.</li>
- *   <li>Teleport to AR planet B (clear).</li>
- *   <li>Verify no stale rain on B.</li>
- * </ol>
- *
- * STATUS: skeleton — needs weather B1 implementation (§7.5 expected mode flips
- * from {@code shared} → {@code per_dimension}) and a teleport probe. Deferred.
+ * <p>Deferred until per-dimension weather (B1) lands and a client-side teleport
+ * + weather-overlay-state probe is available.</p>
  */
-public class WeatherClientSyncE2ETest extends ClientHarnessBoundScenario {
+@Ignore("Requires weather B1 + client teleport probe — deferred")
+public class WeatherClientSyncE2ETest extends AbstractClientE2ETest {
 
-    @Override public String id() { return "ar.scenario.weather_client_sync_e2e"; }
-    @Override public String category() { return "P2/client-e2e/weather"; }
-
-    @Override
-    protected TestStatus runScenario(TestContext context, TestClient testClient, ClientBot bot) {
-        context.note("requires weather B1 + teleport probe — deferred");
-        return TestStatus.SKIPPED;
+    @Test
+    public void rainOnPlanetAIsNotVisibleOnPlanetB() throws Exception {
+        // Filled in after B1.
     }
 }

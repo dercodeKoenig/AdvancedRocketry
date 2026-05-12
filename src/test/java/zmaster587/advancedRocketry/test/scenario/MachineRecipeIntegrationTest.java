@@ -1,69 +1,39 @@
 package zmaster587.advancedRocketry.test.scenario;
 
-import com.github.stannismod.forge.testing.TestContext;
-import com.github.stannismod.forge.testing.TestStatus;
-import com.github.stannismod.forge.testing.server.TestClient;
+import com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest;
+import org.junit.Test;
 
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import static org.junit.Assert.assertTrue;
+
 /**
  * SMART §7.7 — machine + recipe integration.
  *
- * <p>The 11 canonical AR multiblock recipe machines load their recipes from
- * config/advRocketry/*.xml during AR's {@code preInit}. This scenario verifies:</p>
- *
- * <ol>
- *   <li>{@code /artest machine recipes-summary} reports a non-zero recipe count
- *       for every machine class (proves the XML loaders + libVulpes'
- *       {@code RecipesMachine} registration both work).</li>
- *   <li>The probe-wiring smoke for {@code /artest machine tick-until}: empty pos
- *       and a non-multiblock tile (vanilla chest) both return controlled errors
- *       instead of NPE.</li>
- * </ol>
- *
- * <p>Full multiblock recipe execution (place machine, supply inputs+power, wait
- * for output) requires per-machine fixture geometry — every machine has a
- * different structure shape. That's a fixture-engine effort, deferred. The
- * recipe-count assertion is the practical regression tripwire that catches XML
- * loader / classloader / recipe-handler-registration regressions.</p>
+ * Probe-wiring smoke + recipe-registry assertion: every required AR machine
+ * class must have >0 recipes loaded by libVulpes' {@code RecipesMachine}.
  */
-public class MachineRecipeIntegrationTest extends HarnessBoundScenario {
+public class MachineRecipeIntegrationTest extends AbstractHeadlessServerTest {
 
-    @Override public String id() { return "ar.scenario.machine_recipe_integration"; }
-    @Override public String category() { return "P1/machines"; }
-    @Override public boolean required() { return false; }
-
-    @Override
-    protected TestStatus runScenario(TestContext context, TestClient client) throws Exception {
-        // 1. Probe-wiring smoke (kept from previous version — guards against
-        //    NPE regressions in the probe itself).
+    @Test
+    public void recipeRegistryAndTickUntilProbeAreWired() throws Exception {
+        // 1. Probe wiring smoke.
         String empty = String.join("\n",
-                client.execute("artest machine tick-until 0 100 64 100 complete 5"));
-        if (!empty.contains("\"error\":\"no tile entity\"")) {
-            context.note("tick-until on empty pos didn't error: " + empty);
-            return TestStatus.FAILED;
-        }
-        client.execute("artest place 0 100 64 100 minecraft:chest");
-        String chest = String.join("\n",
-                client.execute("artest machine tick-until 0 100 64 100 complete 5"));
-        if (!chest.contains("\"error\":\"tile lacks ") || !chest.contains("isComplete")) {
-            context.note("tick-until didn't gracefully reject TileEntityChest: " + chest);
-            return TestStatus.FAILED;
-        }
+                client().execute("artest machine tick-until 0 100 64 100 complete 5"));
+        assertTrue("tick-until on empty pos didn't error: " + empty,
+                empty.contains("\"error\":\"no tile entity\""));
 
-        // 2. Real recipe-registry assertion. Each AR machine MUST have >0 recipes.
-        String summary = String.join("\n", client.execute("artest machine recipes-summary"));
-        if (summary.contains("\"error\"")) {
-            context.note("recipes-summary errored: " + summary);
-            return TestStatus.FAILED;
-        }
-        // Required machines (a subset that's stable across AR builds — these XML
-        // files always ship with content).
-        // Subset of machines that always ship with non-empty XML configs in
-        // upstream AR. {@code TilePrecisionAssembler} is intentionally omitted —
-        // its XML is empty in some configurations (recipes added by user via
-        // datapacks / external configs).
+        client().execute("artest place 0 100 64 100 minecraft:chest");
+        String chest = String.join("\n",
+                client().execute("artest machine tick-until 0 100 64 100 complete 5"));
+        assertTrue("tick-until didn't gracefully reject TileEntityChest: " + chest,
+                chest.contains("\"error\":\"tile lacks ") && chest.contains("isComplete"));
+
+        // 2. Recipe-registry assertion.
+        String summary = String.join("\n", client().execute("artest machine recipes-summary"));
+        assertTrue("recipes-summary errored: " + summary, !summary.contains("\"error\""));
+
         String[] requiredMachines = {
                 "TileCuttingMachine",
                 "TileElectricArcFurnace",
@@ -84,12 +54,7 @@ public class MachineRecipeIntegrationTest extends HarnessBoundScenario {
                 failures.append(name).append("=").append(count).append(";");
             }
         }
-        if (failures.length() > 0) {
-            context.note("machine recipe counts: " + failures + " full=" + summary);
-            return TestStatus.FAILED;
-        }
-
-        context.note("all required AR machines have recipes loaded: " + summary);
-        return TestStatus.PASSED;
+        assertTrue("machine recipe counts: " + failures + " full=" + summary,
+                failures.length() == 0);
     }
 }

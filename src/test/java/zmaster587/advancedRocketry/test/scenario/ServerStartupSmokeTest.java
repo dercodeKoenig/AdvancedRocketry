@@ -1,38 +1,34 @@
 package zmaster587.advancedRocketry.test.scenario;
 
-import com.github.stannismod.forge.testing.TestContext;
-import com.github.stannismod.forge.testing.TestStatus;
-import com.github.stannismod.forge.testing.server.TestClient;
+import com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest;
+import org.junit.Test;
 
 import java.util.List;
+
+import static org.junit.Assert.assertTrue;
 
 /**
  * SMART §7.1 — server startup + minimum command round-trip smoke test.
  *
  * <ol>
- *   <li>Start the dedicated server harness (handled by {@link HarnessBoundScenario#setUp}).</li>
+ *   <li>Start the dedicated server harness ({@code @Before} in
+ *       {@link AbstractHeadlessServerTest}).</li>
  *   <li>Run {@code /list} as a basic command-round-trip check.</li>
  *   <li>Run {@code /artest registry summary} to prove the test-only probe is registered.</li>
- *   <li>Assert no startup crash; capture transcript for the report.</li>
  * </ol>
  */
-public class ServerStartupSmokeTest extends HarnessBoundScenario {
+public class ServerStartupSmokeTest extends AbstractHeadlessServerTest {
 
-    @Override public String id() { return "ar.scenario.server_startup_smoke"; }
-    @Override public String category() { return "P0/server-lifecycle"; }
-    @Override public int timeoutTicks() { return 1; }
+    @Test
+    public void serverBootsAndCommandsRoundTrip() throws Exception {
+        // Server is already up; harness boot waited for the "For help" marker
+        // before returning from @Before.
+        List<String> listOutput = client().execute("list");
+        assertTrue("/list returned no output", !listOutput.isEmpty());
 
-    @Override
-    protected TestStatus runScenario(TestContext context, TestClient client) throws Exception {
-        List<String> listOutput = client.execute("list");
-        context.note("/list output lines: " + listOutput.size());
-
-        List<String> registry = client.execute("artest registry summary");
+        List<String> registry = client().execute("artest registry summary");
         boolean hasRegistryOutput = registry.stream().anyMatch(line -> line.contains("\"blocks\""));
-        if (!hasRegistryOutput) {
-            return TestStatus.FAILED;
-        }
-        context.note("/artest registry summary returned " + registry.size() + " lines");
-        return TestStatus.PASSED;
+        assertTrue("/artest registry summary missing 'blocks' key: " + registry,
+                hasRegistryOutput);
     }
 }
