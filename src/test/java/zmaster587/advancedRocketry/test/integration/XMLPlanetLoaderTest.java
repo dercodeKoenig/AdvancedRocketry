@@ -225,6 +225,99 @@ public class XMLPlanetLoaderTest {
                 props.getGravitationalMultiplier(), 1e-6);
     }
 
+    // ---- Write → read full round-trip ---------------------------------------
+
+    /**
+     * §6.1 #10 — writeXML produces XML that readAllPlanets parses back into a
+     * DimensionProperties carrying every field we wrote.
+     *
+     * Production save path: AR writes planet definitions to
+     * {@code config/advRocketry/planetDefs.xml} via {@code XMLPlanetLoader.writeXML(DimensionManager)}.
+     * That XML is later re-read at startup. The contract this test pins down is:
+     * critical numeric/identity fields survive the round-trip.
+     */
+    @Test
+    public void writeThenReadPreservesCriticalFields() throws Exception {
+        // 1. Build an in-memory galaxy: 1 star + 1 planet attached to it.
+        zmaster587.advancedRocketry.api.dimension.solar.StellarBody star =
+                new zmaster587.advancedRocketry.api.dimension.solar.StellarBody();
+        star.setId(7301);
+        star.setName("WriteRtStar");
+        star.setTemperature(120);
+        star.setSize(1.25f);
+        star.setBlackHole(false);
+
+        DimensionProperties planet = new DimensionProperties(7302, "WriteRtPlanet");
+        planet.gravitationalMultiplier = 1.5f;
+        planet.orbitalDist = 175;
+        planet.rotationalPeriod = 19_200;
+        planet.setAtmosphereDensityDirect(125);
+        planet.setStar(star);
+        planet.hasOxygen = true;
+
+        star.addPlanet(planet);
+
+        // 2. Wrap into a minimal IGalaxy and serialise.
+        zmaster587.advancedRocketry.api.dimension.solar.IGalaxy galaxy =
+                new SingleStarGalaxyFixture(star);
+
+        String xml = XMLPlanetLoader.writeXML(galaxy);
+        assertTrue("writeXML must include the star name", xml.contains("WriteRtStar"));
+        assertTrue("writeXML must include the planet name", xml.contains("WriteRtPlanet"));
+
+        // 3. Round-trip through a temp file + loadFile + readAllPlanets.
+        File out = tempFolder.newFile("written-planets.xml");
+        Files.write(out.toPath(), xml.getBytes(StandardCharsets.UTF_8));
+
+        XMLPlanetLoader reader = new XMLPlanetLoader();
+        assertTrue("loadFile must accept self-generated XML", reader.loadFile(out));
+
+        DimensionPropertyCoupling restored = reader.readAllPlanets();
+        assertEquals("1 star round-trips", 1, restored.stars.size());
+        assertEquals("WriteRtStar", restored.stars.get(0).getName());
+
+        assertEquals("1 planet round-trips", 1, restored.dims.size());
+        DimensionProperties restoredPlanet = restored.dims.get(0);
+        assertEquals("WriteRtPlanet", restoredPlanet.getName());
+
+        // Critical numeric fields — anything off-by-one here means a writeXML →
+        // loadFile divergence that corrupts saves.
+        assertEquals("gravity must round-trip",
+                1.5f, restoredPlanet.getGravitationalMultiplier(), 1e-3);
+        assertEquals("orbitalDist must round-trip",
+                175, restoredPlanet.orbitalDist);
+        assertEquals("rotationalPeriod must round-trip",
+                19_200, restoredPlanet.rotationalPeriod);
+        assertEquals("atmosphereDensity must round-trip",
+                125, restoredPlanet.getAtmosphereDensity());
+    }
+
+    /**
+     * Minimal IGalaxy fixture wrapping a single star. Only {@link #getStars()}
+     * is consumed by {@link XMLPlanetLoader#writeXML}; all other methods throw
+     * so that if the write path expands its API usage we fail loudly.
+     */
+    private static final class SingleStarGalaxyFixture
+            implements zmaster587.advancedRocketry.api.dimension.solar.IGalaxy {
+        private final zmaster587.advancedRocketry.api.dimension.solar.StellarBody star;
+        SingleStarGalaxyFixture(zmaster587.advancedRocketry.api.dimension.solar.StellarBody s) {
+            this.star = s;
+        }
+
+        @Override
+        public java.util.Collection<zmaster587.advancedRocketry.api.dimension.solar.StellarBody>
+        getStars() {
+            return java.util.Collections.singletonList(star);
+        }
+        @Override public Integer[] getRegisteredDimensions() { throw new UnsupportedOperationException(); }
+        @Override public zmaster587.advancedRocketry.api.satellite.SatelliteBase getSatellite(long satId) { throw new UnsupportedOperationException(); }
+        @Override public boolean canTravelTo(int dimId) { throw new UnsupportedOperationException(); }
+        @Override public zmaster587.advancedRocketry.api.dimension.IDimensionProperties getDimensionProperties(int dimId) { throw new UnsupportedOperationException(); }
+        @Override public zmaster587.advancedRocketry.api.dimension.solar.StellarBody getStar(int id) { throw new UnsupportedOperationException(); }
+        @Override public boolean isDimensionCreated(int dimId) { throw new UnsupportedOperationException(); }
+        @Override public boolean areDimensionsInSamePlanetMoonSystem(int a, int b) { throw new UnsupportedOperationException(); }
+    }
+
     @Test
     public void gravityClampsBelowMin() throws Exception {
         DimensionPropertyCoupling coupling = parse(galaxy(star("Sol",

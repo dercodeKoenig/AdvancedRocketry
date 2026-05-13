@@ -30,8 +30,5 @@ lasthash.txt
 
 logs
 
-# Navigator context markers
-.context-markers/
-
 # Navigator temporary files
 .agent/.nav-temp/

@@ -1,9 +1,14 @@
 package zmaster587.advancedRocketry.test.integration;
 
+import net.minecraft.init.Items;
+import net.minecraft.item.ItemStack;
 import net.minecraft.nbt.NBTTagCompound;
 import org.junit.BeforeClass;
 import org.junit.Test;
+import zmaster587.advancedRocketry.api.Constants;
+import zmaster587.advancedRocketry.dimension.DimensionManager;
 import zmaster587.advancedRocketry.dimension.DimensionProperties;
+import zmaster587.advancedRocketry.dimension.DimensionProperties.AtmosphereTypes;
 import zmaster587.advancedRocketry.test.MinecraftBootstrap;
 
 import java.lang.reflect.Field;
@@ -237,6 +242,169 @@ public class DimensionPropertiesTest {
         assertEquals(5, props.getStarId());
         assertEquals(-1, getIntField(props, "parentPlanet"));
         assertEquals(42, props.getAtmosphereDensity());
+    }
+
+    /**
+     * §6.2 — derive AtmosphereTypes from density value (boundary-checked).
+     *
+     * Production callers (oxygen handler, sealable-block detection, oregen) read
+     * the type via {@link AtmosphereTypes#getAtmosphereTypeFromValue(int)} — the
+     * mapping is the contract that downstream gameplay depends on.
+     */
+    @Test
+    public void atmosphereTypeFromDensityAndTemperature() {
+        // Boundary rule: value > type.value → that type, walked top-down.
+        // SUPERHIGHPRESSURE(800), HIGHPRESSURE(200), NORMAL(75), LOW(25), NONE(0).
+
+        assertEquals(AtmosphereTypes.SUPERHIGHPRESSURE,
+                AtmosphereTypes.getAtmosphereTypeFromValue(801));
+        assertEquals(AtmosphereTypes.SUPERHIGHPRESSURE,
+                AtmosphereTypes.getAtmosphereTypeFromValue(10_000));
+
+        // value == 800 is NOT super-high (strict >); falls into HIGHPRESSURE.
+        assertEquals(AtmosphereTypes.HIGHPRESSURE,
+                AtmosphereTypes.getAtmosphereTypeFromValue(800));
+        assertEquals(AtmosphereTypes.HIGHPRESSURE,
+                AtmosphereTypes.getAtmosphereTypeFromValue(201));
+
+        assertEquals(AtmosphereTypes.NORMAL,
+                AtmosphereTypes.getAtmosphereTypeFromValue(200));
+        assertEquals(AtmosphereTypes.NORMAL,
+                AtmosphereTypes.getAtmosphereTypeFromValue(100));
+        assertEquals(AtmosphereTypes.NORMAL,
+                AtmosphereTypes.getAtmosphereTypeFromValue(76));
+
+        assertEquals(AtmosphereTypes.LOW,
+                AtmosphereTypes.getAtmosphereTypeFromValue(75));
+        assertEquals(AtmosphereTypes.LOW,
+                AtmosphereTypes.getAtmosphereTypeFromValue(26));
+
+        assertEquals(AtmosphereTypes.NONE,
+                AtmosphereTypes.getAtmosphereTypeFromValue(25));
+        assertEquals(AtmosphereTypes.NONE,
+                AtmosphereTypes.getAtmosphereTypeFromValue(0));
+        assertEquals(AtmosphereTypes.NONE,
+                AtmosphereTypes.getAtmosphereTypeFromValue(-100));
+
+        // DimensionProperties.hasAtmosphere() flips at NORMAL/LOW boundary.
+        DimensionProperties earth = new DimensionProperties(7771, "Earth");
+        earth.setAtmosphereDensityDirect(100);
+        assertTrue("density=100 should have atmosphere", earth.hasAtmosphere());
+
+        DimensionProperties vacuum = new DimensionProperties(7772, "Vac");
+        vacuum.setAtmosphereDensityDirect(0);
+        assertFalse("density=0 should be no atmosphere", vacuum.hasAtmosphere());
+    }
+
+    /**
+     * §6.2 — setParentPlanet must establish the bidirectional link: child's
+     * parentPlanet field points at parent, and parent's childPlanets contains
+     * the child's id.
+     */
+    @Test
+    public void parentChildRelationshipsAreBidirectional() {
+        DimensionProperties parent = new DimensionProperties(7780, "ParentWorld");
+        DimensionProperties child = new DimensionProperties(7781, "MoonChild");
+        setIntField(parent, "starId", 0);
+        setIntField(child, "starId", 0);
+
+        // Register both in DimensionManager so setParentPlanet(parent, true) can
+        // resolve parent.childPlanets via DimensionManager when traversing.
+        DimensionManager.getInstance().setDimProperties(7780, parent);
+        DimensionManager.getInstance().setDimProperties(7781, child);
+
+        assertFalse("parent must not start with child", parent.getChildPlanets().contains(7781));
+        assertEquals("child must start with INVALID_PLANET parent",
+                Constants.INVALID_PLANET, child.getParentPlanet());
+
+        child.setParentPlanet(parent);
+
+        assertEquals("child's parentPlanet field must point at parent",
+                7780, child.getParentPlanet());
+        assertTrue("parent's childPlanets must contain child id",
+                parent.getChildPlanets().contains(7781));
+        assertTrue("child must be reported as moon (has parent)", child.isMoon());
+
+        // Switching parent must clean up the old parent's child list.
+        DimensionProperties otherParent = new DimensionProperties(7782, "OtherParent");
+        setIntField(otherParent, "starId", 0);
+        DimensionManager.getInstance().setDimProperties(7782, otherParent);
+
+        child.setParentPlanet(otherParent);
+        assertFalse("old parent must drop child after re-parenting",
+                parent.getChildPlanets().contains(7781));
+        assertTrue("new parent must adopt child",
+                otherParent.getChildPlanets().contains(7781));
+        assertEquals(7782, child.getParentPlanet());
+
+        // Setting parent to null detaches the child cleanly.
+        child.setParentPlanet(null);
+        assertEquals(Constants.INVALID_PLANET, child.getParentPlanet());
+        assertFalse("detach must clear parent's children",
+                otherParent.getChildPlanets().contains(7781));
+    }
+
+    /**
+     * §6.2 — a moon must inherit its parent's solar orbital distance, not use its
+     * own (the moon's {@code orbitalDist} is its distance from the parent, not
+     * from the star).
+     */
+    @Test
+    public void moonInheritsParentSolarDistance() {
+        DimensionProperties parent = new DimensionProperties(7790, "MoonParent");
+        setIntField(parent, "starId", 0);
+        parent.orbitalDist = 250; // far-out planet
+
+        DimensionProperties moon = new DimensionProperties(7791, "Moon");
+        setIntField(moon, "starId", 0);
+        moon.orbitalDist = 50; // moon's distance from parent
+
+        DimensionManager.getInstance().setDimProperties(7790, parent);
+        DimensionManager.getInstance().setDimProperties(7791, moon);
+
+        // Without parent: solar distance == own orbitalDist.
+        assertEquals("standalone planet's solar distance is its own orbitalDist",
+                50, moon.getSolarOrbitalDistance());
+
+        moon.setParentPlanet(parent);
+
+        assertEquals("moon's solar distance must come from parent (250), not its own (50)",
+                250, moon.getSolarOrbitalDistance());
+        assertEquals("parent unaffected",
+                250, parent.getSolarOrbitalDistance());
+
+        // getSolarTheta also delegates to parent.
+        parent.orbitTheta = 1.234;
+        assertEquals("moon's solar theta must come from parent",
+                1.234, moon.getSolarTheta(), 1e-9);
+    }
+
+    /**
+     * §6.2 — requiredArtifacts list must survive NBT round-trip with item
+     * identity + count preserved (used by planet-unlock gameplay).
+     */
+    @Test
+    public void requiredArtifactsRoundTrip() {
+        DimensionProperties original = new DimensionProperties(7800, "Gated");
+        original.requiredArtifacts.add(new ItemStack(Items.DIAMOND, 3));
+        original.requiredArtifacts.add(new ItemStack(Items.EMERALD, 1));
+        setIntField(original, "starId", 0);
+
+        NBTTagCompound nbt = new NBTTagCompound();
+        original.writeToNBT(nbt);
+
+        DimensionProperties restored = DimensionProperties.createFromNBT(7800, nbt);
+
+        assertEquals("artifact list size must round-trip",
+                2, restored.getRequiredArtifacts().size());
+
+        ItemStack first = restored.getRequiredArtifacts().get(0);
+        assertEquals(Items.DIAMOND, first.getItem());
+        assertEquals(3, first.getCount());
+
+        ItemStack second = restored.getRequiredArtifacts().get(1);
+        assertEquals(Items.EMERALD, second.getItem());
+        assertEquals(1, second.getCount());
     }
 
     @Test

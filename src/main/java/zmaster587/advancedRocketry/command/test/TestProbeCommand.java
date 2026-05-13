@@ -142,6 +142,18 @@ public class TestProbeCommand extends CommandBase {
                 case "selector":
                     handleSelector(server, sender, tail(args));
                     break;
+                case "fluid":
+                    handleFluid(server, sender, tail(args));
+                    break;
+                case "vent":
+                    handleVent(server, sender, tail(args));
+                    break;
+                case "item":
+                    handleItem(server, sender, tail(args));
+                    break;
+                case "enchant":
+                    handleEnchant(server, sender, tail(args));
+                    break;
                 default:
                     send(sender, "{\"error\":\"unknown subcommand\",\"sub\":\"" + args[0] + "\"}");
             }
@@ -2132,5 +2144,409 @@ public class TestProbeCommand extends CommandBase {
 
     private static String escapeJson(String s) {
         return s == null ? "" : s.replace("\\", "\\\\").replace("\"", "\\\"").replace("\n", "\\n").replace("\r", "\\r");
+    }
+
+    // §5 / §7.13 — item / enchantment registry probes -------------------------
+
+    /**
+     * {@code /artest item check <item-id> [capability]} —
+     *   * registry presence of the item;
+     *   * its unlocalized name;
+     *   * whether a freshly-created ItemStack exposes the named capability
+     *     (currently supports "protective-armor", or omit to skip the cap check).
+     */
+    private void handleItem(MinecraftServer server, ICommandSender sender, String[] args) {
+        if (args.length < 2 || !"check".equalsIgnoreCase(args[0])) {
+            send(sender, "{\"error\":\"unknown item subcommand — try check <item-id> [capability]\"}");
+            return;
+        }
+        String itemId = args[1];
+        net.minecraft.item.Item item = ForgeRegistries.ITEMS.getValue(new ResourceLocation(itemId));
+        Map<String, Object> info = new LinkedHashMap<>();
+        info.put("id", itemId);
+        info.put("registered", item != null);
+        if (item == null) {
+            send(sender, jsonMap(info));
+            return;
+        }
+        info.put("itemClass", item.getClass().getName());
+        info.put("unlocalizedName", item.getUnlocalizedName());
+
+        if (args.length >= 3) {
+            String capName = args[2];
+            net.minecraft.item.ItemStack stack = new net.minecraft.item.ItemStack(item);
+            boolean has = false;
+            if ("protective-armor".equalsIgnoreCase(capName)) {
+                if (zmaster587.advancedRocketry.api.capability.CapabilitySpaceArmor.PROTECTIVEARMOR != null) {
+                    has = stack.hasCapability(
+                            zmaster587.advancedRocketry.api.capability.CapabilitySpaceArmor.PROTECTIVEARMOR,
+                            null);
+                }
+            } else if ("fluid-handler".equalsIgnoreCase(capName)) {
+                has = stack.hasCapability(
+                        net.minecraftforge.fluids.capability.CapabilityFluidHandler.FLUID_HANDLER_ITEM_CAPABILITY,
+                        null);
+            } else {
+                info.put("capability_error", "unknown capability \"" + capName + "\"");
+            }
+            info.put("capability", capName);
+            info.put("hasCapability", has);
+        }
+        send(sender, jsonMap(info));
+    }
+
+    /**
+     * {@code /artest enchant check <enchant-id>} — reports whether an
+     * enchantment is registered. Used to verify the spacebreathing enchant lands
+     * during AR init.
+     */
+    private void handleEnchant(MinecraftServer server, ICommandSender sender, String[] args) {
+        if (args.length < 2 || !"check".equalsIgnoreCase(args[0])) {
+            send(sender, "{\"error\":\"unknown enchant subcommand — try check <id>\"}");
+            return;
+        }
+        String id = args[1];
+        net.minecraft.enchantment.Enchantment ench =
+                ForgeRegistries.ENCHANTMENTS.getValue(new ResourceLocation(id));
+        Map<String, Object> info = new LinkedHashMap<>();
+        info.put("id", id);
+        info.put("registered", ench != null);
+        if (ench != null) {
+            info.put("name", ench.getName());
+            info.put("maxLevel", ench.getMaxLevel());
+            info.put("rarity", ench.getRarity().name());
+        }
+        send(sender, jsonMap(info));
+    }
+
+    // §5.7 / §7.13 — fluid handling probes (generic Forge IFluidHandler) -------
+
+    /**
+     * {@code /artest fluid inject <dim> <x> <y> <z> <fluidName> <amount>} —
+     * fills the tile's Forge IFluidHandler with the named fluid.
+     * <p>
+     * {@code /artest fluid stored <dim> <x> <y> <z>} — dumps tank states.
+     */
+    private void handleFluid(MinecraftServer server, ICommandSender sender, String[] args) {
+        if (args.length >= 4 && "stored".equalsIgnoreCase(args[0])) {
+            int dim = parseIntOr(args[1], Integer.MIN_VALUE);
+            int x = parseIntOr(args[2], 0);
+            int y = parseIntOr(args[3], 0);
+            int z = args.length >= 5 ? parseIntOr(args[4], 0) : 0;
+            net.minecraft.world.WorldServer world = server.getWorld(dim);
+            if (world == null) {
+                send(sender, "{\"error\":\"world not loaded\",\"dim\":" + dim + "}");
+                return;
+            }
+            TileEntity tile = world.getTileEntity(new BlockPos(x, y, z));
+            if (tile == null) {
+                send(sender, "{\"error\":\"no tile entity\",\"pos\":[" + x + "," + y + "," + z + "]}");
+                return;
+            }
+            net.minecraftforge.fluids.capability.IFluidHandler handler =
+                    findFluidHandler(tile);
+            Map<String, Object> info = new LinkedHashMap<>();
+            info.put("tileClass", tile.getClass().getName());
+            if (handler == null) {
+                info.put("hasFluid", false);
+            } else {
+                info.put("hasFluid", true);
+                net.minecraftforge.fluids.capability.IFluidTankProperties[] props = handler.getTankProperties();
+                StringBuilder tanksJson = new StringBuilder("[");
+                for (int i = 0; i < props.length; i++) {
+                    net.minecraftforge.fluids.FluidStack contents = props[i].getContents();
+                    if (i > 0) tanksJson.append(',');
+                    tanksJson.append("{\"capacity\":").append(props[i].getCapacity());
+                    if (contents == null) {
+                        tanksJson.append(",\"fluid\":null}");
+                    } else {
+                        tanksJson.append(",\"fluid\":\"").append(escapeJson(contents.getFluid().getName()))
+                                .append("\",\"amount\":").append(contents.amount).append('}');
+                    }
+                }
+                tanksJson.append(']');
+                info.put("tanks_RAW", tanksJson.toString());
+            }
+            // Hand-emit because jsonMap doesn't pass tanks_RAW through cleanly.
+            StringBuilder out = new StringBuilder("{");
+            out.append("\"tileClass\":\"").append(escapeJson(tile.getClass().getName())).append('"');
+            out.append(",\"hasFluid\":").append(handler != null);
+            if (handler != null) {
+                out.append(",\"tanks\":").append(info.get("tanks_RAW"));
+            }
+            out.append('}');
+            send(sender, out.toString());
+            return;
+        }
+        if (args.length >= 7 && "inject".equalsIgnoreCase(args[0])) {
+            int dim = parseIntOr(args[1], Integer.MIN_VALUE);
+            int x = parseIntOr(args[2], 0);
+            int y = parseIntOr(args[3], 0);
+            int z = parseIntOr(args[4], 0);
+            String fluidName = args[5];
+            int amount = parseIntOr(args[6], 0);
+            net.minecraft.world.WorldServer world = server.getWorld(dim);
+            if (world == null) {
+                send(sender, "{\"error\":\"world not loaded\",\"dim\":" + dim + "}");
+                return;
+            }
+            TileEntity tile = world.getTileEntity(new BlockPos(x, y, z));
+            if (tile == null) {
+                send(sender, "{\"error\":\"no tile entity\",\"pos\":[" + x + "," + y + "," + z + "]}");
+                return;
+            }
+            net.minecraftforge.fluids.Fluid fluid =
+                    net.minecraftforge.fluids.FluidRegistry.getFluid(fluidName);
+            if (fluid == null) {
+                send(sender, "{\"error\":\"fluid not registered\",\"name\":\""
+                        + escapeJson(fluidName) + "\"}");
+                return;
+            }
+            net.minecraftforge.fluids.capability.IFluidHandler handler =
+                    findFluidHandler(tile);
+            if (handler == null) {
+                send(sender, "{\"error\":\"tile has no IFluidHandler capability\"}");
+                return;
+            }
+            int filled = handler.fill(new net.minecraftforge.fluids.FluidStack(fluid, amount), true);
+            send(sender, "{\"ok\":true,\"filled\":" + filled
+                    + ",\"fluid\":\"" + escapeJson(fluidName) + "\"}");
+            return;
+        }
+        send(sender, "{\"error\":\"unknown fluid subcommand — try stored <dim> <x> <y> <z> | inject <dim> <x> <y> <z> <fluidName> <amount>\"}");
+    }
+
+    private static net.minecraftforge.fluids.capability.IFluidHandler findFluidHandler(TileEntity tile) {
+        for (net.minecraft.util.EnumFacing dir : net.minecraft.util.EnumFacing.values()) {
+            if (tile.hasCapability(net.minecraftforge.fluids.capability.CapabilityFluidHandler
+                    .FLUID_HANDLER_CAPABILITY, dir)) {
+                return tile.getCapability(net.minecraftforge.fluids.capability.CapabilityFluidHandler
+                        .FLUID_HANDLER_CAPABILITY, dir);
+            }
+        }
+        if (tile.hasCapability(net.minecraftforge.fluids.capability.CapabilityFluidHandler
+                .FLUID_HANDLER_CAPABILITY, null)) {
+            return tile.getCapability(net.minecraftforge.fluids.capability.CapabilityFluidHandler
+                    .FLUID_HANDLER_CAPABILITY, null);
+        }
+        return null;
+    }
+
+    // §7.13 — oxygen vent state probe -----------------------------------------
+
+    /**
+     * {@code /artest vent info <dim> <x> <y> <z>} — exposes the oxygen vent's
+     * internal seal state, blob size, and the atmosphere it has imposed on its
+     * blob. Used by §7.13 sealed-room scenario to verify the seal-detect cycle.
+     *
+     * Returns:
+     * <pre>
+     * {
+     *   "isVent": true,
+     *   "isSealed": true|false,        // private TileOxygenVent.isSealed
+     *   "blobSize": &lt;int&gt;,             // AtmosphereHandler.getBlobSize(vent)
+     *   "blobAtmosphere": "...",       // current AreaBlob atmosphere unlocalized name
+     *   "hasFluid": true|false,        // private TileOxygenVent.hasFluid
+     *   "fluidAmount": &lt;int&gt;,          // tank contents
+     *   "energyStored": &lt;int&gt;
+     * }
+     * </pre>
+     */
+    private void handleVent(MinecraftServer server, ICommandSender sender, String[] args) {
+        // /artest vent reseal <dim> <x> <y> <z> — force a one-shot
+        // addBlock(handler, pos) on a vent's blob. Production runs the same
+        // call inside performFunction every 100 world-time ticks, but
+        // force-tick doesn't advance world time, so tests need an explicit
+        // probe to drive the seal cycle.
+        if (args.length >= 4 && "reseal".equalsIgnoreCase(args[0])) {
+            int dim = parseIntOr(args[1], Integer.MIN_VALUE);
+            int x = parseIntOr(args[2], 0);
+            int y = parseIntOr(args[3], 0);
+            int z = args.length >= 5 ? parseIntOr(args[4], 0) : 0;
+            net.minecraft.world.WorldServer world = server.getWorld(dim);
+            if (world == null) {
+                send(sender, "{\"error\":\"world not loaded\",\"dim\":" + dim + "}");
+                return;
+            }
+            TileEntity tile = world.getTileEntity(new BlockPos(x, y, z));
+            if (!(tile instanceof zmaster587.advancedRocketry.tile.atmosphere.TileOxygenVent)) {
+                send(sender, "{\"error\":\"not a TileOxygenVent\"}");
+                return;
+            }
+            zmaster587.advancedRocketry.tile.atmosphere.TileOxygenVent vent =
+                    (zmaster587.advancedRocketry.tile.atmosphere.TileOxygenVent) tile;
+            zmaster587.advancedRocketry.atmosphere.AtmosphereHandler handler =
+                    zmaster587.advancedRocketry.atmosphere.AtmosphereHandler
+                            .getOxygenHandler(dim);
+            if (handler == null) {
+                send(sender, "{\"error\":\"no atmosphere handler for dim\"}");
+                return;
+            }
+            // First-tick parity: ensure blob is registered before the seal
+            // check. addBlock NPEs if the vent isn't a registered blob.
+            try {
+                handler.getBlobSize(vent);
+            } catch (NullPointerException notRegistered) {
+                handler.registerBlob(vent, vent.getPos());
+            }
+
+            // Vent's canFormBlob() returns isTurnedOn(); default redstone
+            // state is ON which means the vent only runs when getting a
+            // redstone signal — useless for headless tests. Force state to OFF
+            // (the "always running, suppressed by redstone" mode in production).
+            try {
+                java.lang.reflect.Field stateF = zmaster587.advancedRocketry.tile.atmosphere
+                        .TileOxygenVent.class.getDeclaredField("state");
+                stateF.setAccessible(true);
+                stateF.set(vent, zmaster587.libVulpes.util.ZUtils.RedstoneState.OFF);
+            } catch (ReflectiveOperationException ignore) {
+                // Not fatal — addBlock will simply be a no-op when the vent
+                // can't form a blob, and the test will see sealed=false.
+            }
+            // AtmosphereBlob.addBlock is a no-op when the seed position is
+            // already in the graph (production re-evaluates the seal only when
+            // the blob is explicitly cleared). Clear the blob first so the
+            // flood-fill re-evaluates against current world state — critical
+            // for "wall just got broken, recheck seal" assertions.
+            handler.clearBlob(vent);
+
+            // AtmosphereBlob runs flood-fill ASYNC when
+            // atmosphereHandleBitMask&1==1 (default config bitMask=3).
+            // Schedule the work, then busy-wait up to 2s for the worker to
+            // settle so the test can read a stable sealed state.
+            handler.addBlock(vent,
+                    new zmaster587.libVulpes.util.HashedBlockPosition(vent.getPos()));
+            long deadline = System.currentTimeMillis() + 2000L;
+            while (System.currentTimeMillis() < deadline) {
+                try {
+                    java.lang.reflect.Field execF = zmaster587.advancedRocketry.util.AtmosphereBlob
+                            .class.getDeclaredField("executing");
+                    execF.setAccessible(true);
+                    Object blob = null;
+                    try {
+                        java.lang.reflect.Field blobsF =
+                                zmaster587.advancedRocketry.atmosphere.AtmosphereHandler
+                                        .class.getDeclaredField("blobs");
+                        blobsF.setAccessible(true);
+                        @SuppressWarnings("unchecked")
+                        java.util.HashMap<Object, Object> blobs =
+                                (java.util.HashMap<Object, Object>) blobsF.get(handler);
+                        blob = blobs.get(vent);
+                    } catch (Exception ignore) {}
+                    if (blob != null && !execF.getBoolean(blob)) break;
+                } catch (Exception ignore) {
+                    break;
+                }
+                try { Thread.sleep(10); } catch (InterruptedException ie) { Thread.currentThread().interrupt(); break; }
+            }
+            int finalBlobSize = handler.getBlobSize(vent);
+            boolean newlySealed = finalBlobSize > 0;
+            // Mirror the production setSealed(...) via reflection.
+            try {
+                java.lang.reflect.Field f = zmaster587.advancedRocketry.tile.atmosphere
+                        .TileOxygenVent.class.getDeclaredField("isSealed");
+                f.setAccessible(true);
+                f.setBoolean(vent, newlySealed);
+            } catch (ReflectiveOperationException e) {
+                send(sender, "{\"error\":\"reflection failed: " + escapeJson(e.getMessage()) + "\"}");
+                return;
+            }
+            send(sender, "{\"ok\":true,\"sealed\":" + newlySealed
+                    + ",\"blobSize\":" + finalBlobSize + "}");
+            return;
+        }
+        if (args.length < 4 || !"info".equalsIgnoreCase(args[0])) {
+            send(sender, "{\"error\":\"unknown vent subcommand — try info <dim> <x> <y> <z> | reseal <dim> <x> <y> <z>\"}");
+            return;
+        }
+        int dim = parseIntOr(args[1], Integer.MIN_VALUE);
+        int x = parseIntOr(args[2], 0);
+        int y = parseIntOr(args[3], 0);
+        int z = args.length >= 5 ? parseIntOr(args[4], 0) : 0;
+        net.minecraft.world.WorldServer world = server.getWorld(dim);
+        if (world == null) {
+            send(sender, "{\"error\":\"world not loaded\",\"dim\":" + dim + "}");
+            return;
+        }
+        TileEntity tile = world.getTileEntity(new BlockPos(x, y, z));
+        if (!(tile instanceof zmaster587.advancedRocketry.tile.atmosphere.TileOxygenVent)) {
+            send(sender, "{\"isVent\":false,\"tile\":\""
+                    + (tile == null ? "null" : tile.getClass().getName()) + "\"}");
+            return;
+        }
+        zmaster587.advancedRocketry.tile.atmosphere.TileOxygenVent vent =
+                (zmaster587.advancedRocketry.tile.atmosphere.TileOxygenVent) tile;
+
+        boolean isSealed;
+        boolean hasFluid;
+        try {
+            java.lang.reflect.Field f1 = zmaster587.advancedRocketry.tile.atmosphere.TileOxygenVent
+                    .class.getDeclaredField("isSealed");
+            f1.setAccessible(true);
+            isSealed = f1.getBoolean(vent);
+            java.lang.reflect.Field f2 = zmaster587.advancedRocketry.tile.atmosphere.TileOxygenVent
+                    .class.getDeclaredField("hasFluid");
+            f2.setAccessible(true);
+            hasFluid = f2.getBoolean(vent);
+        } catch (ReflectiveOperationException e) {
+            send(sender, "{\"error\":\"reflection failed: " + escapeJson(e.getMessage()) + "\"}");
+            return;
+        }
+
+        zmaster587.advancedRocketry.atmosphere.AtmosphereHandler handler =
+                zmaster587.advancedRocketry.atmosphere.AtmosphereHandler
+                        .getOxygenHandler(dim);
+        // Blob lookup throws NPE if the vent hasn't yet had performFunction
+        // called once (which is what registers the blob). Guard for that.
+        int blobSize;
+        if (handler == null) {
+            blobSize = -1;
+        } else {
+            try {
+                blobSize = handler.getBlobSize(vent);
+            } catch (NullPointerException notRegisteredYet) {
+                blobSize = -2; // sentinel: blob not registered
+            }
+        }
+        String blobAtm = "no-handler";
+        if (handler != null) {
+            zmaster587.advancedRocketry.api.IAtmosphere atm =
+                    handler.getAtmosphereType(new BlockPos(x, y + 1, z));
+            blobAtm = atm == null ? "null" : atm.getUnlocalizedName();
+        }
+
+        // Tank contents.
+        net.minecraftforge.fluids.capability.IFluidHandler fluidH = findFluidHandler(tile);
+        int fluidAmount = 0;
+        if (fluidH != null) {
+            for (net.minecraftforge.fluids.capability.IFluidTankProperties p : fluidH.getTankProperties()) {
+                if (p.getContents() != null) fluidAmount += p.getContents().amount;
+            }
+        }
+
+        // Energy.
+        int energyStored = 0;
+        net.minecraftforge.energy.IEnergyStorage es = null;
+        for (net.minecraft.util.EnumFacing dir : net.minecraft.util.EnumFacing.values()) {
+            if (tile.hasCapability(net.minecraftforge.energy.CapabilityEnergy.ENERGY, dir)) {
+                es = tile.getCapability(net.minecraftforge.energy.CapabilityEnergy.ENERGY, dir);
+                break;
+            }
+        }
+        if (es == null && tile.hasCapability(net.minecraftforge.energy.CapabilityEnergy.ENERGY, null)) {
+            es = tile.getCapability(net.minecraftforge.energy.CapabilityEnergy.ENERGY, null);
+        }
+        if (es != null) energyStored = es.getEnergyStored();
+
+        StringBuilder out = new StringBuilder("{");
+        out.append("\"isVent\":true");
+        out.append(",\"isSealed\":").append(isSealed);
+        out.append(",\"blobSize\":").append(blobSize);
+        out.append(",\"blobAtmosphere\":\"").append(escapeJson(blobAtm)).append('"');
+        out.append(",\"hasFluid\":").append(hasFluid);
+        out.append(",\"fluidAmount\":").append(fluidAmount);
+        out.append(",\"energyStored\":").append(energyStored);
+        out.append('}');
+        send(sender, out.toString());
     }
 }

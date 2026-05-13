@@ -86,4 +86,82 @@ public class ARConfigurationTest {
         assertEquals(4242, copy.orbit);
         assertEquals(256, copy.stationSize);
     }
+
+    /**
+     * §6.3 — performance section default-stability check.
+     *
+     * The PERFORMANCE config section in {@link ARConfiguration#loadPreInit} sets
+     * {@code atmosphereHandleBitMask} and {@code oxygenVentSize}. They don't have
+     * field initializers (default 0 until loadPreInit fills them from
+     * configuration), so this test asserts on the "raw post-construct" defaults
+     * AND on the clone behaviour — the same invariants other section tests
+     * verify. A field rename or accidental @ConfigProperty removal makes the
+     * compile fail or the clone diverge.
+     */
+    @Test
+    public void performanceConfigDefaultsStable() {
+        ARConfiguration cfg = new ARConfiguration();
+
+        // Raw defaults: no field initializer → JVM zero.
+        assertEquals("atmosphereHandleBitMask must default to 0 pre-loadPreInit",
+                0, cfg.atmosphereHandleBitMask);
+        assertEquals("oxygenVentSize must default to 0 pre-loadPreInit",
+                0, cfg.oxygenVentSize);
+
+        // Clone must carry performance fields end-to-end (they're @ConfigProperty
+        // tagged so loadPreInit→sync→clone is the production path).
+        cfg.atmosphereHandleBitMask = 3;
+        cfg.oxygenVentSize = 32;
+        ARConfiguration copy = new ARConfiguration(cfg);
+        assertEquals(3, copy.atmosphereHandleBitMask);
+        assertEquals(32, copy.oxygenVentSize);
+    }
+
+    /**
+     * §6.3 — robustness: constructing a config, mutating arbitrary fields,
+     * accessing every collection, then cloning must NOT throw on any path. This
+     * is the "unknown config (= partially-populated) does not crash" contract —
+     * production loadPreInit may leave some fields at JVM defaults if the user's
+     * config.cfg is missing keys, and downstream code MUST tolerate that.
+     */
+    @Test
+    public void unknownConfigDoesNotCrash() {
+        ARConfiguration cfg = new ARConfiguration();
+
+        // Access every initialised collection — must be non-null and iterable.
+        // (Catches accidental field removal that would NPE at config-sync time.)
+        assertEquals(0, cfg.bypassEntity.size());
+        assertEquals(0, cfg.torchBlocks.size());
+        assertEquals(0, cfg.blackListRocketBlocks.size());
+        assertEquals(0, cfg.standardGeodeOres.size());
+        assertEquals(0, cfg.standardLaserDrillOres.size());
+        assertEquals(0, cfg.laserBlackListDims.size());
+        assertEquals(0, cfg.initiallyKnownPlanets.size());
+        assertEquals(0, cfg.asteroidTypes.size());
+
+        // Reading every uninitialised primitive must NOT throw NPE / underflow.
+        // (Tripwire: if any of these become Integer/Float boxed, JVM-default
+        // null causes NPE on read.)
+        @SuppressWarnings("unused") int  i1 = cfg.atmosphereHandleBitMask;
+        @SuppressWarnings("unused") int  i2 = cfg.oxygenVentSize;
+        @SuppressWarnings("unused") int  i3 = cfg.maxBiomesPerPlanet;
+        @SuppressWarnings("unused") double d1 = cfg.rocketThrustMultiplier;
+        @SuppressWarnings("unused") double d2 = cfg.fuelCapacityMultiplier;
+        @SuppressWarnings("unused") float f1 = cfg.spaceLaserPowerMult;
+        @SuppressWarnings("unused") boolean b1 = cfg.launchingDestroysBlocks;
+        @SuppressWarnings("unused") boolean b2 = cfg.experimentalSpaceFlight;
+
+        // Cloning a partially populated config must succeed and preserve every
+        // mutation, even ones loadPreInit would never have set.
+        cfg.orbit = -777;                      // sentinel-out-of-range value
+        cfg.spaceLaserPowerMult = Float.NaN;   // pathological float
+        ARConfiguration clone = new ARConfiguration(cfg);
+        assertEquals(-777, clone.orbit);
+        assertTrue("NaN must survive clone (no silent normalisation)",
+                Float.isNaN(clone.spaceLaserPowerMult));
+
+        // Idempotent: getCurrentConfig() returns a non-null singleton regardless
+        // of which fields have been touched.
+        assertNotNull(ARConfiguration.getCurrentConfig());
+    }
 }

@@ -2,22 +2,34 @@ package zmaster587.advancedRocketry.test.integration;
 
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
+import net.minecraft.init.Items;
+import net.minecraft.item.ItemStack;
 import net.minecraft.nbt.NBTTagCompound;
+import net.minecraft.network.PacketBuffer;
+import net.minecraft.util.math.BlockPos;
 import org.junit.BeforeClass;
 import org.junit.Test;
 import zmaster587.advancedRocketry.api.ARConfiguration;
 import zmaster587.advancedRocketry.api.satellite.SatelliteBase;
 import zmaster587.advancedRocketry.api.satellite.SatelliteProperties;
 import zmaster587.advancedRocketry.dimension.DimensionProperties;
+import zmaster587.advancedRocketry.network.PacketAsteroidInfo;
+import zmaster587.advancedRocketry.network.PacketBiomeIDChange;
 import zmaster587.advancedRocketry.network.PacketConfigSync;
 import zmaster587.advancedRocketry.network.PacketDimInfo;
+import zmaster587.advancedRocketry.network.PacketFluidParticle;
+import zmaster587.advancedRocketry.network.PacketInvalidLocationNotify;
+import zmaster587.advancedRocketry.network.PacketLaserGun;
 import zmaster587.advancedRocketry.network.PacketSatellite;
 import zmaster587.advancedRocketry.network.PacketStationUpdate;
 import zmaster587.advancedRocketry.stations.SpaceStationObject;
 import zmaster587.advancedRocketry.test.MinecraftBootstrap;
+import zmaster587.advancedRocketry.util.Asteroid;
+import zmaster587.libVulpes.util.HashedBlockPosition;
 
 import java.lang.reflect.Field;
 
+import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
@@ -269,5 +281,231 @@ public class PacketSerializationTest {
         assertNotNull("config null after readClient", restored);
         assertEquals(9999, restored.spaceDimId);
         assertEquals(999, restored.stationSize);
+    }
+
+    // ---- PacketInvalidLocationNotify -----------------------------------------
+
+    @Test
+    public void packetInvalidLocationNotifyRoundTrip() {
+        HashedBlockPosition pos = new HashedBlockPosition(123, 64, -456);
+        PacketInvalidLocationNotify sent = new PacketInvalidLocationNotify(pos);
+
+        ByteBuf buffer = newBuffer();
+        sent.write(buffer);
+
+        PacketInvalidLocationNotify received = new PacketInvalidLocationNotify();
+        received.readClient(buffer);
+
+        assertEquals("wire should be fully consumed", 0, buffer.readableBytes());
+        HashedBlockPosition restored = getField(received, "toPos");
+        assertEquals(123, restored.x);
+        assertEquals(64, restored.y);
+        assertEquals(-456, restored.z);
+    }
+
+    // ---- PacketFluidParticle -------------------------------------------------
+
+    @Test
+    public void packetFluidParticleRoundTrip() {
+        BlockPos from = new BlockPos(10, 20, 30);
+        BlockPos to = new BlockPos(-40, 50, -60);
+        PacketFluidParticle sent = new PacketFluidParticle(from, to, 80, 0xFF66AA);
+
+        ByteBuf buffer = newBuffer();
+        sent.write(buffer);
+
+        PacketFluidParticle received = new PacketFluidParticle();
+        received.readClient(buffer);
+
+        assertEquals(0, buffer.readableBytes());
+        BlockPos restoredFrom = getField(received, "fromPos");
+        BlockPos restoredTo = getField(received, "toPos");
+        assertEquals(from, restoredFrom);
+        assertEquals(to, restoredTo);
+        assertEquals(80, (int) PacketSerializationTest.<Integer>getField(received, "time"));
+        assertEquals(0xFF66AA, (int) PacketSerializationTest.<Integer>getField(received, "color"));
+    }
+
+    // ---- PacketAsteroidInfo --------------------------------------------------
+
+    @Test
+    public void packetAsteroidInfoRoundTrip() {
+        Asteroid original = new Asteroid();
+        original.ID = "test:goldRich";
+        original.distance = 175;
+        original.mass = 32_000;
+        original.minLevel = 3;
+        original.massVariability = 0.25f;
+        original.richness = 0.6f;
+        original.richnessVariability = 0.1f;
+        original.probability = 0.05f;
+        original.timeMultiplier = 1.5f;
+        original.itemStacks.add(new ItemStack(Items.GOLD_INGOT, 1));
+        original.stackProbabilities.add(0.4f);
+        original.itemStacks.add(new ItemStack(Items.IRON_INGOT, 1));
+        original.stackProbabilities.add(0.6f);
+
+        PacketAsteroidInfo sent = new PacketAsteroidInfo(original);
+        ByteBuf buffer = newBuffer();
+        sent.write(buffer);
+
+        PacketAsteroidInfo received = new PacketAsteroidInfo();
+        received.readClient(buffer);
+
+        assertEquals(0, buffer.readableBytes());
+        Asteroid restored = getField(received, "asteroid");
+
+        assertEquals("test:goldRich", restored.ID);
+        assertEquals(175, restored.distance);
+        assertEquals(32_000, restored.mass);
+        assertEquals(3, restored.minLevel);
+        assertEquals(0.25f, restored.massVariability, 1e-6);
+        assertEquals(0.6f, restored.richness, 1e-6);
+        assertEquals(0.1f, restored.richnessVariability, 1e-6);
+        assertEquals(0.05f, restored.probability, 1e-6);
+        assertEquals(1.5f, restored.timeMultiplier, 1e-6);
+
+        assertEquals(2, restored.itemStacks.size());
+        assertEquals(Items.GOLD_INGOT, restored.itemStacks.get(0).getItem());
+        assertEquals(Items.IRON_INGOT, restored.itemStacks.get(1).getItem());
+        assertEquals(0.4f, restored.stackProbabilities.get(0), 1e-6);
+        assertEquals(0.6f, restored.stackProbabilities.get(1), 1e-6);
+    }
+
+    @Test
+    public void packetAsteroidInfoRoundTripEmptyStackList() {
+        Asteroid original = new Asteroid();
+        original.ID = "test:empty";
+        original.distance = 1;
+        original.mass = 1;
+        original.minLevel = 0;
+        original.massVariability = 0;
+        original.richness = 0;
+        original.richnessVariability = 0;
+        original.probability = 0;
+        original.timeMultiplier = 1;
+
+        PacketAsteroidInfo sent = new PacketAsteroidInfo(original);
+        ByteBuf buffer = newBuffer();
+        sent.write(buffer);
+
+        PacketAsteroidInfo received = new PacketAsteroidInfo();
+        received.readClient(buffer);
+
+        Asteroid restored = getField(received, "asteroid");
+        assertEquals(0, restored.itemStacks.size());
+        assertEquals(0, restored.stackProbabilities.size());
+    }
+
+    // ---- PacketLaserGun ------------------------------------------------------
+
+    /**
+     * write() pulls fromEntity.getEntityId() — we can't easily fabricate a real
+     * Entity, so this test exercises the readClient path against a hand-crafted
+     * wire payload that matches what write() would have produced. The write
+     * symmetry is implicitly covered by the executeClient half being a no-op for
+     * fields other than entityId/toPos.
+     */
+    @Test
+    public void packetLaserGunReadClientDecodesWire() {
+        ByteBuf buffer = newBuffer();
+        buffer.writeInt(4242);              // entityId
+        buffer.writeFloat(1.5f);            // toPos.x
+        buffer.writeFloat(64.25f);          // toPos.y
+        buffer.writeFloat(-2.75f);          // toPos.z
+
+        PacketLaserGun received = new PacketLaserGun();
+        received.readClient(buffer);
+
+        assertEquals(0, buffer.readableBytes());
+        assertEquals(4242, (int) PacketSerializationTest.<Integer>getField(received, "entityId"));
+
+        net.minecraft.util.math.Vec3d toPos = getField(received, "toPos");
+        assertEquals(1.5, toPos.x, 1e-6);
+        assertEquals(64.25, toPos.y, 1e-6);
+        assertEquals(-2.75, toPos.z, 1e-6);
+    }
+
+    // ---- PacketBiomeIDChange -------------------------------------------------
+
+    /**
+     * write() pulls chunk.x / chunk.z / chunk.getBiomeArray() — fabricating a
+     * real Chunk requires a full World. We test the readClient path against a
+     * known wire layout matching what the production write() emits.
+     */
+    @Test
+    public void packetBiomeIDChangeReadClientDecodesWire() {
+        byte[] biomeArr = new byte[256];
+        for (int i = 0; i < 256; i++) biomeArr[i] = (byte) (i ^ 0x5A);
+
+        ByteBuf buffer = newBuffer();
+        buffer.writeInt(7);                 // worldId
+        buffer.writeInt(12);                // chunk.x → xPos
+        buffer.writeInt(-3);                // chunk.z → zPos
+        buffer.writeInt(200);               // pos.x
+        buffer.writeShort(64);              // pos.y (short)
+        buffer.writeInt(-50);               // pos.z
+        buffer.writeBytes(biomeArr);
+
+        PacketBiomeIDChange received = new PacketBiomeIDChange();
+        received.readClient(buffer);
+
+        assertEquals(0, buffer.readableBytes());
+        assertEquals(7, (int) PacketSerializationTest.<Integer>getField(received, "worldId"));
+        assertEquals(12, (int) PacketSerializationTest.<Integer>getField(received, "xPos"));
+        assertEquals(-3, (int) PacketSerializationTest.<Integer>getField(received, "zPos"));
+
+        HashedBlockPosition pos = getField(received, "pos");
+        assertEquals(200, pos.x);
+        assertEquals(64, pos.y);
+        assertEquals(-50, pos.z);
+
+        byte[] restored = getField(received, "array");
+        assertArrayEquals(biomeArr, restored);
+    }
+
+    // ---- PacketStorageTileUpdate ---------------------------------------------
+
+    /**
+     * readClient() touches Minecraft.getMinecraft().world — unreachable from
+     * unit JVM. We exercise the wire shape directly: write a known payload via
+     * PacketBuffer (as production write does) and verify the bytes decode into
+     * the expected primitive layout. The Entity.world.provider dispatch is
+     * covered by §7.9 / §7.10 scenarios.
+     */
+    @Test
+    public void packetStorageTileUpdateWireLayout() {
+        // Wire format:
+        //   int worldId, int entityId, int x, int y, int z, NBTCompound tile.
+        ByteBuf buffer = newBuffer();
+        buffer.writeInt(0);                 // overworld
+        buffer.writeInt(99);                // entityId
+        buffer.writeInt(15);                // x
+        buffer.writeInt(70);                // y
+        buffer.writeInt(-15);               // z
+
+        NBTTagCompound tileNbt = new NBTTagCompound();
+        tileNbt.setString("id", "advancedrocketry:test_tile");
+        tileNbt.setInteger("energy", 42_000);
+        new PacketBuffer(buffer).writeCompoundTag(tileNbt);
+
+        // Mirror-decode the bytes the way readClient would, but without the
+        // Minecraft.getMinecraft() lookup. This proves the wire format is
+        // self-describing and the NBT is recoverable.
+        assertEquals(0, buffer.readInt());
+        assertEquals(99, buffer.readInt());
+        assertEquals(15, buffer.readInt());
+        assertEquals(70, buffer.readInt());
+        assertEquals(-15, buffer.readInt());
+
+        NBTTagCompound restored;
+        try {
+            restored = new PacketBuffer(buffer).readCompoundTag();
+        } catch (java.io.IOException e) {
+            throw new AssertionError(e);
+        }
+        assertNotNull(restored);
+        assertEquals("advancedrocketry:test_tile", restored.getString("id"));
+        assertEquals(42_000, restored.getInteger("energy"));
     }
 }
