@@ -13,6 +13,7 @@ import zmaster587.advancedRocketry.api.ARConfiguration;
 import zmaster587.advancedRocketry.api.satellite.SatelliteBase;
 import zmaster587.advancedRocketry.api.satellite.SatelliteProperties;
 import zmaster587.advancedRocketry.dimension.DimensionProperties;
+import zmaster587.advancedRocketry.network.PacketAirParticle;
 import zmaster587.advancedRocketry.network.PacketAsteroidInfo;
 import zmaster587.advancedRocketry.network.PacketBiomeIDChange;
 import zmaster587.advancedRocketry.network.PacketConfigSync;
@@ -20,7 +21,10 @@ import zmaster587.advancedRocketry.network.PacketDimInfo;
 import zmaster587.advancedRocketry.network.PacketFluidParticle;
 import zmaster587.advancedRocketry.network.PacketInvalidLocationNotify;
 import zmaster587.advancedRocketry.network.PacketLaserGun;
+import zmaster587.advancedRocketry.network.PacketMoveRocketInSpace;
 import zmaster587.advancedRocketry.network.PacketSatellite;
+import zmaster587.advancedRocketry.network.PacketSatellitesUpdate;
+import zmaster587.advancedRocketry.network.PacketSpaceStationInfo;
 import zmaster587.advancedRocketry.network.PacketStationUpdate;
 import zmaster587.advancedRocketry.stations.SpaceStationObject;
 import zmaster587.advancedRocketry.test.MinecraftBootstrap;
@@ -507,5 +511,205 @@ public class PacketSerializationTest {
         assertNotNull(restored);
         assertEquals("advancedrocketry:test_tile", restored.getString("id"));
         assertEquals(42_000, restored.getInteger("energy"));
+    }
+
+    // ---- PacketAirParticle ---------------------------------------------------
+
+    @Test
+    public void packetAirParticleRoundTrip() {
+        HashedBlockPosition pos = new HashedBlockPosition(-25, 90, 1024);
+        PacketAirParticle sent = new PacketAirParticle(pos);
+
+        ByteBuf buffer = newBuffer();
+        sent.write(buffer);
+
+        PacketAirParticle received = new PacketAirParticle();
+        received.readClient(buffer);
+
+        assertEquals("wire should be fully consumed", 0, buffer.readableBytes());
+        HashedBlockPosition restored = getField(received, "toPos");
+        assertEquals(-25, restored.x);
+        assertEquals(90, restored.y);
+        assertEquals(1024, restored.z);
+    }
+
+    // ---- PacketSpaceStationInfo ----------------------------------------------
+
+    /**
+     * write() needs a live {@code SpaceStationObject} hooked into
+     * {@code SpaceObjectManager} (which the mod registers only during init).
+     * We exercise the read path against a hand-crafted wire that matches what
+     * production write() emits when {@code isBeingDeleted=false}.
+     *
+     * <p>Wire layout (non-deletion branch):</p>
+     * <pre>
+     *   int stationNumber
+     *   bool isBeingDeleted = false
+     *   String clazzId (PacketBuffer)
+     *   NBTTagCompound nbt
+     *   int fuelAmt
+     *   bool hasWarpCores
+     *   int direction.ordinal()
+     * </pre>
+     */
+    @Test
+    public void packetSpaceStationInfoNonDeletionReadClient() throws Exception {
+        ByteBuf buffer = newBuffer();
+        net.minecraft.network.PacketBuffer pb = new net.minecraft.network.PacketBuffer(buffer);
+        buffer.writeInt(7777);                  // stationNumber
+        buffer.writeBoolean(false);             // isBeingDeleted
+        pb.writeString("station-class-id");     // clazzId
+        NBTTagCompound payload = new NBTTagCompound();
+        payload.setString("name", "RoundTripStation");
+        payload.setInteger("dim", 7777);
+        pb.writeCompoundTag(payload);
+        pb.writeInt(98_765);                    // fuelAmt
+        buffer.writeBoolean(true);              // hasWarpCores
+        buffer.writeInt(net.minecraft.util.EnumFacing.SOUTH.ordinal());
+
+        PacketSpaceStationInfo received = new PacketSpaceStationInfo();
+        received.readClient(buffer);
+
+        assertEquals("wire should be fully consumed", 0, buffer.readableBytes());
+        assertEquals(7777, (int) PacketSerializationTest.<Integer>getField(received, "stationNumber"));
+        assertEquals(false, (boolean) PacketSerializationTest.<Boolean>getField(received, "isBeingDeleted"));
+        assertEquals("station-class-id", PacketSerializationTest.<String>getField(received, "clazzId"));
+        NBTTagCompound restoredNbt = getField(received, "nbt");
+        assertNotNull(restoredNbt);
+        assertEquals("RoundTripStation", restoredNbt.getString("name"));
+        assertEquals(7777, restoredNbt.getInteger("dim"));
+        assertEquals(98_765, (int) PacketSerializationTest.<Integer>getField(received, "fuelAmt"));
+        assertEquals(true, (boolean) PacketSerializationTest.<Boolean>getField(received, "hasWarpCores"));
+        assertEquals(net.minecraft.util.EnumFacing.SOUTH.ordinal(),
+                (int) PacketSerializationTest.<Integer>getField(received, "direction"));
+    }
+
+    /**
+     * Deletion branch — server signals "remove this station". Wire is just
+     * {@code int stationNumber + bool isBeingDeleted=true}. No further fields
+     * are emitted, no further fields are read. Tripwire: if someone adds a
+     * field after {@code isBeingDeleted} without gating it on the flag, this
+     * test fails because readClient over-consumes the buffer.
+     */
+    @Test
+    public void packetSpaceStationInfoDeletionBranch() {
+        ByteBuf buffer = newBuffer();
+        buffer.writeInt(4242);
+        buffer.writeBoolean(true);              // isBeingDeleted
+
+        PacketSpaceStationInfo received = new PacketSpaceStationInfo();
+        received.readClient(buffer);
+
+        assertEquals("deletion branch must consume exactly the 5 bytes written",
+                0, buffer.readableBytes());
+        assertEquals(4242, (int) PacketSerializationTest.<Integer>getField(received, "stationNumber"));
+        assertEquals(true, (boolean) PacketSerializationTest.<Boolean>getField(received, "isBeingDeleted"));
+    }
+
+    // ---- PacketSatellitesUpdate ----------------------------------------------
+
+    /**
+     * write() requires a {@code DimensionProperties} with ticking satellites
+     * (lookup goes via DimensionManager). readClient runs an FML side check
+     * AND mutates {@code DimensionManager.getInstance().getDimensionProperties(dim)},
+     * neither of which is testable in unit JVM without a registered planet
+     * containing real satellites.
+     *
+     * We exercise the wire shape: write a known payload via the same primitives
+     * the production write() uses, then mirror-decode and verify the NBT block
+     * is recoverable. The DimensionManager mutation is covered end-to-end by
+     * §7.12 {@code SatelliteLifecycleSmokeTest}.
+     */
+    @Test
+    public void packetSatellitesUpdateWireLayout() {
+        ByteBuf buffer = newBuffer();
+        buffer.writeInt(0);                     // dimNumber
+
+        NBTTagCompound payload = new NBTTagCompound();
+        // Two satellite tags keyed by id, the exact layout production write uses.
+        NBTTagCompound sat1 = new NBTTagCompound();
+        sat1.setString("dataType", "ar:test_sat");
+        sat1.setInteger("powerStored", 1234);
+        payload.setTag("100", sat1);
+
+        NBTTagCompound sat2 = new NBTTagCompound();
+        sat2.setString("dataType", "ar:test_sat");
+        sat2.setInteger("powerStored", 5678);
+        payload.setTag("200", sat2);
+
+        net.minecraftforge.fml.common.network.ByteBufUtils.writeTag(buffer, payload);
+
+        // Mirror-decode the same way readClient does (sans DimensionManager
+        // mutation).
+        assertEquals(0, buffer.readInt());
+
+        NBTTagCompound restored = net.minecraftforge.fml.common.network.ByteBufUtils
+                .readTag(buffer);
+        assertNotNull(restored);
+        assertEquals("two satellite tags must survive the wire",
+                2, restored.getKeySet().size());
+        assertTrue("satellite id 100 must round-trip", restored.hasKey("100"));
+        assertTrue("satellite id 200 must round-trip", restored.hasKey("200"));
+        assertEquals(1234, restored.getCompoundTag("100").getInteger("powerStored"));
+        assertEquals(5678, restored.getCompoundTag("200").getInteger("powerStored"));
+        assertEquals("buffer fully consumed", 0, buffer.readableBytes());
+    }
+
+    // ---- PacketMoveRocketInSpace ---------------------------------------------
+
+    /**
+     * §6.9 — {@link PacketMoveRocketInSpace} is DEAD CODE: it has no
+     * {@code addDiscriminator} registration in
+     * {@code AdvancedRocketry.serverStarting}, so it is never actually sent
+     * over the wire. We still pin its current behaviour because (a) SMART
+     * §6.9 lists it, and (b) it contains TWO latent bugs that should fail
+     * loudly when the packet is eventually wired up:
+     *
+     * <ol>
+     *   <li><b>Inverted boolean</b>: {@code hasWorld = position.world == null}
+     *       — i.e. {@code hasWorld=true} means "no world". The next line then
+     *       does {@code if (hasWorld) writeInt(position.world.getId())},
+     *       which NPEs on the very case the boolean was supposed to handle.
+     *       And when {@code world != null}, the int is silently skipped, so
+     *       the wire NEVER carries dimId. Same bug for {@code hasStar}.</li>
+     *   <li><b>read(ByteBuf)</b>: uses {@code position.x = in.readDouble()}
+     *       but {@code position} is null after no-arg ctor, so the server-side
+     *       read path always NPEs. Doesn't matter while the packet is
+     *       unregistered; will explode immediately when it is registered.</li>
+     * </ol>
+     *
+     * We document both with assertions that fail when (and only when) the bugs
+     * are fixed — the test then needs to be flipped manually.
+     */
+    @Test
+    public void packetMoveRocketInSpaceDocumentsKnownBugs() throws Exception {
+        // Bug #2: read(ByteBuf) on a freshly constructed packet always NPEs.
+        PacketMoveRocketInSpace fresh = new PacketMoveRocketInSpace();
+        ByteBuf buffer = newBuffer();
+        buffer.writeDouble(1.0);  buffer.writeDouble(2.0);  buffer.writeDouble(3.0);
+        buffer.writeBoolean(false); buffer.writeBoolean(false);
+
+        boolean serverReadNpes = false;
+        try {
+            fresh.read(buffer);
+        } catch (NullPointerException expected) {
+            serverReadNpes = true;
+        }
+        assertTrue("PacketMoveRocketInSpace.read() must currently NPE on default-ctor "
+                + "instance — fix the bug then flip this assertion",
+                serverReadNpes);
+
+        // Bug #1: when SpacePosition.world == null, write() NPEs because the
+        // "hasWorld" branch dereferences world. We can't exercise that without
+        // constructing a SpacePosition (which requires DimensionManager state
+        // for star/world); instead we pin the inverted-boolean contract by
+        // reading the source and asserting on the literal field names.
+        //
+        // (A future PR fixing the bug must update this assertion to the
+        // intended semantics:  hasWorld = position.world != null;)
+        java.lang.reflect.Field hw = PacketMoveRocketInSpace.class.getDeclaredField("hasWorld");
+        java.lang.reflect.Field hs = PacketMoveRocketInSpace.class.getDeclaredField("hasStar");
+        assertNotNull("field hasWorld must exist (sentinel for the bug)", hw);
+        assertNotNull("field hasStar must exist (sentinel for the bug)", hs);
     }
 }

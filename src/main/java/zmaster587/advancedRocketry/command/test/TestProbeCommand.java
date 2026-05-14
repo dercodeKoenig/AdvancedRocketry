@@ -154,6 +154,18 @@ public class TestProbeCommand extends CommandBase {
                 case "enchant":
                     handleEnchant(server, sender, tail(args));
                     break;
+                case "beacon":
+                    handleBeacon(server, sender, tail(args));
+                    break;
+                case "entity":
+                    handleEntity(server, sender, tail(args));
+                    break;
+                case "block":
+                    handleBlock(server, sender, tail(args));
+                    break;
+                case "field":
+                    handleField(server, sender, tail(args));
+                    break;
                 default:
                     send(sender, "{\"error\":\"unknown subcommand\",\"sub\":\"" + args[0] + "\"}");
             }
@@ -2548,5 +2560,232 @@ public class TestProbeCommand extends CommandBase {
         out.append(",\"energyStored\":").append(energyStored);
         out.append('}');
         send(sender, out.toString());
+    }
+
+    // §7.18 — beacon location probe -------------------------------------------
+
+    /**
+     * {@code /artest beacon list <dim>} — returns the dim's registered beacon
+     * locations. Beacons add themselves to
+     * {@code DimensionProperties.beaconLocations} when their multiblock is
+     * enabled (via {@code TileBeacon.setMachineEnabled(true)}).
+     */
+    private void handleBeacon(MinecraftServer server, ICommandSender sender, String[] args) {
+        if (args.length < 2 || !"list".equalsIgnoreCase(args[0])) {
+            send(sender, "{\"error\":\"unknown beacon subcommand — try list <dim>\"}");
+            return;
+        }
+        int dim = parseIntOr(args[1], Integer.MIN_VALUE);
+        // getDimensionProperties has an overworld-fallback for unknown ids —
+        // use isDimensionCreated to detect "truly registered AR dim".
+        if (!zmaster587.advancedRocketry.dimension.DimensionManager.getInstance()
+                .isDimensionCreated(dim)) {
+            send(sender, "{\"error\":\"dim not registered\",\"dim\":" + dim + "}");
+            return;
+        }
+        zmaster587.advancedRocketry.dimension.DimensionProperties props =
+                zmaster587.advancedRocketry.dimension.DimensionManager.getInstance()
+                        .getDimensionProperties(dim);
+        java.util.Set<zmaster587.libVulpes.util.HashedBlockPosition> locs =
+                props.getBeacons();
+        StringBuilder out = new StringBuilder("{\"dim\":").append(dim);
+        out.append(",\"count\":").append(locs == null ? -1 : locs.size());
+        out.append(",\"locations\":[");
+        if (locs != null) {
+            boolean first = true;
+            for (zmaster587.libVulpes.util.HashedBlockPosition p : locs) {
+                if (!first) out.append(',');
+                first = false;
+                out.append('[').append(p.x).append(',').append(p.y).append(',').append(p.z).append(']');
+            }
+        }
+        out.append("]}");
+        send(sender, out.toString());
+    }
+
+    // §7.18 — entity spawn probe ----------------------------------------------
+
+    /**
+     * {@code /artest entity spawn <dim> <x> <y> <z> <entityRegistryName>} —
+     * spawns an entity by its registry name (e.g.
+     * {@code advancedrocketry:hovercraft}). Returns the spawned entity id, or
+     * an error if the entity class doesn't have a {@code (World,double,double,double)}
+     * or {@code (World)} ctor.
+     *
+     * {@code /artest entity info <dim> <entityId>} — reports the entity's
+     * class + position + alive state.
+     */
+    private void handleEntity(MinecraftServer server, ICommandSender sender, String[] args) {
+        if (args.length >= 6 && "spawn".equalsIgnoreCase(args[0])) {
+            int dim = parseIntOr(args[1], Integer.MIN_VALUE);
+            double x = parseDoubleOr(args[2], 0);
+            double y = parseDoubleOr(args[3], 0);
+            double z = parseDoubleOr(args[4], 0);
+            String entityName = args[5];
+            net.minecraft.world.WorldServer world = server.getWorld(dim);
+            if (world == null) {
+                send(sender, "{\"error\":\"world not loaded\",\"dim\":" + dim + "}");
+                return;
+            }
+            Class<? extends net.minecraft.entity.Entity> clazz =
+                    net.minecraft.entity.EntityList.getClass(new ResourceLocation(entityName));
+            if (clazz == null) {
+                send(sender, "{\"error\":\"unknown entity name\",\"name\":\""
+                        + escapeJson(entityName) + "\"}");
+                return;
+            }
+            net.minecraft.entity.Entity entity;
+            try {
+                // Prefer (World, x, y, z) ctor.
+                java.lang.reflect.Constructor<? extends net.minecraft.entity.Entity> ctor;
+                try {
+                    ctor = clazz.getConstructor(net.minecraft.world.World.class,
+                            double.class, double.class, double.class);
+                    entity = ctor.newInstance(world, x, y, z);
+                } catch (NoSuchMethodException nsm) {
+                    ctor = clazz.getConstructor(net.minecraft.world.World.class);
+                    entity = ctor.newInstance(world);
+                    entity.setPosition(x, y, z);
+                }
+            } catch (ReflectiveOperationException e) {
+                send(sender, "{\"error\":\"spawn failed: "
+                        + escapeJson(e.getClass().getSimpleName() + ": " + e.getMessage())
+                        + "\"}");
+                return;
+            }
+            boolean spawned = world.spawnEntity(entity);
+            send(sender, "{\"ok\":true,\"spawned\":" + spawned
+                    + ",\"entityId\":" + entity.getEntityId()
+                    + ",\"entityClass\":\"" + escapeJson(entity.getClass().getName()) + "\"}");
+            return;
+        }
+        if (args.length >= 3 && "info".equalsIgnoreCase(args[0])) {
+            int dim = parseIntOr(args[1], Integer.MIN_VALUE);
+            int id = parseIntOr(args[2], -1);
+            net.minecraft.world.WorldServer world = server.getWorld(dim);
+            if (world == null) {
+                send(sender, "{\"error\":\"world not loaded\",\"dim\":" + dim + "}");
+                return;
+            }
+            net.minecraft.entity.Entity entity = world.getEntityByID(id);
+            if (entity == null) {
+                send(sender, "{\"isAlive\":false,\"entityId\":" + id + "}");
+                return;
+            }
+            send(sender, "{\"isAlive\":true,\"entityId\":" + id
+                    + ",\"entityClass\":\"" + escapeJson(entity.getClass().getName()) + "\""
+                    + ",\"posX\":" + entity.posX
+                    + ",\"posY\":" + entity.posY
+                    + ",\"posZ\":" + entity.posZ
+                    + ",\"isDead\":" + entity.isDead + "}");
+            return;
+        }
+        send(sender, "{\"error\":\"unknown entity subcommand — try spawn <dim> <x> <y> <z> <name> | info <dim> <entityId>\"}");
+    }
+
+    private static double parseDoubleOr(String s, double dflt) {
+        try { return Double.parseDouble(s); } catch (NumberFormatException nfe) { return dflt; }
+    }
+
+    // §7.18 — generic block-state probe ---------------------------------------
+
+    /**
+     * {@code /artest block at <dim> <x> <y> <z>} — returns the block registry
+     * name + meta at a position. Used by tests that need to assert on world
+     * blockstate changes (e.g. force-field projection, terraformer block
+     * mutation) without going through a tile entity.
+     */
+    private void handleBlock(MinecraftServer server, ICommandSender sender, String[] args) {
+        if (args.length < 5 || !"at".equalsIgnoreCase(args[0])) {
+            send(sender, "{\"error\":\"unknown block subcommand — try at <dim> <x> <y> <z>\"}");
+            return;
+        }
+        int dim = parseIntOr(args[1], Integer.MIN_VALUE);
+        int x = parseIntOr(args[2], 0);
+        int y = parseIntOr(args[3], 0);
+        int z = parseIntOr(args[4], 0);
+        net.minecraft.world.WorldServer world = server.getWorld(dim);
+        if (world == null) {
+            send(sender, "{\"error\":\"world not loaded\",\"dim\":" + dim + "}");
+            return;
+        }
+        BlockPos pos = new BlockPos(x, y, z);
+        net.minecraft.block.state.IBlockState state = world.getBlockState(pos);
+        net.minecraft.util.ResourceLocation rn = state.getBlock().getRegistryName();
+        @SuppressWarnings("deprecation")
+        int meta = state.getBlock().getMetaFromState(state);
+        send(sender, "{\"pos\":[" + x + "," + y + "," + z + "]"
+                + ",\"block\":\"" + escapeJson(rn == null ? "null" : rn.toString()) + "\""
+                + ",\"meta\":" + meta
+                + ",\"isAir\":" + world.isAirBlock(pos)
+                + "}");
+    }
+
+    // §7.18 — force-field projector state probe -------------------------------
+
+    /**
+     * {@code /artest field info <dim> <x> <y> <z>} — reads the projector's
+     * private {@code extensionRange} field via reflection so tests can verify
+     * "the field has grown" without scanning blocks. Also blocks the server
+     * thread up to ~1.5s (30 sleeps × 50ms) to let the projector's
+     * {@code % 5 == 0} time gate hit naturally — production runs the
+     * extension cycle only every 5 world ticks, and {@code tile force-tick}
+     * doesn't advance world time, so a wait against the natural tick loop is
+     * the only way to drive extension without modifying production logic.
+     *
+     * <p>{@code /artest field info-now <dim> <x> <y> <z>} — same probe but
+     * without the wait (snapshot the current state).</p>
+     */
+    private void handleField(MinecraftServer server, ICommandSender sender, String[] args) {
+        if (args.length < 5 ||
+                !("info".equalsIgnoreCase(args[0]) || "info-now".equalsIgnoreCase(args[0]))) {
+            send(sender, "{\"error\":\"unknown field subcommand — try info <dim> <x> <y> <z> | info-now <dim> <x> <y> <z>\"}");
+            return;
+        }
+        boolean waitForTickGate = "info".equalsIgnoreCase(args[0]);
+        int dim = parseIntOr(args[1], Integer.MIN_VALUE);
+        int x = parseIntOr(args[2], 0);
+        int y = parseIntOr(args[3], 0);
+        int z = parseIntOr(args[4], 0);
+        net.minecraft.world.WorldServer world = server.getWorld(dim);
+        if (world == null) {
+            send(sender, "{\"error\":\"world not loaded\",\"dim\":" + dim + "}");
+            return;
+        }
+        BlockPos pos = new BlockPos(x, y, z);
+        TileEntity tile = world.getTileEntity(pos);
+        if (!(tile instanceof zmaster587.advancedRocketry.tile.TileForceFieldProjector)) {
+            send(sender, "{\"isProjector\":false,\"tile\":\""
+                    + (tile == null ? "null" : tile.getClass().getName()) + "\"}");
+            return;
+        }
+        zmaster587.advancedRocketry.tile.TileForceFieldProjector proj =
+                (zmaster587.advancedRocketry.tile.TileForceFieldProjector) tile;
+
+        if (waitForTickGate) {
+            // Loop up to 30 × 50ms = 1.5s while releasing the server thread so
+            // natural ticks (and the projector's % 5 time gate) fire. Bail
+            // early once we observe ANY non-zero extensionRange.
+            for (int iter = 0; iter < 30; iter++) {
+                if (readExtensionRange(proj) != 0) break;
+                try { Thread.sleep(50L); } catch (InterruptedException ie) { Thread.currentThread().interrupt(); break; }
+            }
+        }
+
+        short range = readExtensionRange(proj);
+        boolean powered = world.isBlockPowered(pos);
+        send(sender, "{\"isProjector\":true,\"extensionRange\":" + range
+                + ",\"isPowered\":" + powered + "}");
+    }
+
+    private static short readExtensionRange(zmaster587.advancedRocketry.tile.TileForceFieldProjector proj) {
+        try {
+            java.lang.reflect.Field f = zmaster587.advancedRocketry.tile.TileForceFieldProjector
+                    .class.getDeclaredField("extensionRange");
+            f.setAccessible(true);
+            return f.getShort(proj);
+        } catch (ReflectiveOperationException e) {
+            return -1;
+        }
     }
 }
