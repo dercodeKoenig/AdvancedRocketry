@@ -206,6 +206,21 @@ dependencies {
     testImplementation("com.github.stannismod.forge:forge-test-framework:0.4.0:dev")
 }
 
+// The client harness (testClient) launches the real Minecraft client through
+// FG6's `legacydev` launcher. legacydev 0.2.4.1 bundles GradleForgeHacks /
+// CoremodTweaker — the machinery that scans the run classpath for coremods and
+// FMLAT access transformers and remaps their SRG names to MCP for the dev
+// environment. FG6's own runClient uses 0.2.4.1; but the Forge POM only
+// requests `legacydev:0.2.3.+`, and 0.2.3.1 predates that machinery entirely.
+// Without this force the harness launches with 0.2.3.1 and dependency-mod
+// access transformers are silently skipped — JEI's jei_at.cfg never widens
+// TextureMap.initMissingImage(), so mod init dies with an IllegalAccessError.
+configurations.named("testRuntimeClasspath") {
+    resolutionStrategy {
+        force("net.minecraftforge:legacydev:0.2.4.1")
+    }
+}
+
 // ─── Test task topology ──────────────────────────────────────────────────────
 //
 // Test TYPE is selected by DIRECTORY, never by command-line flags. Each of the
@@ -539,6 +554,13 @@ val gitHash: String by lazy {
 // Name pattern: [archiveBaseName]-[archiveAppendix]-[archiveVersion]-[archiveClassifier].[archiveExtension]
 tasks.withType(Jar::class) {
     archiveAppendix.set(mcVersion)
+    // The testClient harness layer merges build/resources/main into
+    // build/classes/java/main (so the client sees AR's assets co-located with
+    // its @Mod class, like a packaged jar). That leaves the resource files
+    // present in BOTH source-set output dirs, so a subsequent `jar` run sees
+    // every asset twice. The duplicates are byte-identical, so first-wins is
+    // correct.
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
     manifest {
         attributes(
                 "Built-By" to System.getProperty("user.name"),

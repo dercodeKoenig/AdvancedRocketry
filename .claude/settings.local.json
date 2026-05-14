@@ -1,7 +1,9 @@
 {
   "permissions": {
     "allow": [
-      "Bash(mkdir -p .agent/tasks .agent/system .agent/sops/integrations .agent/sops/debugging .agent/sops/development .agent/sops/deployment .agent/grafana .claude)"
+      "Bash(mkdir -p .agent/tasks .agent/system .agent/sops/integrations .agent/sops/debugging .agent/sops/development .agent/sops/deployment .agent/grafana .claude)",
+      "Read(//tmp/**)",
+      "Bash(unzip -o -q ~/.gradle/caches/forge_gradle/mcp_repo/net/minecraft/joined/1.12.2/joined-1.12.2.jar)"
     ]
   }
 }
