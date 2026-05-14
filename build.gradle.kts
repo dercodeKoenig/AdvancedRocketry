@@ -203,52 +203,112 @@ dependencies {
     // MCP-named MC classes, the reobf (no-classifier) jar has SRG names and
     // won't compile against the dev classpath.
     testImplementation("junit:junit:4.13.2")
-    testImplementation("com.github.stannismod.forge:forge-test-framework:0.3.0:dev")
+    testImplementation("com.github.stannismod.forge:forge-test-framework:0.4.0:dev")
 }
 
-tasks.test {
+// ─── Test task topology ──────────────────────────────────────────────────────
+//
+// Test TYPE is selected by DIRECTORY, never by command-line flags. Each of the
+// four SMART §2 pyramid layers lives in its own package under src/test/java and
+// has its own Gradle task:
+//
+//   ./gradlew testUnit         → §2.1 pure unit            (fast, no harness)
+//   ./gradlew testIntegration  → §2.2 MC-bootstrap integ.  (fast, no harness)
+//   ./gradlew testServer       → §2.3 dedicated-server e2e (harness, forked JVMs)
+//   ./gradlew testClient       → §2.4 real-client + server (harness + GL client)
+//   ./gradlew test             → ALL of the above (umbrella — runs the whole
+//                                src/test tree by delegating to the four tasks)
+//
+// No -P flags are REQUIRED for any of these. Two OPTIONAL perf/mode overrides
+// still exist (they have sane defaults — you never have to pass them):
+//   -Pforks=N      parallel harness JVMs               (default 3)
+//   -Pweather=...  expected weather mode for §7.5       (default shared)
+//
+// In the IDE, "Run all tests in directory" on any of the four packages works
+// natively (IntelliJ drives JUnit directly, bypassing the Gradle filter).
+
+val weatherMode: String = (project.findProperty("weather") as? String) ?: "shared"
+val parallelForks: Int = (project.findProperty("forks") as? String)?.toIntOrNull() ?: 3
+
+// Tell the reusable test framework (v0.2.0+) which launcher / asset layout to use.
+// Defaults in the framework target RFG/FG4 — these overrides flip it to FG6.
+//
+// FG6's `legacydev` module is the GradleStart analog: net.minecraftforge.legacydev
+// .MainServer / .MainClient. Both are env-var driven (mainClass, tweakClass,
+// MCP_TO_SRG, MC_VERSION, assetIndex, assetDirectory, nativesDirectory). The
+// server harness gets those from the test JVM's environment (forwarded from
+// runServer below); the client harness gets them via the framework's
+// forge.test.client.env.* channel (forwarded from runClient below) because
+// server and client need DIFFERENT mainClass/tweakClass and can't share one
+// inherited environment.
+val fg6HarnessProps = mapOf(
+    "forge.test.launcher.class.server" to "net.minecraftforge.legacydev.MainServer",
+    "forge.test.launcher.class.client" to "net.minecraftforge.legacydev.MainClient",
+    "forge.test.assets.dir" to "${gradle.gradleUserHomeDir}/caches/forge_gradle/assets",
+    "forge.test.launcher.legacyArgs" to "false"
+)
+
+// Reflects a FG6 MinecraftRunTask's RunConfig and resolves its environment +
+// properties through the exact token map FG6 uses at runtime
+// (RunConfigGenerator.configureTokensLazy). Returns (resolvedEnv, resolvedProps).
+// MinecraftRunTask + RunConfigGenerator are package-private in the FG6 plugin,
+// hence the reflection.
+fun resolveFg6RunConfig(runTaskName: String): Pair<Map<String, String>, Map<String, String>> {
+    val runTask = tasks.named(runTaskName).get()
+    val runConfig = runTask.javaClass.methods.first { it.name == "getRunConfig" }
+            .invoke(runTask)
+            .let { it.javaClass.getMethod("get").invoke(it) }
+
+    val rcgClass = Class.forName("net.minecraftforge.gradle.common.util.runs.RunConfigGenerator")
+    val mapModClassesMethod = rcgClass.declaredMethods.first { it.name == "mapModClassesToGradle" }
+    mapModClassesMethod.isAccessible = true
+    val modClassesStream = mapModClassesMethod.invoke(null, project, runConfig)
+    val mcArtifacts = runTask.javaClass.methods.first { it.name == "getMinecraftArtifacts" }.invoke(runTask)
+    val rtArtifacts = runTask.javaClass.methods.first { it.name == "getRuntimeClasspathArtifacts" }.invoke(runTask)
+    val configureTokens = rcgClass.declaredMethods.first { it.name == "configureTokensLazy" }
+    configureTokens.isAccessible = true
+    @Suppress("UNCHECKED_CAST")
+    val tokenMap = configureTokens.invoke(null, project, runConfig, modClassesStream, mcArtifacts, rtArtifacts)
+            as Map<String, java.util.function.Supplier<String>>
+
+    val replaceMethod = runConfig.javaClass.getMethod("replace", Map::class.java, String::class.java)
+    @Suppress("UNCHECKED_CAST")
+    val rcEnv = runConfig.javaClass.getMethod("getEnvironment").invoke(runConfig) as Map<String, String>
+    @Suppress("UNCHECKED_CAST")
+    val rcProps = runConfig.javaClass.getMethod("getProperties").invoke(runConfig) as Map<String, String>
+
+    val resolvedEnv = rcEnv.mapValues { (_, v) -> replaceMethod.invoke(runConfig, tokenMap, v) as String }
+    val resolvedProps = rcProps.mapValues { (_, v) -> replaceMethod.invoke(runConfig, tokenMap, v) as String }
+    return resolvedEnv to resolvedProps
+}
+
+// Packs a -D property map into a JAVA_TOOL_OPTIONS-style string (every JVM
+// auto-prepends JAVA_TOOL_OPTIONS to its CLI). Paths with spaces get quoted.
+fun packToolOptions(props: Map<String, String>): String =
+    props.entries.joinToString(" ") { (k, v) ->
+        if (v.contains(" ")) "-D$k=\"$v\"" else "-D$k=$v"
+    }
+
+// Standard logging/JUnit config shared by every test task.
+fun Test.applyCommonTestConfig() {
     useJUnit()
+    // Test-only flag gating /artest probe commands and other test-only behaviour.
+    systemProperty("advancedrocketry.tests", "true")
     testLogging {
         events("failed", "skipped", "passed")
         exceptionFormat = org.gradle.api.tasks.testing.logging.TestExceptionFormat.FULL
         showStandardStreams = false
     }
-    // Test-only flag gating /artest probe commands and other test-only behavior
-    systemProperty("advancedrocketry.tests", "true")
-    // `test` runs only the fast pyramid layers: pure unit (SMART §2.1) and
-    // lightweight integration with MC bootstrap in the same JVM (SMART §2.2).
-    // Server/client-harness suites live under separate tasks because they
-    // require the FG6 runServer classpath and a forked dedicated-server JVM.
-    filter {
-        includeTestsMatching("zmaster587.advancedRocketry.test.unit.*")
-        includeTestsMatching("zmaster587.advancedRocketry.test.integration.*")
-    }
 }
 
-// Tell the reusable test framework (v0.2.0+) which launcher / asset layout to use.
-// Defaults in the framework target RFG/FG4 — these overrides flip it to FG6.
-val fg6HarnessProps = mapOf(
-    "forge.test.launcher.class.server" to "net.minecraftforge.legacydev.MainServer",
-    "forge.test.launcher.class.client" to "mcp.client.Start",
-    "forge.test.assets.dir" to "${gradle.gradleUserHomeDir}/caches/forge_gradle/assets",
-    "forge.test.launcher.legacyArgs" to "false"
-)
-
-// SMART §11 — dedicated task that runs ONLY the AR scenario suite (P0 + P1
-// scenarios composed by AdvancedRocketryTestRegistry). Useful in CI to gate
-// merges on the in-game scenarios separately from the unit tests.
-//
-// Configurable expected weather mode for §7.5:
-//   ./gradlew testAdvancedRocketryScenarios -Pweather=shared
-//   ./gradlew testAdvancedRocketryScenarios -Pweather=per_dimension
-val weatherMode: String = (project.findProperty("weather") as? String) ?: "shared"
-
-val parallelForks: Int = (project.findProperty("forks") as? String)?.toIntOrNull() ?: 3
-
-tasks.register<Test>("testAdvancedRocketryScenarios") {
-    description = "Runs the AR-specific scenario suite (SMART §7 P0+P1+P2) in parallel."
+// Shared config for the harness-backed layers (server + client). Bakes in the
+// FG6 runServer classpath augmentation, harness system properties, parallel-fork
+// budget, and the env/sysprop forwarding doFirst block. `enableClient` additionally
+// turns on the real-client harness — auto-skipped (JUnit Assume) on headless
+// machines, no flag required.
+fun Test.configureHarnessLayer(enableClient: Boolean) {
     group = "verification"
-    useJUnit()
+    applyCommonTestConfig()
     testClassesDirs = sourceSets["test"].output.classesDirs
     // Augment the test classpath with FG6's runServer classpath so that
     // RealDedicatedServerHarness has net.minecraftforge.legacydev.MainServer
@@ -261,24 +321,29 @@ tasks.register<Test>("testAdvancedRocketryScenarios") {
                 ?: error("runServer task does not expose getClasspath() — FG6 internals changed?")
         cpField.invoke(runServer) as FileCollection
     })
-    filter {
-        // SMART §2.3 server-harness e2e + §2.4 client-harness e2e. Each test
-        // class is plain JUnit + an `AbstractHeadlessServerTest`/`AbstractClientE2ETest`
-        // base; gradle filter just routes by package.
-        includeTestsMatching("zmaster587.advancedRocketry.test.server.*")
-        includeTestsMatching("zmaster587.advancedRocketry.test.client.*")
-    }
-    systemProperty("advancedrocketry.tests", "true")
     systemProperty("advancedrocketry.tests.expectedWeatherMode", weatherMode)
     // Forward FG6 paths to the test-framework harness (v0.2.0+).
     fg6HarnessProps.forEach { (k, v) -> systemProperty(k, v) }
-    // Enable the framework's JUnit base classes (AbstractHeadlessServerTest)
-    // by default. Override with -Pharness=false to skip server boot — all
-    // tests then SKIP via JUnit Assume rather than failing.
-    val harnessEnabled = (project.findProperty("harness") as? String) ?: "true"
-    systemProperty("forge.test.harness.enabled", harnessEnabled)
-    systemProperty("forge.test.client.enabled",
-            (project.findProperty("clientHarness") as? String) ?: "false")
+    // The dedicated-server harness is ALWAYS on for these tasks — that's the
+    // entire point of running them. There is no -Pharness flag: to skip the
+    // harness you simply don't run the server/client task.
+    systemProperty("forge.test.harness.enabled", "true")
+    if (enableClient) {
+        // The real Minecraft client needs an OpenGL-capable display. Auto-detect:
+        // enabled on desktops, auto-skipped via JUnit Assume on headless CI.
+        // No -PclientHarness flag. (GraphicsEnvironment is resolved reflectively
+        // because the Kotlin build-script classpath doesn't expose java.awt.*.)
+        val headless = runCatching {
+            val ge = Class.forName("java.awt.GraphicsEnvironment")
+            ge.getMethod("isHeadless").invoke(null) as Boolean
+        }.getOrDefault(true)
+        systemProperty("forge.test.client.enabled", (!headless).toString())
+        // FG6 extracts the LWJGL natives into <project>/build/natives — not the
+        // RFG/FG4 cache layout the framework's RealClientHarness defaults to.
+        // forge-test-framework 0.4.0+ honours this override.
+        systemProperty("forge.test.client.nativesDir",
+                layout.buildDirectory.dir("natives").get().asFile.absolutePath)
+    }
 
     // Parallel execution: one forked JVM per scenario class, up to `parallelForks`
     // running concurrently. Each scenario is independent (own port via
@@ -294,74 +359,139 @@ tasks.register<Test>("testAdvancedRocketryScenarios") {
 
     // FG6's MinecraftRunTask.exec() resolves env+sysprops via a runtime token map
     // (see RunConfigGenerator.configureTokensLazy). Replicate the same resolution
-    // in doFirst so MainServer gets the env vars (mainClass, tweakClass, MCP_TO_SRG,
-    // etc.) it needs. Without this the spawned server JVM dies with
-    // "Must specify mainClass environment variable".
+    // in doFirst so the legacydev launchers (MainServer / MainClient) get the env
+    // vars (mainClass, tweakClass, MCP_TO_SRG, …) they need. Without this the
+    // spawned JVM dies with "Must specify mainClass environment variable".
     doFirst {
-        val runServer = tasks.named("runServer").get()
-        val runConfig = runServer.javaClass.methods.first { it.name == "getRunConfig" }
-                .invoke(runServer)
-                .let { it.javaClass.getMethod("get").invoke(it) }
-
-        // Resolve the token map via the same package-private path FG6 uses.
-        val rcgClass = Class.forName("net.minecraftforge.gradle.common.util.runs.RunConfigGenerator")
-        val mapModClassesMethod = rcgClass.declaredMethods.first { it.name == "mapModClassesToGradle" }
-        mapModClassesMethod.isAccessible = true
-        val modClassesStream = mapModClassesMethod.invoke(null, project, runConfig)
-        val mcArtifacts = runServer.javaClass.methods.first { it.name == "getMinecraftArtifacts" }.invoke(runServer)
-        val rtArtifacts = runServer.javaClass.methods.first { it.name == "getRuntimeClasspathArtifacts" }.invoke(runServer)
-        val configureTokens = rcgClass.declaredMethods.first { it.name == "configureTokensLazy" }
-        configureTokens.isAccessible = true
-        @Suppress("UNCHECKED_CAST")
-        val tokenMap = configureTokens.invoke(null, project, runConfig, modClassesStream, mcArtifacts, rtArtifacts)
-                as Map<String, java.util.function.Supplier<String>>
-
-        // RunConfig.replace(Map, String) substitutes ${...} / {...} placeholders.
-        val replaceMethod = runConfig.javaClass.getMethod("replace", Map::class.java, String::class.java)
-
-        @Suppress("UNCHECKED_CAST")
-        val rcEnv = runConfig.javaClass.getMethod("getEnvironment").invoke(runConfig) as Map<String, String>
-        rcEnv.forEach { (k, v) ->
-            val resolved = replaceMethod.invoke(runConfig, tokenMap, v) as String
-            environment(k, resolved)
-        }
-        // FG6's RunConfig.environment uses ${MC_VERSION} as a placeholder for the
-        // configured MC version; token map doesn't always resolve it (FG6 plugs
-        // it in late, after token resolution). Set it explicitly so the harness
-        // subprocess has the right MC version to find the deobfuscation_data file.
+        // --- Server harness environment -------------------------------------
+        // AbstractClientE2ETest boots a dedicated server too, so EVERY harness
+        // task forwards runServer's config. RealDedicatedServerHarness's child
+        // JVM inherits the test JVM's env vars; the -D properties additionally
+        // ride along via JAVA_TOOL_OPTIONS (every JVM auto-prepends it).
+        val (serverEnv, serverProps) = resolveFg6RunConfig("runServer")
+        serverEnv.forEach { (k, v) -> environment(k, v) }
+        // FG6's RunConfig.environment uses ${MC_VERSION} as a placeholder the
+        // token map doesn't always resolve — set it explicitly.
         environment("MC_VERSION", mcVersion)
-        @Suppress("UNCHECKED_CAST")
-        val rcProps = runConfig.javaClass.getMethod("getProperties").invoke(runConfig) as Map<String, String>
-        val resolvedProps = mutableMapOf<String, String>()
-        rcProps.forEach { (k, v) ->
-            val resolved = replaceMethod.invoke(runConfig, tokenMap, v) as String
-            systemProperty(k, resolved)
-            resolvedProps[k] = resolved
+        serverProps.forEach { (k, v) -> systemProperty(k, v) }
+        val serverToolOptions = packToolOptions(serverProps)
+        if (serverToolOptions.isNotEmpty()) {
+            environment("JAVA_TOOL_OPTIONS", serverToolOptions)
         }
-        // The test framework's RealDedicatedServerHarness spawns a child JVM with
-        // a hard-coded arg list — it inherits env vars but NOT the -D properties
-        // FG6 sets on the parent test JVM (MCP_TO_SRG csv dir, srg.notch-srg,
-        // mainClass, tweakClass, etc.). Without those, launchwrapper can't locate
-        // the deobfuscation_data file and FMLDeobfuscatingRemapper.setup NPEs.
-        //
-        // Workaround: pack the same -D flags into JAVA_TOOL_OPTIONS env var, which
-        // every spawned JVM auto-prepends to its CLI. Paths with spaces get
-        // single-quoted (JAVA_TOOL_OPTIONS uses shell-style quoting).
-        val toolOptions = resolvedProps.entries.joinToString(" ") { (k, v) ->
-            if (v.contains(" ")) "-D$k=\"$v\"" else "-D$k=$v"
+        logger.lifecycle("Forwarded ${serverEnv.size} env + ${serverProps.size} props from runServer")
+
+        // --- Client harness environment -------------------------------------
+        // The client subprocess can't inherit the test JVM's env: that carries
+        // runServer's mainClass/tweakClass. The client needs runClient's. The
+        // framework (forge-test-framework 0.4.0+) applies any
+        // forge.test.client.env.<NAME> system property as env var <NAME> on the
+        // client process ONLY, overriding the inherited (server) value.
+        if (enableClient) {
+            val (clientEnv, clientProps) = resolveFg6RunConfig("runClient")
+            clientEnv.forEach { (k, v) -> systemProperty("forge.test.client.env.$k", v) }
+            systemProperty("forge.test.client.env.MC_VERSION", mcVersion)
+            val clientToolOptions = packToolOptions(clientProps)
+            if (clientToolOptions.isNotEmpty()) {
+                systemProperty("forge.test.client.env.JAVA_TOOL_OPTIONS", clientToolOptions)
+            }
+            logger.lifecycle("Forwarded ${clientEnv.size} env + ${clientProps.size} props "
+                    + "from runClient (as forge.test.client.env.*)")
+
+            // Merge main resources into the main classes dir for the client.
+            //
+            // Gradle splits a source set's output into build/classes/java/main
+            // (compiled classes) and build/resources/main (assets, mcmod.info).
+            // FML's ModDiscoverer.findClasspathMods() makes a SEPARATE mod
+            // candidate per classpath directory: the @Mod class is found in the
+            // classes dir → AR's mod + its IResourceManager resource pack are
+            // rooted there, with no assets/ or mcmod.info. The result on the
+            // client: mcmod.info missing ("missing required element 'name'")
+            // and every TileEntitySpecialRenderer that loads an .obj model via
+            // Minecraft.getResourceManager() throws → ClientProxy.registerRenderers
+            // NPEs the whole mod load.
+            //
+            // The dedicated server doesn't render, so it never trips this — only
+            // the client needs assets co-located with classes, exactly like a
+            // packaged mod jar has them. Sync them together for the client run.
+            val classesDir = sourceSets["main"].output.classesDirs.files
+                    .firstOrNull { it.name == "main" && it.parentFile.name == "java" }
+                    ?: sourceSets["main"].output.classesDirs.files.first()
+            val resourcesDir = sourceSets["main"].output.resourcesDir
+            if (resourcesDir != null && resourcesDir.isDirectory) {
+                copy {
+                    from(resourcesDir)
+                    into(classesDir)
+                }
+                logger.lifecycle("Merged main resources into $classesDir for the client harness")
+            }
         }
-        if (toolOptions.isNotEmpty()) {
-            environment("JAVA_TOOL_OPTIONS", toolOptions)
-        }
-        logger.lifecycle("Forwarded ${rcEnv.size} env vars and ${rcProps.size} system properties from runServer config")
-    }
-    testLogging {
-        events("failed", "skipped", "passed")
-        exceptionFormat = org.gradle.api.tasks.testing.logging.TestExceptionFormat.FULL
     }
     // Building AR's jar is a soft prereq because runServer's classpath includes it
     // (and the in-game mod must be present for any AR-specific assertion).
     dependsOn(tasks.named("jar"))
+}
+
+// ── §2.1 — pure unit tests (no MC runtime) ──
+tasks.register<Test>("testUnit") {
+    description = "SMART §2.1 — pure unit tests (src/test/.../unit). Fast, no harness."
+    group = "verification"
+    applyCommonTestConfig()
+    testClassesDirs = sourceSets["test"].output.classesDirs
+    classpath = sourceSets["test"].runtimeClasspath
+    filter { includeTestsMatching("zmaster587.advancedRocketry.test.unit.*") }
+}
+
+// ── §2.2 — lightweight integration tests (MC bootstrap in-JVM) ──
+tasks.register<Test>("testIntegration") {
+    description = "SMART §2.2 — integration tests (src/test/.../integration). Fast, no harness."
+    group = "verification"
+    applyCommonTestConfig()
+    testClassesDirs = sourceSets["test"].output.classesDirs
+    classpath = sourceSets["test"].runtimeClasspath
+    filter { includeTestsMatching("zmaster587.advancedRocketry.test.integration.*") }
+    mustRunAfter("testUnit")
+}
+
+// ── §2.3 — dedicated-server harness e2e ──
+tasks.register<Test>("testServer") {
+    description = "SMART §2.3 — dedicated-server scenario e2e (src/test/.../server)."
+    configureHarnessLayer(enableClient = false)
+    filter { includeTestsMatching("zmaster587.advancedRocketry.test.server.*") }
+    mustRunAfter("testIntegration")
+}
+
+// ── §2.4 — real-client + dedicated-server e2e ──
+tasks.register<Test>("testClient") {
+    description = "SMART §2.4 — real-client + server e2e (src/test/.../client). " +
+            "Auto-skips on headless machines."
+    configureHarnessLayer(enableClient = true)
+    filter { includeTestsMatching("zmaster587.advancedRocketry.test.client.*") }
+    mustRunAfter("testServer")
+    // The real client JVM loads LWJGL natives from build/natives — make sure
+    // FG6 has extracted them before the harness tries to launch the client.
+    dependsOn("extractNatives")
+}
+
+// `test` is the umbrella: running it runs the ENTIRE src/test tree by delegating
+// to the four per-layer tasks. It runs no tests in its own JVM — that keeps each
+// layer's fork strategy intact (the fast layers must NOT inherit the harness
+// forkEvery(1), which would spawn a JVM per unit test class).
+tasks.test {
+    useJUnit()
+    filter {
+        isFailOnNoMatchingTests = false
+        // Umbrella task — the real work is in the four dependency tasks below.
+        includeTestsMatching("__advancedrocketry_umbrella_runs_nothing__")
+    }
+    dependsOn("testUnit", "testIntegration", "testServer", "testClient")
+}
+
+// Back-compat alias — SMART §11 and src/test/README.md still reference this name.
+// It runs the two harness layers (server + client).
+tasks.register("testAdvancedRocketryScenarios") {
+    description = "Alias — runs the harness layers (testServer + testClient)."
+    group = "verification"
+    dependsOn("testServer", "testClient")
 }
 
 tasks.processResources {
