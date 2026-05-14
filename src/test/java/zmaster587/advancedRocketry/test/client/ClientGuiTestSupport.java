@@ -1,6 +1,8 @@
 package zmaster587.advancedRocketry.test.client;
 
 import com.github.stannismod.forge.testing.client.ClientBot;
+import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import net.minecraft.util.EnumFacing;
 import net.minecraft.util.EnumHand;
@@ -65,5 +67,39 @@ final class ClientGuiTestSupport {
             bot.waitTicks(5);
         }
         return screenOf(bot.reportState());
+    }
+
+    /**
+     * First entry in {@code report_buttons} whose {@code id} satisfies
+     * {@code [minId, maxId)} and is clickable (enabled + visible), or
+     * {@code Integer.MIN_VALUE} if none. Used to pick a stable mod-assigned
+     * button id rather than relying on list position.
+     */
+    static int findButtonId(JsonObject reportButtons, int minId, int maxId) {
+        JsonArray buttons = reportButtons.getAsJsonArray("buttons");
+        for (JsonElement element : buttons) {
+            JsonObject button = element.getAsJsonObject();
+            int id = button.get("id").getAsInt();
+            if (id >= minId && id < maxId
+                    && button.get("enabled").getAsBoolean()
+                    && button.get("visible").getAsBoolean()) {
+                return id;
+            }
+        }
+        return Integer.MIN_VALUE;
+    }
+
+    /** Container slot number of the first slot holding {@code itemId}, or -1. */
+    static int findSlotWithItem(JsonObject reportSlots, String itemId, boolean playerSlot) {
+        JsonArray slots = reportSlots.getAsJsonArray("slots");
+        for (JsonElement element : slots) {
+            JsonObject slot = element.getAsJsonObject();
+            if (slot.get("hasStack").getAsBoolean()
+                    && slot.get("playerSlot").getAsBoolean() == playerSlot
+                    && itemId.equals(slot.get("item").getAsString())) {
+                return slot.get("slot").getAsInt();
+            }
+        }
+        return -1;
     }
 }
