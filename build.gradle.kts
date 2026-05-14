@@ -244,6 +244,12 @@ configurations.named("testRuntimeClasspath") {
 
 val weatherMode: String = (project.findProperty("weather") as? String) ?: "shared"
 val parallelForks: Int = (project.findProperty("forks") as? String)?.toIntOrNull() ?: 3
+// The client harness layer (testClient) launches a real, GL-rendering Minecraft
+// client per scenario. Running several of those concurrently makes the
+// right-click → openGui → displayGuiScreen round-trip unreliable (the GUI
+// silently fails to open under GL/CPU contention), so the client layer
+// serialises by default. Override with -PclientForks=N if your host can take it.
+val clientForks: Int = (project.findProperty("clientForks") as? String)?.toIntOrNull() ?: 1
 
 // Tell the reusable test framework (v0.2.0+) which launcher / asset layout to use.
 // Defaults in the framework target RFG/FG4 — these overrides flip it to FG6.
@@ -360,13 +366,18 @@ fun Test.configureHarnessLayer(enableClient: Boolean) {
                 layout.buildDirectory.dir("natives").get().asFile.absolutePath)
     }
 
-    // Parallel execution: one forked JVM per scenario class, up to `parallelForks`
-    // running concurrently. Each scenario is independent (own port via
-    // ServerSocket(0), own tempDir) so cross-fork interference is impossible.
+    // Parallel execution: one forked JVM per scenario class, up to the layer's
+    // fork budget running concurrently. Each scenario is independent (own port
+    // via ServerSocket(0), own tempDir) so cross-fork interference is impossible.
+    //
+    // The dedicated-server layer scales out (`parallelForks`, default 3). The
+    // client layer launches a real GL-rendering Minecraft per scenario; those
+    // contend badly when run concurrently, so it serialises by default
+    // (`clientForks`, default 1).
     //
     // Budget: each fork holds the test runner JVM (~500 MB) + one harness JVM
-    // (~1.5 GB). 6 forks ≈ 12 GB peak RAM. Tune via -Pforks=N.
-    maxParallelForks = parallelForks
+    // (~1.5 GB). Tune via -Pforks=N (server) / -PclientForks=N (client).
+    maxParallelForks = if (enableClient) clientForks else parallelForks
     setForkEvery(1L)
     // Per-fork JVM args — keep tight so we don't blow past RAM with 6 forks.
     minHeapSize = "256m"

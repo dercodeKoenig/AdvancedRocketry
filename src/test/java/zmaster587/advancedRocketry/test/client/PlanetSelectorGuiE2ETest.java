@@ -1,36 +1,32 @@
 package zmaster587.advancedRocketry.test.client;
 
 import com.github.stannismod.forge.testing.junit.AbstractClientE2ETest;
-import com.google.gson.JsonObject;
-import net.minecraft.util.EnumFacing;
-import net.minecraft.util.EnumHand;
 import org.junit.Test;
 
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
+import static zmaster587.advancedRocketry.test.client.ClientGuiTestSupport.openGuiByRightClick;
+import static zmaster587.advancedRocketry.test.client.ClientGuiTestSupport.waitForNoScreen;
 
 /**
- * SMART §7.20 — minimal client GUI smoke for the planet selector tile.
+ * SMART §7.20 — client GUI smoke for the planet selector tile.
  *
- * <p>Sequence:</p>
+ * <p>Exercises the full right-click → server {@code onBlockActivated} →
+ * {@code openGui} → client {@code displayGuiScreen} round-trip:</p>
  * <ol>
- *   <li>Server places {@code advancedrocketry:planetSelector} at a fixed pos.</li>
- *   <li>Client teleports above the tile (the {@code rightClickBlock} bridge
- *       call uses a raycast from the player's eyes — the block must be in
- *       reach).</li>
- *   <li>{@code bot.rightClickBlock(...)} opens the modular GUI server-side.</li>
- *   <li>{@code bot.reportState()} returns the current screen's class — assert
- *       a GUI did open.</li>
- *   <li>{@code bot.closeScreen()} cleans up; the screen handle is released.</li>
+ *   <li>Server places {@code advancedrocketry:planetSelector} in the spawn chunk.</li>
+ *   <li>The harness player (random {@code Player###} name under the FG6 launcher,
+ *       so addressed via the {@code @a} selector) is teleported onto the tile.</li>
+ *   <li>{@code rightClickBlock} (retried) triggers the libVulpes modular GUI.</li>
+ *   <li>{@code GuiModularFullScreen} is confirmed open.</li>
+ *   <li>{@code bot.closeScreen()} releases it.</li>
  * </ol>
  *
- * <p>Does NOT exercise an actual planet click — that requires empirically
- * derived pixel coordinates inside {@code ModulePlanetSelector}'s rendered
- * grid which vary with module sizing. The full selection cycle (click →
- * server state change) is covered headless by
- * {@code server/SelectorServerSmokeTest}.</p>
+ * <p>Does NOT click an individual planet — that needs empirically derived pixel
+ * coordinates inside {@code ModulePlanetSelector}'s grid. The full selection
+ * cycle is covered headless by {@code server/SelectorServerSmokeTest}.</p>
  *
- * <p>Gated by {@code forge.test.client.enabled=true} via
- * {@link AbstractClientE2ETest}. Default-skips on headless CI.</p>
+ * <p>Gated by {@code forge.test.client.enabled=true}; auto-skips on headless CI.</p>
  */
 public class PlanetSelectorGuiE2ETest extends AbstractClientE2ETest {
 
@@ -38,43 +34,21 @@ public class PlanetSelectorGuiE2ETest extends AbstractClientE2ETest {
 
     @Test
     public void rightClickingTileOpensSelectorGui() throws Exception {
-        // 1. Server places the block within the spawn-chunk so the client's
-        //    default join position is in reach.
         String place = String.join("\n", serverClient().execute(
                 "artest place 0 " + X + " " + Y + " " + Z + " advancedrocketry:planetSelector"));
-        assertTrue("could not place planetSelector: " + place,
-                place.contains("\"placed\":true"));
+        assertTrue("could not place planetSelector: " + place, place.contains("\"placed\":true"));
 
-        // 2. Teleport client player above the block, looking down (pitch=90°).
-        serverClient().execute("tp ForgeTestClient " + (X + 0.5) + " " + (Y + 2) + " " + (Z + 0.5)
-                + " 0 90");
-        bot().waitTicks(20);
+        // The FG6 client launcher assigns the player a random "Player###" name,
+        // so target the single harness player with the @a selector.
+        serverClient().execute("tp @a " + (X + 0.5) + " " + (Y + 2) + " " + (Z + 0.5) + " 0 90");
+        bot().waitTicks(40);
 
-        // 3. Right-click the block face from above.
-        bot().rightClickBlock(X, Y, Z, EnumFacing.UP, EnumHand.MAIN_HAND);
-        bot().waitTicks(10);
+        String screen = openGuiByRightClick(bot(), X, Y, Z);
+        assertEquals("expected the planet selector modular GUI to open",
+                "zmaster587.libVulpes.inventory.GuiModularFullScreen", screen);
 
-        // 4. reportState should now show a non-empty currentScreen — the
-        //    libVulpes modular GUI hosting ModulePlanetSelector.
-        JsonObject state = bot().reportState();
-        String screen = state.has("currentScreen")
-                ? state.get("currentScreen").getAsString()
-                : "";
-        assertTrue("expected a GUI to open after right-click, got screen=" + screen
-                        + " full=" + state,
-                screen != null
-                        && !screen.isEmpty()
-                        && !"null".equalsIgnoreCase(screen));
-
-        // 5. Close and verify release.
         bot().closeScreen();
-        bot().waitTicks(5);
-        JsonObject after = bot().reportState();
-        String afterScreen = after.has("currentScreen")
-                ? after.get("currentScreen").getAsString()
-                : "";
-        assertTrue("closeScreen didn't release the GUI: " + afterScreen,
-                afterScreen == null || afterScreen.isEmpty()
-                        || "null".equalsIgnoreCase(afterScreen));
+        assertTrue("closeScreen didn't release the GUI: " + waitForNoScreen(bot(), 60),
+                waitForNoScreen(bot(), 60).isEmpty());
     }
 }
