@@ -81,6 +81,83 @@ tasks.compileJava {
     targetCompatibility = "1.8"
 }
 
+// ─── Mixin annotation-processor configuration ────────────────────────────────
+//
+// Mixins are written against deobfuscated (MCP) names so the dev workspace
+// compiles and the IDE understands them. At runtime in a reobf production jar
+// the targets are SRG-named. The Mixin annotation processor solves this by
+// emitting a "refmap" — a JSON file (`mixins.advancedrocketry.refmap.json`)
+// mapping every MCP selector in our `@Mixin`/`@At`/`@Inject` annotations to
+// its SRG counterpart. The mixin runtime reads the refmap at apply time.
+//
+// FG6 emits MCP↔SRG mappings in two forms:
+//   - build/createMcpToSrg/output.tsrg — MCP→SRG, but in TSRG v2 format
+//     (Mixin AP 0.8.5's TSRG reader only understands v1, no header).
+//   - build/createSrgToMcp/output.srg — SRG→MCP, but in classic FG3 SRG format
+//     (CL:/FD:/MD: lines), which Mixin AP DOES understand — just in the WRONG
+//     direction (it'd think the SRG name is the "source" name).
+//
+// Cheapest reliable path: take createSrgToMcp's .srg file and swap the last
+// two whitespace-separated columns on every CL:/FD:/MD: line so it becomes a
+// MCP→SRG .srg file. Mixin AP reads it via -AreobfSrgFile and emits a
+// populated refmap (otherwise it silently produces an empty mappings table
+// and any @At/@Accessor that names MCP fields fails to bind in reobf jars).
+val mixinRefmapFile = layout.buildDirectory.file("refmaps/mixins.advancedrocketry.refmap.json")
+val mixinSrgFile = layout.buildDirectory.file("mixinMappings/mcp_to_srg.srg")
+
+val mixinReverseSrg by tasks.registering {
+    dependsOn("createSrgToMcp")
+    val srcFile = layout.buildDirectory.file("createSrgToMcp/output.srg")
+    val dstFile = mixinSrgFile
+    inputs.file(srcFile)
+    outputs.file(dstFile)
+    doLast {
+        val src = srcFile.get().asFile
+        val dst = dstFile.get().asFile
+        dst.parentFile.mkdirs()
+        val out = StringBuilder()
+        for (raw in src.readLines()) {
+            val parts = raw.split(' ')
+            // Line shapes:
+            //   PK: srcPkg dstPkg                    (2 cols after tag)
+            //   CL: srcCls dstCls                    (2 cols)
+            //   FD: srcCls/srcName dstCls/dstName    (2 cols)
+            //   MD: srcCls/srcName srcDesc dstCls/dstName dstDesc   (4 cols)
+            // Swap pairs to invert direction.
+            when {
+                parts.size == 3 && parts[0].endsWith(":") -> {
+                    // PK / CL / FD: <src> <dst>
+                    out.append(parts[0]).append(' ').append(parts[2]).append(' ').append(parts[1])
+                }
+                parts.size == 5 && parts[0] == "MD:" -> {
+                    // MD: srcCls/srcName srcDesc dstCls/dstName dstDesc
+                    out.append("MD: ").append(parts[3]).append(' ').append(parts[4]).append(' ')
+                            .append(parts[1]).append(' ').append(parts[2])
+                }
+                else -> {
+                    // Comment / blank / unknown — preserve verbatim.
+                    out.append(raw)
+                }
+            }
+            out.append('\n')
+        }
+        dst.writeText(out.toString())
+    }
+}
+
+tasks.compileJava {
+    dependsOn(mixinReverseSrg)
+    val srgFile = mixinSrgFile.get().asFile
+    val refmapOut = mixinRefmapFile.get().asFile
+    options.compilerArgs.addAll(listOf(
+        "-AreobfSrgFile=${srgFile.absolutePath}",
+        "-AoutRefMapFile=${refmapOut.absolutePath}",
+        "-AdefaultObfuscationEnv=searge"
+    ))
+    doFirst { refmapOut.parentFile.mkdirs() }
+    outputs.file(mixinRefmapFile)
+}
+
 
 minecraft {
     mappings("snapshot", "20171003-1.12")
@@ -150,6 +227,21 @@ repositories {
     maven {
         url = uri("https://cursemaven.com")
     }
+    // MixinBooter — modpack-standard Mixin loader for 1.12.2 (CleanroomMC). Used
+    // at runtime to bootstrap our `mixins.advancedrocketry.json` config via the
+    // jar's `MixinConfigs` manifest entry; we depend on it `compileOnly` (the
+    // mod expects MixinBooter to be present in any modern 1.12.2 modpack
+    // environment, incl. "Towards Rocket Science").
+    maven {
+        name = "CleanroomMC"
+        url = uri("https://maven.cleanroommc.com")
+    }
+    // SpongePowered Mixin (compile-time API + annotation processor for refmap
+    // generation). Runtime Mixin is provided by MixinBooter.
+    maven {
+        name = "SpongePowered"
+        url = uri("https://repo.spongepowered.org/maven")
+    }
     //ivy {
     //    name = "industrialcraft-2"
     //    artifactPattern("http://jenkins.ic2.player.to/job/IC2_111/39/artifact/build/libs/[module]-[revision].[ext]")
@@ -192,6 +284,33 @@ dependencies {
 //    implementation ("net.minecraftforge:mergetool:0.2.3.3")
     implementation ("net.minecraftforge:mergetool") { version { strictly("0.2.3.3") } }
 
+    // ── Mixin (Sponge 0.8.x via MixinBooter) ──────────────────────────────
+    //
+    // Compile-time API (annotations + interfaces) + annotation processor
+    // (generates the refmap mapping MCP names in mixin source to the SRG
+    // names present in production reobf jars).
+    //
+    // MixinBooter is the 1.12.2 modpack-standard Mixin loader. It IS itself a
+    // coremod — its FMLCorePlugin manifest entry installs the MixinTweaker,
+    // and during FML coremod scan it reads each loaded coremod's
+    // `MixinConfigs` manifest attribute and applies the referenced configs.
+    //
+    // Pinned to 8.x: MixinBooter 9.x bundles a Mixin that validates class
+    // features against ASM 7+ (`ConstantDynamic` etc.) during config init —
+    // Forge 1.12.2's launchwrapper ships ASM 5, so 9.x crashes at boot with
+    // NoClassDefFoundError before our config is even applied. 8.9 is what
+    // mainstream 1.12.2 modpacks (GTNH and friends) actually ship, and it
+    // works on stock ASM 5.
+    //
+    // Declared `implementation(fg.deobf(...))` so it lands on the dev RUNTIME
+    // classpath (runClient/runServer/test) — same pattern JEI uses. Without
+    // this our mixins would compile fine but silently fail to apply at run
+    // time. Production jar is NOT shaded; the dependency is recorded in the
+    // .pom so modpack tooling knows to ship MixinBooter alongside AR.
+    implementation(fg.deobf("zone.rong:mixinbooter:7.0"))
+    annotationProcessor("org.spongepowered:mixin:0.8.5-SNAPSHOT:processor")
+    compileOnly("org.spongepowered:mixin:0.8.5-SNAPSHOT")
+
     // Test framework (Forge 1.12.2 reusable test framework — see src/test/README.md).
     //
     // Resolution chain (first match wins):
@@ -203,7 +322,7 @@ dependencies {
     // MCP-named MC classes, the reobf (no-classifier) jar has SRG names and
     // won't compile against the dev classpath.
     testImplementation("junit:junit:4.13.2")
-    testImplementation("com.github.stannismod.forge:forge-test-framework:0.4.0:dev")
+    testImplementation("com.github.stannismod.forge:forge-test-framework:0.4.2:dev")
 }
 
 // The client harness (testClient) launches the real Minecraft client through
@@ -242,7 +361,11 @@ configurations.named("testRuntimeClasspath") {
 // In the IDE, "Run all tests in directory" on any of the four packages works
 // natively (IntelliJ drives JUnit directly, bypassing the Gradle filter).
 
-val weatherMode: String = (project.findProperty("weather") as? String) ?: "shared"
+// Default flipped from "shared" to "per_dimension" once the B1 weather wrapper
+// (PlanetWeatherManager + Mixin on WorldServerMulti) landed — AR planets now
+// have independent vanilla weather state by default. Pass -Pweather=shared to
+// override (e.g. for bisecting whether the wrap silently regressed).
+val weatherMode: String = (project.findProperty("weather") as? String) ?: "per_dimension"
 val parallelForks: Int = (project.findProperty("forks") as? String)?.toIntOrNull() ?: 3
 // The client harness layer (testClient) launches a real, GL-rendering Minecraft
 // client per scenario. Running several of those concurrently makes the
@@ -598,9 +721,17 @@ tasks.withType(Jar::class) {
                 "Git-Hash" to gitHash,
                 "FMLAT" to "accessTransformer.cfg",
                 "FMLCorePlugin" to "zmaster587.advancedRocketry.asm.AdvancedRocketryPlugin",
-                "FMLCorePluginContainsFMLMod" to "true"
+                "FMLCorePluginContainsFMLMod" to "true",
+                // MixinBooter scans coremod manifests for this attribute at FML
+                // coremod-load time and applies each comma-separated mixin config.
+                // We ship a single config covering the per-dimension weather wrapper.
+                "MixinConfigs" to "mixins.advancedrocketry.json"
         )
     }
+    // Package the Mixin AP's generated refmap into the jar root, where the
+    // mixin runtime expects to find the file referenced by mixins.advancedrocketry.json
+    // ("refmap": "mixins.advancedrocketry.refmap.json").
+    from(mixinRefmapFile)
 }
 
 val deobfJar by tasks.registering(Jar::class) {

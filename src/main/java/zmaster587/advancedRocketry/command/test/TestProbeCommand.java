@@ -166,6 +166,9 @@ public class TestProbeCommand extends CommandBase {
                 case "field":
                     handleField(server, sender, tail(args));
                     break;
+                case "tp":
+                    handleTp(server, sender, tail(args));
+                    break;
                 default:
                     send(sender, "{\"error\":\"unknown subcommand\",\"sub\":\"" + args[0] + "\"}");
             }
@@ -2787,5 +2790,66 @@ public class TestProbeCommand extends CommandBase {
         } catch (ReflectiveOperationException e) {
             return -1;
         }
+    }
+
+    /**
+     * Test-only cross-dim teleport: /artest tp &lt;dim&gt; [player-name].
+     *
+     * <p>Bypasses {@code /advancedrocketry goto} (which gates on
+     * {@code sender instanceof Entity} and isn't reachable from a server
+     * console driving the harness). Runs the same
+     * {@code PlayerList.transferPlayerToDimension} path goto eventually uses,
+     * so {@code PlayerChangedDimensionEvent} fires and downstream listeners
+     * (e.g. {@code PlanetWeatherEventHandler.syncToPlayer}) are exercised
+     * exactly as they would be in normal gameplay.</p>
+     *
+     * <p>Player defaults to the first connected player when omitted — handy
+     * for client-E2E tests that run a single player whose name is generated
+     * (FG6's legacydev assigns a random "Player###").</p>
+     */
+    private void handleTp(net.minecraft.server.MinecraftServer server,
+                          ICommandSender sender, String[] args) {
+        if (args.length < 1) {
+            send(sender, "{\"error\":\"usage: /artest tp <dim> [player]\"}");
+            return;
+        }
+        int dim = parseIntOr(args[0], Integer.MIN_VALUE);
+        if (dim == Integer.MIN_VALUE) {
+            send(sender, "{\"error\":\"invalid dim id\",\"value\":\"" + args[0] + "\"}");
+            return;
+        }
+        net.minecraft.entity.player.EntityPlayerMP target = null;
+        if (args.length >= 2) {
+            target = server.getPlayerList().getPlayerByUsername(args[1]);
+            if (target == null) {
+                send(sender, "{\"error\":\"unknown player\",\"name\":\"" + args[1] + "\"}");
+                return;
+            }
+        } else {
+            java.util.List<net.minecraft.entity.player.EntityPlayerMP> players = server.getPlayerList().getPlayers();
+            if (players.isEmpty()) {
+                send(sender, "{\"error\":\"no players online\"}");
+                return;
+            }
+            target = players.get(0);
+        }
+        if (!net.minecraftforge.common.DimensionManager.isDimensionRegistered(dim)) {
+            send(sender, "{\"error\":\"dimension not registered\",\"dim\":" + dim + "}");
+            return;
+        }
+        net.minecraftforge.common.DimensionManager.keepDimensionLoaded(dim, true);
+        if (net.minecraftforge.common.DimensionManager.getWorld(dim) == null) {
+            net.minecraftforge.common.DimensionManager.initDimension(dim);
+        }
+        net.minecraft.world.WorldServer destWorld = server.getWorld(dim);
+        if (destWorld == null) {
+            send(sender, "{\"error\":\"destination world failed to load\",\"dim\":" + dim + "}");
+            return;
+        }
+        int fromDim = target.world.provider.getDimension();
+        server.getPlayerList().transferPlayerToDimension(target, dim,
+                new zmaster587.advancedRocketry.world.util.TeleporterNoPortalSeekBlock(destWorld));
+        send(sender, "{\"ok\":true,\"player\":\"" + target.getName() + "\",\"fromDim\":"
+                + fromDim + ",\"toDim\":" + dim + "}");
     }
 }

@@ -1,0 +1,16 @@
+{
+  "required": true,
+  "minVersion": "0.8",
+  "package": "zmaster587.advancedRocketry.mixin",
+  "compatibilityLevel": "JAVA_8",
+  "refmap": "mixins.advancedrocketry.refmap.json",
+  "mixins": [
+    "AccessorWorld",
+    "MixinWorldServerMulti",
+    "MixinPlayerList"
+  ],
+  "client": [
+    "MixinNetHandlerPlayClient"
+  ],
+  "server": []
+}

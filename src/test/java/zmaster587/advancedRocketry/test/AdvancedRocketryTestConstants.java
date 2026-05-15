@@ -33,7 +33,12 @@ public final class AdvancedRocketryTestConstants {
     }
 
     public static String expectedWeatherMode() {
-        String value = System.getProperty(WEATHER_MODE_PROPERTY, WEATHER_MODE_SHARED);
+        // Default flipped from 'shared' to 'per_dimension' once B1 (Mixin
+        // weather wrapper) landed. Override with
+        // -Dadvancedrocketry.tests.expectedWeatherMode=shared
+        // to assert the pre-B1 baseline (e.g. for bisecting whether the wrap
+        // path silently regressed).
+        String value = System.getProperty(WEATHER_MODE_PROPERTY, WEATHER_MODE_PER_DIMENSION);
         if (!WEATHER_MODE_SHARED.equals(value) && !WEATHER_MODE_PER_DIMENSION.equals(value)) {
             throw new IllegalArgumentException(
                     "Invalid -D" + WEATHER_MODE_PROPERTY + "=" + value
