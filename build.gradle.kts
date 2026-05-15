@@ -455,6 +455,23 @@ fun Test.configureHarnessLayer(enableClient: Boolean) {
     // Building AR's jar is a soft prereq because runServer's classpath includes it
     // (and the in-game mod must be present for any AR-specific assertion).
     dependsOn(tasks.named("jar"))
+    // FG6 generates the SRG/MCP mapping files lazily — runServer/runClient pull
+    // them in, but they are NOT inputs to compileJava. On a fresh checkout where
+    // those run tasks have never been invoked, build/extractMappings,
+    // build/createSrgToMcp, and build/createLegacyObf2Srg don't exist; the -D
+    // props we forward (csvDir, srg.notch-srg) point at missing files, and the
+    // forked dedicated server NPEs in FMLDeobfuscatingRemapper.setup before
+    // printing its ready marker. Force the mapping outputs to materialise.
+    // Use string-based dependsOn — FG6 registers these tasks lazily during its
+    // own plugin apply, so `tasks.named("extractMappings")` here would throw
+    // UnknownTaskException at script-evaluation time.
+    dependsOn("extractMappings", "createSrgToMcp", "createLegacyObf2Srg")
+    if (enableClient) {
+        // The real client also needs assets resolved (sounds.json, lang files,
+        // textures) — FG6's downloadAssets populates the assetIndex referenced
+        // by the launcher.
+        dependsOn("downloadAssets")
+    }
 }
 
 // ── §2.1 — pure unit tests (no MC runtime) ──
