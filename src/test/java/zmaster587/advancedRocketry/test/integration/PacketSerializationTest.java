@@ -36,6 +36,7 @@ import java.lang.reflect.Field;
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
 /**
@@ -711,5 +712,267 @@ public class PacketSerializationTest {
         java.lang.reflect.Field hs = PacketMoveRocketInSpace.class.getDeclaredField("hasStar");
         assertNotNull("field hasWorld must exist (sentinel for the bug)", hw);
         assertNotNull("field hasStar must exist (sentinel for the bug)", hs);
+    }
+
+    // ── §6.9 bullet 5 — "assert invalid/missing data fails safely" ────────
+    // Negative-input coverage for every AR packet whose write/readClient pair
+    // needs MC bootstrap. Pattern is uniform: feed an empty (or hostile-header)
+    // ByteBuf and assert two invariants hold:
+    //
+    //   (a) readClient either parses cleanly or fails *bounded* — a single
+    //       exception propagates to the Netty pipeline, no infinite loop, no
+    //       runaway allocation, no JVM-killing throw.
+    //   (b) Fields that would otherwise leak attacker bytes are at their
+    //       no-arg-ctor defaults, gating executeClient from acting on
+    //       half-parses.
+    //
+    // PacketStorageTileUpdate is skipped — its readClient calls
+    // Minecraft.getMinecraft().world, which is unavailable in headless
+    // bootstrap. PacketMoveRocketInSpace is skipped — readClient is empty
+    // (and read(ByteBuf) NPEs unconditionally, documented elsewhere).
+
+    /**
+     * Treat any RuntimeException as a bounded failure (the same way Forge's
+     * Netty pipeline does — it logs and drops the packet). The post-condition
+     * asserts are what actually establish the safety property.
+     */
+    private static void assertReadClientFailsSafely(Runnable readOp) {
+        try {
+            readOp.run();
+        } catch (RuntimeException ignoredBounded) {
+            // Acceptable — bounded propagation.
+        }
+    }
+
+    @Test
+    public void packetLaserGunReadClientEmptyBufferLeavesDefaults() {
+        ByteBuf empty = newBuffer();
+        PacketLaserGun packet = new PacketLaserGun();
+        assertReadClientFailsSafely(() -> packet.readClient(empty));
+        assertEquals(0, (int) PacketSerializationTest.<Integer>getField(packet, "entityId"));
+        assertNull("toPos must stay null when wire underflows before float reads",
+                PacketSerializationTest.<Object>getField(packet, "toPos"));
+    }
+
+    @Test
+    public void packetAirParticleReadClientEmptyBufferLeavesDefaults() {
+        ByteBuf empty = newBuffer();
+        PacketAirParticle packet = new PacketAirParticle();
+        assertReadClientFailsSafely(() -> packet.readClient(empty));
+        assertNull(PacketSerializationTest.<Object>getField(packet, "toPos"));
+    }
+
+    @Test
+    public void packetInvalidLocationNotifyReadClientEmptyBufferLeavesDefaults() {
+        ByteBuf empty = newBuffer();
+        PacketInvalidLocationNotify packet = new PacketInvalidLocationNotify();
+        assertReadClientFailsSafely(() -> packet.readClient(empty));
+        assertNull(PacketSerializationTest.<Object>getField(packet, "toPos"));
+    }
+
+    @Test
+    public void packetFluidParticleReadClientEmptyBufferLeavesDefaults() {
+        ByteBuf empty = newBuffer();
+        PacketFluidParticle packet = new PacketFluidParticle();
+        assertReadClientFailsSafely(() -> packet.readClient(empty));
+        assertNull(PacketSerializationTest.<Object>getField(packet, "toPos"));
+        assertNull(PacketSerializationTest.<Object>getField(packet, "fromPos"));
+        assertEquals(0, (int) PacketSerializationTest.<Integer>getField(packet, "time"));
+        assertEquals(0, (int) PacketSerializationTest.<Integer>getField(packet, "color"));
+    }
+
+    @Test
+    public void packetBiomeIDChangeReadClientEmptyBufferLeavesDefaults() {
+        // PacketBiomeIDChange's no-arg ctor pre-allocates array=byte[256] and
+        // pos=HashedBlockPosition(0,0,0). Empty buffer → readInt underflows
+        // before any field assignment. The pre-allocated array stays all
+        // zeros (would otherwise be filled by in.readBytes(array) to 256
+        // attacker bytes).
+        ByteBuf empty = newBuffer();
+        PacketBiomeIDChange packet = new PacketBiomeIDChange();
+        assertReadClientFailsSafely(() -> packet.readClient(empty));
+        assertEquals(0, (int) PacketSerializationTest.<Integer>getField(packet, "worldId"));
+        byte[] array = getField(packet, "array");
+        assertNotNull(array);
+        assertEquals("array still pre-sized to 256 (not resized by attacker)", 256, array.length);
+        for (int i = 0; i < array.length; i++) {
+            assertEquals("array[" + i + "] must be zero when biome wire underflows", 0, array[i]);
+        }
+    }
+
+    @Test
+    public void packetDimInfoReadClientEmptyBufferLeavesDefaults() {
+        // Empty buffer underflows on readInt before any field is assigned.
+        ByteBuf empty = newBuffer();
+        PacketDimInfo packet = new PacketDimInfo();
+        assertReadClientFailsSafely(() -> packet.readClient(empty));
+        assertEquals(0, (int) PacketSerializationTest.<Integer>getField(packet, "dimNumber"));
+        assertEquals(false, (boolean) PacketSerializationTest.<Boolean>getField(packet, "deleteDim"));
+        assertEquals("artifacts list must stay empty when wire underflows",
+                0, PacketSerializationTest.<java.util.List<?>>getField(packet, "artifacts").size());
+        assertEquals("customIcon must stay at no-arg ctor default \"\"",
+                "", PacketSerializationTest.<String>getField(packet, "customIcon"));
+    }
+
+    @Test
+    public void packetDimInfoReadClientDeleteFlagSkipsNbtSection() {
+        // The deleteDim=true branch is the "drop this dim" signal — readClient
+        // must NOT try to read any NBT or customIcon bytes. Header-only wire
+        // (5 bytes) parses cleanly and leaves artifacts empty / customIcon "".
+        ByteBuf wire = newBuffer();
+        wire.writeInt(42);          // dimNumber
+        wire.writeBoolean(true);    // deleteDim
+
+        PacketDimInfo packet = new PacketDimInfo();
+        packet.readClient(wire); // must NOT throw
+
+        assertEquals(42, (int) PacketSerializationTest.<Integer>getField(packet, "dimNumber"));
+        assertEquals(true, (boolean) PacketSerializationTest.<Boolean>getField(packet, "deleteDim"));
+        assertEquals(0, PacketSerializationTest.<java.util.List<?>>getField(packet, "artifacts").size());
+        assertEquals("", PacketSerializationTest.<String>getField(packet, "customIcon"));
+    }
+
+    @Test
+    public void packetSpaceStationInfoReadClientEmptyBufferLeavesDefaults() {
+        ByteBuf empty = newBuffer();
+        PacketSpaceStationInfo packet = new PacketSpaceStationInfo();
+        assertReadClientFailsSafely(() -> packet.readClient(empty));
+        assertEquals(0, (int) PacketSerializationTest.<Integer>getField(packet, "stationNumber"));
+        assertEquals(false,
+                (boolean) PacketSerializationTest.<Boolean>getField(packet, "isBeingDeleted"));
+        assertNull(PacketSerializationTest.<Object>getField(packet, "nbt"));
+        assertNull(PacketSerializationTest.<Object>getField(packet, "clazzId"));
+        assertEquals(0, (int) PacketSerializationTest.<Integer>getField(packet, "fuelAmt"));
+    }
+
+    @Test
+    public void packetSpaceStationInfoDeleteFlagSkipsPayload() {
+        // deleteFlag=true must short-circuit before the try-block reads any
+        // NBT/clazzId/fuelAmt bytes, preventing partial parses.
+        ByteBuf wire = newBuffer();
+        wire.writeInt(77);          // stationNumber
+        wire.writeBoolean(true);    // isBeingDeleted
+
+        PacketSpaceStationInfo packet = new PacketSpaceStationInfo();
+        packet.readClient(wire); // must NOT throw
+
+        assertEquals(77, (int) PacketSerializationTest.<Integer>getField(packet, "stationNumber"));
+        assertEquals(true, (boolean) PacketSerializationTest.<Boolean>getField(packet, "isBeingDeleted"));
+        assertNull(PacketSerializationTest.<Object>getField(packet, "nbt"));
+        assertNull(PacketSerializationTest.<Object>getField(packet, "clazzId"));
+        assertEquals(0, (int) PacketSerializationTest.<Integer>getField(packet, "fuelAmt"));
+    }
+
+    @Test
+    public void packetStationUpdateReadClientEmptyBufferLeavesDefaults() {
+        ByteBuf empty = newBuffer();
+        PacketStationUpdate packet = new PacketStationUpdate();
+        assertReadClientFailsSafely(() -> packet.readClient(empty));
+        assertEquals(0, (int) PacketSerializationTest.<Integer>getField(packet, "stationNumber"));
+        assertNull(PacketSerializationTest.<Object>getField(packet, "type"));
+        assertEquals(0, (int) PacketSerializationTest.<Integer>getField(packet, "destOrbitingBody"));
+        assertEquals(0, (int) PacketSerializationTest.<Integer>getField(packet, "fuel"));
+    }
+
+    @Test
+    public void packetStationUpdateReadClientHostileTypeOrdinalFailsBounded() {
+        // type = Type.values()[in.readInt()] — feeding an out-of-range ordinal
+        // throws ArrayIndexOutOfBoundsException. Verify the failure is bounded
+        // and stationNumber, having been parsed before the throw, is the only
+        // touched field (no further branch executes).
+        ByteBuf wire = newBuffer();
+        wire.writeInt(42);             // stationNumber
+        wire.writeInt(Integer.MAX_VALUE); // hostile ordinal
+
+        PacketStationUpdate packet = new PacketStationUpdate();
+        assertReadClientFailsSafely(() -> packet.readClient(wire));
+        // stationNumber DID parse (attacker-controlled int) before the AIOOBE,
+        // but no switch branch ran and nothing leaked into typed fields.
+        assertEquals(42, (int) PacketSerializationTest.<Integer>getField(packet, "stationNumber"));
+        assertNull(PacketSerializationTest.<Object>getField(packet, "type"));
+        assertEquals(0, (int) PacketSerializationTest.<Integer>getField(packet, "destOrbitingBody"));
+        assertNull(PacketSerializationTest.<Object>getField(packet, "nbt"));
+    }
+
+    @Test
+    public void packetAsteroidInfoReadClientEmptyBufferLeavesDefaults() throws Exception {
+        // First read is packetBuffer.readString(128) which underflows
+        // immediately. asteroid was pre-allocated by the no-arg ctor;
+        // verify its ID stayed null (not partially populated).
+        ByteBuf empty = newBuffer();
+        PacketAsteroidInfo packet = new PacketAsteroidInfo();
+        Object asteroidBefore = getField(packet, "asteroid");
+        assertReadClientFailsSafely(() -> packet.readClient(empty));
+        Object asteroidAfter = getField(packet, "asteroid");
+        // Same instance — readClient didn't replace it with a half-parse.
+        assertEquals(asteroidBefore, asteroidAfter);
+        // Asteroid.ID is a String field; readString failed before assignment.
+        java.lang.reflect.Field idField = asteroidAfter.getClass().getDeclaredField("ID");
+        idField.setAccessible(true);
+        assertNull("asteroid.ID must not be set when readString underflows", idField.get(asteroidAfter));
+    }
+
+    @Test
+    public void packetConfigSyncReadClientEmptyBufferDoesNotCorruptGlobalConfig() {
+        // Snapshot a few representative ARConfiguration fields, fire readClient
+        // on an empty buffer, then assert the *global* config is unchanged.
+        // The packet's own config field is allowed to end up in any state
+        // (it's a per-packet local copy), but the singleton must survive
+        // attacker traffic intact.
+        ARConfiguration current = ARConfiguration.getCurrentConfig();
+        double thrustBefore = current.rocketThrustMultiplier;
+        boolean requireFuelBefore = current.rocketRequireFuel;
+
+        ByteBuf empty = newBuffer();
+        PacketConfigSync packet = new PacketConfigSync();
+        assertReadClientFailsSafely(() -> packet.readClient(empty));
+
+        ARConfiguration after = ARConfiguration.getCurrentConfig();
+        assertTrue("getCurrentConfig must still return the same singleton",
+                current == after);
+        assertEquals(thrustBefore, after.rocketThrustMultiplier, 0.0);
+        assertEquals(requireFuelBefore, after.rocketRequireFuel);
+    }
+
+    @Test
+    public void packetSatelliteReadClientEmptyBufferDoesNotMutateDimensionManager() {
+        // PacketSatellite.readClient calls DimensionManager.getInstance()
+        //   .getDimensionProperties(satellite.getDimensionId()).addSatellite(satellite)
+        // — i.e. it mutates global state during read. On an empty buffer
+        // readCompoundTag underflows before SatelliteRegistry.createFromNBT is
+        // invoked, so the addSatellite call is skipped. Net effect: no global
+        // mutation. Verify by snapshotting Earth's satellite count.
+        zmaster587.advancedRocketry.dimension.DimensionManager dm =
+                zmaster587.advancedRocketry.dimension.DimensionManager.getInstance();
+        // Earth's dim properties are guaranteed to exist after MinecraftBootstrap.
+        zmaster587.advancedRocketry.dimension.DimensionProperties earth =
+                dm.getDimensionProperties(0);
+        int satellitesBefore = earth.getAllSatellites().size();
+
+        ByteBuf empty = newBuffer();
+        PacketSatellite packet = new PacketSatellite();
+        assertReadClientFailsSafely(() -> packet.readClient(empty));
+
+        int satellitesAfter = earth.getAllSatellites().size();
+        assertEquals("Earth's satellite map must not be mutated by an empty packet",
+                satellitesBefore, satellitesAfter);
+    }
+
+    @Test
+    public void packetSatellitesUpdateReadClientEmptyBufferDoesNotMutateDimensionManager() {
+        // First read is byteBuf.readInt() (the dimNumber). Underflow → no
+        // DimensionManager.getDimensionProperties call, no mutation.
+        zmaster587.advancedRocketry.dimension.DimensionManager dm =
+                zmaster587.advancedRocketry.dimension.DimensionManager.getInstance();
+        zmaster587.advancedRocketry.dimension.DimensionProperties earth =
+                dm.getDimensionProperties(0);
+        int satellitesBefore = earth.getAllSatellites().size();
+
+        ByteBuf empty = newBuffer();
+        PacketSatellitesUpdate packet = new PacketSatellitesUpdate();
+        assertReadClientFailsSafely(() -> packet.readClient(empty));
+
+        int satellitesAfter = earth.getAllSatellites().size();
+        assertEquals(satellitesBefore, satellitesAfter);
     }
 }
