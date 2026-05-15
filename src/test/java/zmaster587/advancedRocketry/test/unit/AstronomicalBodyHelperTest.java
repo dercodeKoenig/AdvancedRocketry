@@ -127,4 +127,24 @@ public class AstronomicalBodyHelperTest {
         assertTrue("planet farther from the star must be cooler", outerPlanet < innerPlanet);
     }
 
+    @Test
+    public void planetaryLightMultiplierWithinExpectedBounds() {
+        // SMART §6.7 #3: for a sun-like baseline, sweep across astronomical
+        // distances and assert the eye-perceived light multiplier stays inside
+        // a narrow band around the analytic value 1.5^log2(stellarBrightness).
+        // The model collapses to PLM = 1.5^(2 * log2(100/d)) = (1.5)^(2*log2(100/d)).
+        StellarBody star = sunLikeStar();
+        int[] distances = {50, 100, 200, 400};
+        double[] expectedMin = {2.20, 0.99, 0.440, 0.196};
+        double[] expectedMax = {2.30, 1.01, 0.449, 0.199};
+        for (int i = 0; i < distances.length; i++) {
+            double sbm = AstronomicalBodyHelper.getStellarBrightness(star, distances[i]);
+            double plm = AstronomicalBodyHelper.getPlanetaryLightLevelMultiplier(sbm);
+            assertTrue(
+                    "PLM at d=" + distances[i] + " was " + plm
+                            + ", expected within [" + expectedMin[i] + ", " + expectedMax[i] + "]",
+                    plm >= expectedMin[i] && plm <= expectedMax[i]);
+        }
+    }
+
 }

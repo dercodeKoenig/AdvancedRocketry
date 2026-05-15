@@ -26,4 +26,19 @@ public class PlanetDimensionLoadTest extends AbstractHeadlessServerTest {
                 "No AR dimensions registered — skipping (empty galaxy?)",
                 joined.contains("\"arDimensions\":[]"));
     }
+
+    @Test
+    public void dimLoadOnOverworldReportsLoaded() throws Exception {
+        // SMART §5.2: /artest dim load <id> must force-load the world and
+        // report `loaded:true` afterwards. Overworld (dim 0) is always loaded
+        // on a fresh dedicated server, so this smoke pins the probe wiring
+        // without depending on any AR-specific dim id. Deeper load behavior
+        // (loading a not-yet-touched AR dim and back) belongs to Phase 1.
+        String joined = String.join("\n", client().execute("artest dim load 0"));
+
+        assertTrue("dim load 0 did not echo dim:0 in response: " + joined,
+                joined.contains("\"dim\":0"));
+        assertTrue("dim load 0 did not report loaded:true: " + joined,
+                joined.contains("\"loaded\":true"));
+    }
 }

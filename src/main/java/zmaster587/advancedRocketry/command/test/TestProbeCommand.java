@@ -241,6 +241,28 @@ public class TestProbeCommand extends CommandBase {
             send(sender, jsonMap(info));
             return;
         }
+        if ("load".equalsIgnoreCase(args[0]) && args.length >= 2) {
+            int dim = parseIntOr(args[1], Integer.MIN_VALUE);
+            if (dim == Integer.MIN_VALUE) {
+                send(sender, "{\"error\":\"invalid dim id\",\"value\":\"" + args[1] + "\"}");
+                return;
+            }
+            // Mirror the keepDimensionLoaded + initDimension idiom used by the
+            // weather/worldgen probes — pin the dim so AR's per-tick unload
+            // doesn't drop it again immediately after load.
+            net.minecraftforge.common.DimensionManager.keepDimensionLoaded(dim, true);
+            if (net.minecraftforge.common.DimensionManager.getWorld(dim) == null) {
+                net.minecraftforge.common.DimensionManager.initDimension(dim);
+            }
+            net.minecraft.world.WorldServer world = net.minecraftforge.common.DimensionManager.getWorld(dim);
+            Map<String, Object> info = new LinkedHashMap<>();
+            info.put("dim", dim);
+            info.put("loaded", world != null);
+            info.put("providerClass", world != null ? world.provider.getClass().getName() : "null");
+            info.put("isARPlanet", DimensionManager.getInstance().isDimensionCreated(dim));
+            send(sender, jsonMap(info));
+            return;
+        }
         send(sender, "{\"error\":\"unknown dim subcommand\"}");
     }
 

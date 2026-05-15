@@ -153,11 +153,39 @@ transceiver, data bus.
 
 ### Phase 5: Probe gaps surfaced during F2 audit
 
-Filled in dynamically from Phase 0 results. Likely candidates:
+F2 results (2026-05-15, static audit of `TestProbeCommand`, weather scope
+intentionally skipped per session scoping):
 
-- `/artest dim load <id>` if missing
-- `/artest worldgen sample <dim> <cx> <cz>`
-- `/artest oxygen player <name>`
+- [x] **§5.2 `/artest dim load <id>` — DONE 2026-05-15.** `handleDim` now has a
+      `case "load"` that mirrors the weather/worldgen `keepDimensionLoaded` +
+      `initDimension` idiom and returns `{dim, loaded, providerClass,
+      isARPlanet}`. Smoke test pinned in `PlanetDimensionLoadTest`
+      (`dimLoadOnOverworldReportsLoaded`). Deeper coverage (loading a
+      not-yet-touched AR dim) is Phase 1.
+- [x] **§5.13 `/artest worldgen sample <dim> <cx> <cz>` — present**
+      (`TestProbeCommand.java:1283`). Bonus `ore-stats` subcommand also exposed.
+- [x] **§5.10 `/artest oxygen player <name>` — present**
+      (`TestProbeCommand.java:814`). Returns
+      `{name, dim, posX, posY, posZ, atmosphere, breathable, pressure}`.
+- [ ] **§5.3 `/artest planet info <dim>` — present but verify field coverage.**
+      Currently returns 15 fields: `dim, name, starId, parent,
+      atmosphereDensity, gravity, orbitalDistance, rotationalPeriod, hasRings,
+      hasOxygen, seaLevel, rainStartLength, thunderStartLength, rainMarker,
+      thunderMarker`. SMART §5.3 prose calls for the *full* DimensionProperties
+      field list; cross-check against SMART source before Phase 4 and file any
+      missing field (e.g. `averageTemperature`, `originalAtmosphereDensity`,
+      `oceanBlock`, `sunriseSunsetColors`, `skyColor`, `genType`) as a follow-up
+      bullet here.
+- [ ] **Advisory: no top-level category implements `case "help"`.** Calling
+      `/artest <cat> help` falls through to each category's "unknown
+      subcommand" error string. Not a SMART §5 hard requirement, but adding a
+      uniform `case "help"` per handler (returning the existing fallback error
+      text wrapped as `{"usage":...}` instead of `{"error":...}`) would make
+      future audits self-documenting. Optional unless SMART §16 enforces it.
+
+**Weather scope (deferred):** `/artest weather` subcommands NOT audited in this
+session per user request. Future audit pass needs to verify
+`weather get/set/clear/rain/thunder` and any SMART §5 weather-specific verbs.
 
 ## Technical Decisions
 
