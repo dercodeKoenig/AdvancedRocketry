@@ -11,9 +11,12 @@ import static org.junit.Assert.assertTrue;
  * §6.7 Pure-math astronomy helpers.
  *
  * Excluded from these tests: {@code getOrbitalTheta} / {@code getMoonOrbitalTheta} —
- * they call {@code AdvancedRocketry.proxy.getWorldTimeUniversal} which requires the
- * proxy to be initialized (only available inside a running game). Those are covered
- * by scenario tests in §7.
+ * they call {@code AdvancedRocketry.proxy.getWorldTimeUniversal} which requires
+ * the proxy to be initialized; loading {@code AdvancedRocketry.class} triggers
+ * {@code FluidRegistry.enableUniversalBucket()} which can only run after Forge
+ * bootstrap. Wrap-around coverage for those methods lives in
+ * {@code integration/AstronomicalBodyHelperOrbitalThetaTest} where
+ * {@code MinecraftBootstrap} has prepared the registry state.
  */
 public class AstronomicalBodyHelperTest {
 
@@ -123,4 +126,5 @@ public class AstronomicalBodyHelperTest {
 
         assertTrue("planet farther from the star must be cooler", outerPlanet < innerPlanet);
     }
+
 }

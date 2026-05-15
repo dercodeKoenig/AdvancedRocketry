@@ -237,12 +237,19 @@ configurations.named("testRuntimeClasspath") {
 // No -P flags are REQUIRED for any of these. Two OPTIONAL perf/mode overrides
 // still exist (they have sane defaults — you never have to pass them):
 //   -Pforks=N      parallel harness JVMs               (default 3)
-//   -Pweather=...  expected weather mode for §7.5       (default shared)
+//   -Pweather=...  expected weather mode for §7.5       (default per_dimension)
+//
+// Default is per_dimension because that's the *current* production behaviour:
+// AR planets already get isolated weather through CustomDerivedWorldInfo —
+// rain on the overworld does NOT leak to AR dims. The SMART scaffolding had
+// originally assumed "pre-B1 = shared, post-B1 = per_dimension"; that premise
+// is stale in this fork. Override with -Pweather=shared if you need to verify
+// a regression where the isolation collapses back to vanilla.
 //
 // In the IDE, "Run all tests in directory" on any of the four packages works
 // natively (IntelliJ drives JUnit directly, bypassing the Gradle filter).
 
-val weatherMode: String = (project.findProperty("weather") as? String) ?: "shared"
+val weatherMode: String = (project.findProperty("weather") as? String) ?: "per_dimension"
 val parallelForks: Int = (project.findProperty("forks") as? String)?.toIntOrNull() ?: 3
 // The client harness layer (testClient) launches a real, GL-rendering Minecraft
 // client per scenario. Running several of those concurrently makes the

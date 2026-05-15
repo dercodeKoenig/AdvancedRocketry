@@ -33,7 +33,14 @@ public final class AdvancedRocketryTestConstants {
     }
 
     public static String expectedWeatherMode() {
-        String value = System.getProperty(WEATHER_MODE_PROPERTY, WEATHER_MODE_SHARED);
+        // Default per_dimension matches current production: AR planets get
+        // isolated weather through CustomDerivedWorldInfo, so rain on the
+        // overworld does not leak to AR dims. The SMART scaffolding originally
+        // assumed "pre-B1 = shared, post-B1 = per_dimension", but that premise
+        // is stale in this fork. Override with -Dadvancedrocketry.tests
+        // .expectedWeatherMode=shared when verifying a regression back to
+        // vanilla weather behaviour.
+        String value = System.getProperty(WEATHER_MODE_PROPERTY, WEATHER_MODE_PER_DIMENSION);
         if (!WEATHER_MODE_SHARED.equals(value) && !WEATHER_MODE_PER_DIMENSION.equals(value)) {
             throw new IllegalArgumentException(
                     "Invalid -D" + WEATHER_MODE_PROPERTY + "=" + value
