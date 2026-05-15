@@ -83,6 +83,16 @@
 
 ### Implementation Plans (`tasks/`)
 
+**Active tasks**:
+- [`TASK-01-smart-depth-coverage.md`](./tasks/TASK-01-smart-depth-coverage.md) —
+  **Pending**. Bring SMART per-scenario depth up from skeleton level (one
+  representative method per scenario) to SMART-prose level (4–9 bullets of
+  coverage per scenario). Targets §7.3/§7.9/§7.10/§7.12/§7.13/§7.17/§7.19 depth
+  plus the §6.7 #3 micro-fix and a §5 probes audit. Required for the suite to
+  become the real regression-safety net SMART §17 demands. ~25–35 h across
+  ~10 sessions. Predecessor:
+  `.agent/.context-markers/2026-05-15-1610_smart-pyramid-skeleton-complete.md`.
+
 **Format**: `TASK-XX-feature-slug.md`
 
 **When created**:

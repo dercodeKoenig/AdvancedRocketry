@@ -1,9 +1,17 @@
-# Context Marker: SMART pyramid complete (P0/P1/P2 + §6 gaps closed)
+# Context Marker: SMART pyramid SKELETON complete; per-scenario depth gaps remain
 
-**Created**: 2026-05-15 16:10
+**Created**: 2026-05-15 16:10 (renamed/corrected 16:40)
 **Note**: Cross-repo session. FG6 test-harness mappings fix, framework client-window
-minimization, SMART §6.9/§6.10/§6.7 gaps closed, full pyramid validated end-to-end
-(unit + integration + server + client). 201 tests / 193 PASS / 8 SKIP / 0 FAIL.
+minimization, SMART §6.9/§6.10/§6.7 categorial gaps closed, full pyramid validated
+end-to-end (unit + integration + server + client). 201 tests / 193 PASS / 8 SKIP /
+0 FAIL.
+
+**Honest scoping correction**: «pyramid complete» applies to the *skeleton* — all
+4 layers run; every SMART §6/§7 category has at least one test method; every
+P0/P1/P2 named item from §8 has a file. **Per-scenario depth is NOT at SMART
+prose target** for ~7 §7 scenarios: SMART asks for 4-9 bullets of coverage per
+scenario, but several have only 1 representative method. Follow-up plan is in
+`.agent/tasks/TASK-01-smart-depth-coverage.md`.
 
 ---
 
