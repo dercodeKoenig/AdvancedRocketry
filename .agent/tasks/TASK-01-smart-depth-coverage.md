@@ -42,20 +42,38 @@ missing.
       `/artest planet info <dim>` returns the full DimensionProperties field
       list per SMART §5.3. File any missing subcommand as Phase 5 work below.
 
-### Phase 1: P0 depth — §7.3 PlanetDimensionLoadTest (~2-3 h)
+### Phase 1: P0 depth — §7.3 PlanetDimensionLoadTest (~2-3 h) — DONE 2026-05-15
 
-- [ ] **Probe extension**: `/artest dim info <id>` must return
-      `providerClass`, `biomeProviderClass`, `chunkGeneratorClass`, `saveDir`.
-      If any are missing today, add to `TestProbeCommand.dim` case.
-- [ ] `providerClassIsWorldProviderPlanet` — assert `dim info 0` reports
-      AR's `WorldProviderPlanet`
-- [ ] `biomeProviderIsNonNull`
-- [ ] `chunkGeneratorIsNonNull`
-- [ ] `saveFolderResolvesToExpectedPath`
-- [ ] `celestialAngleStableAcrossSameWorldTime` — two probe calls at identical
-      world time must produce identical results
-- [ ] `celestialAngleProgressesAcrossDifferentWorldTimes` — monotonic on
-      `t=0 → 6000 → 12000`
+- [x] **Probe extension**: `/artest dim info <id>` now returns `providerClass`
+      (already), `biomeProviderClass`, `chunkGeneratorClass` (drills past
+      `ChunkProviderServer` to the inner `IChunkGenerator`), and `saveDir`.
+      Added in `TestProbeCommand.handleDim`. Also added
+      `/artest dim celestial-angle <id> <worldTime>` for the two angle tests
+      — pure read-only computation, deterministic.
+- [x] `providerClassIsWorldProviderPlanet` — uses
+      `firstNonOverworldArDimOrSkip` (AR registers Earth as dim 0 but keeps
+      its vanilla `WorldProviderSurface`, so the test targets the first
+      non-overworld AR planet); asserts FQN equals
+      `zmaster587.advancedRocketry.world.provider.WorldProviderPlanet`.
+- [x] `biomeProviderIsNonNull` — same dim, asserts `biomeProviderClass` is
+      neither missing nor `"null"`.
+- [x] `chunkGeneratorIsNonNull` — same dim, same null-vs-missing assertions
+      against the drilled-down generator class.
+- [x] `saveFolderResolvesToExpectedPath` — same dim, asserts
+      `saveDir` starts with `"advRocketry/"` (per
+      `WorldProviderPlanet.getSaveFolder` prefix).
+- [x] `celestialAngleStableAcrossSameWorldTime` — two probe calls at
+      `worldTime=0`, compare extracted `"angle"` doubles with delta=0.0.
+      Note: we compare extracted angle values rather than full response
+      strings — server console echoes are timestamp-prefixed, which would
+      race a byte-level comparison on tick boundaries.
+- [x] `celestialAngleProgressesAcrossDifferentWorldTimes` — soft assertion
+      that angles at `t=0`, `t=6000`, `t=12000` are pairwise distinct.
+      Strict monotonicity not pinned (the celestial cycle wraps modulo
+      `rotationalPeriod`); tightening belongs to a future test after the
+      rocket-assembly suite locks down AR's exact rotational-period math.
+- Validation: `./gradlew testServer --tests "*.PlanetDimensionLoadTest"` →
+  **8/8 PASSED**, 3m 54s.
 
 ### Phase 2: P1 depth (~12-17 h, can be split across 3-4 sessions)
 
@@ -225,8 +243,9 @@ session per user request. Future audit pass needs to verify
 
 ## Completion Checklist
 
-- [ ] Phase 0 (F1, F2) done; F2 results merged into Phase 5
-- [ ] Phase 1 (PlanetDimensionLoad) done; testServer green
+- [x] Phase 0 (F1, F2) done; F2 results merged into Phase 5 (weather audit
+      deferred; non-weather scope complete)
+- [x] Phase 1 (PlanetDimensionLoad) done; testServer green (8/8 PASSED)
 - [ ] Phase 2a (Commands) done
 - [ ] Phase 2b (AtmosphereOxygen) done
 - [ ] Phase 2c (RocketAssembly) done

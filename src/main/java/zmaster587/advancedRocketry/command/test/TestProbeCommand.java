@@ -230,6 +230,11 @@ public class TestProbeCommand extends CommandBase {
             info.put("dim", dim);
             info.put("loaded", world != null);
             info.put("providerClass", world != null ? world.provider.getClass().getName() : "null");
+            info.put("biomeProviderClass", (world != null && world.getBiomeProvider() != null)
+                    ? world.getBiomeProvider().getClass().getName() : "null");
+            info.put("chunkGeneratorClass", chunkGeneratorClassOf(world));
+            info.put("saveDir", (world != null && world.provider.getSaveFolder() != null)
+                    ? world.provider.getSaveFolder() : "null");
             info.put("isARPlanet", DimensionManager.getInstance().isDimensionCreated(dim));
             if (props != null) {
                 info.put("name", props.getName());
@@ -238,6 +243,34 @@ public class TestProbeCommand extends CommandBase {
                 info.put("gravity", props.getGravitationalMultiplier());
                 info.put("orbitalDistance", props.orbitalDist);
             }
+            send(sender, jsonMap(info));
+            return;
+        }
+        if ("celestial-angle".equalsIgnoreCase(args[0]) && args.length >= 3) {
+            int dim = parseIntOr(args[1], Integer.MIN_VALUE);
+            if (dim == Integer.MIN_VALUE) {
+                send(sender, "{\"error\":\"invalid dim id\",\"value\":\"" + args[1] + "\"}");
+                return;
+            }
+            long worldTime = parseLongOr(args[2], Long.MIN_VALUE);
+            if (worldTime == Long.MIN_VALUE) {
+                send(sender, "{\"error\":\"invalid worldTime\",\"value\":\"" + args[2] + "\"}");
+                return;
+            }
+            net.minecraft.world.WorldServer world = net.minecraftforge.common.DimensionManager.getWorld(dim);
+            if (world == null) {
+                send(sender, "{\"error\":\"world not loaded\",\"dim\":" + dim + "}");
+                return;
+            }
+            // Pure computation — provider math is read-only at this entry point,
+            // so callers can probe the same (dim, worldTime) twice and rely on
+            // bit-for-bit identical results.
+            float angle = world.provider.calculateCelestialAngle(worldTime, 0.0f);
+            Map<String, Object> info = new LinkedHashMap<>();
+            info.put("dim", dim);
+            info.put("worldTime", worldTime);
+            info.put("partialTicks", 0.0f);
+            info.put("angle", angle);
             send(sender, jsonMap(info));
             return;
         }
@@ -2122,6 +2155,25 @@ public class TestProbeCommand extends CommandBase {
 
     private static long parseLongOr(String s, long fallback) {
         try { return Long.parseLong(s); } catch (NumberFormatException e) { return fallback; }
+    }
+
+    /**
+     * Drills past the per-dimension wrapper to report the inner generator that
+     * actually owns chunk generation. For a vanilla dedicated server the chunk
+     * provider is {@code ChunkProviderServer} which delegates to an
+     * {@code IChunkGenerator}; for AR planets that inner generator is the
+     * informative one. Falls back to the wrapper's class name (or "null") when
+     * the layout is unexpected.
+     */
+    private static String chunkGeneratorClassOf(net.minecraft.world.WorldServer world) {
+        if (world == null) return "null";
+        net.minecraft.world.chunk.IChunkProvider provider = world.getChunkProvider();
+        if (provider instanceof net.minecraft.world.gen.ChunkProviderServer) {
+            net.minecraft.world.gen.IChunkGenerator inner =
+                    ((net.minecraft.world.gen.ChunkProviderServer) provider).chunkGenerator;
+            if (inner != null) return inner.getClass().getName();
+        }
+        return provider != null ? provider.getClass().getName() : "null";
     }
 
     /** Reads a private int field of an arbitrary object (used for EntityRocket.destinationDimId etc.). */
