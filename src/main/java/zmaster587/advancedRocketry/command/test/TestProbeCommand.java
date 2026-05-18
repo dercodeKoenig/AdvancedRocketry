@@ -812,6 +812,42 @@ public class TestProbeCommand extends CommandBase {
             send(sender, builder.toString());
             return;
         }
+        if ("fuel".equalsIgnoreCase(args[0]) && args.length >= 4) {
+            // /artest station fuel <id> {set|add|use} <amount>
+            int id = parseIntOr(args[1], Integer.MIN_VALUE);
+            String op = args[2];
+            int amount = parseIntOr(args[3], 0);
+            ISpaceObject station = SpaceObjectManager.getSpaceManager().getSpaceStation(id);
+            if (!(station instanceof SpaceStationObject)) {
+                send(sender, "{\"error\":\"station not found or wrong type\",\"id\":" + id + "}");
+                return;
+            }
+            SpaceStationObject sso = (SpaceStationObject) station;
+            int before = sso.getFuelAmount();
+            int returned;
+            if ("set".equalsIgnoreCase(op)) {
+                sso.setFuelAmount(amount);
+                returned = amount;
+            } else if ("add".equalsIgnoreCase(op)) {
+                returned = sso.addFuel(amount);
+            } else if ("use".equalsIgnoreCase(op)) {
+                returned = sso.useFuel(amount);
+            } else {
+                send(sender, "{\"error\":\"unknown fuel op — try set|add|use\",\"op\":\"" + escapeJson(op) + "\"}");
+                return;
+            }
+            Map<String, Object> out = new LinkedHashMap<>();
+            out.put("ok", true);
+            out.put("id", id);
+            out.put("op", op);
+            out.put("requested", amount);
+            out.put("returned", returned);
+            out.put("before", before);
+            out.put("after", sso.getFuelAmount());
+            out.put("max", sso.getMaxFuelAmount());
+            send(sender, jsonMap(out));
+            return;
+        }
         if ("info".equalsIgnoreCase(args[0]) && args.length >= 2) {
             int id = parseIntOr(args[1], Integer.MIN_VALUE);
             ISpaceObject station = SpaceObjectManager.getSpaceManager().getSpaceStation(id);
@@ -833,12 +869,14 @@ public class TestProbeCommand extends CommandBase {
                 info.put("spawnZ", spawn.z);
             }
             if (station instanceof SpaceStationObject) {
-                info.put("fuelAmount", ((SpaceStationObject) station).getFuelAmount());
+                SpaceStationObject sso = (SpaceStationObject) station;
+                info.put("fuelAmount", sso.getFuelAmount());
+                info.put("fuelMax", sso.getMaxFuelAmount());
             }
             send(sender, jsonMap(info));
             return;
         }
-        send(sender, "{\"error\":\"unknown station subcommand — try list|info <id>\"}");
+        send(sender, "{\"error\":\"unknown station subcommand — try list|info <id>|fuel <id> set|add|use <amount>\"}");
     }
 
     // §5.6 Satellite probes ---------------------------------------------------
@@ -2101,7 +2139,12 @@ public class TestProbeCommand extends CommandBase {
                 return;
             }
             net.minecraft.block.Block target = ForgeRegistries.BLOCKS.getValue(new ResourceLocation(blockId));
-            if (target == null) {
+            // Forge's GameRegistry returns AIR as the default for any missing
+            // registry key (instead of null). Detect the fallback explicitly
+            // so callers that supplied "foo:bar_typo" get a real error
+            // rather than a 424k count of air blocks.
+            boolean isAirRequested = blockId.equalsIgnoreCase("minecraft:air");
+            if (target == null || (target == net.minecraft.init.Blocks.AIR && !isAirRequested)) {
                 send(sender, "{\"error\":\"unknown block id\",\"id\":\"" + escapeJson(blockId) + "\"}");
                 return;
             }
