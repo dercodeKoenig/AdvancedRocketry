@@ -203,7 +203,7 @@ dependencies {
     // MCP-named MC classes, the reobf (no-classifier) jar has SRG names and
     // won't compile against the dev classpath.
     testImplementation("junit:junit:4.13.2")
-    testImplementation("com.github.stannismod.forge:forge-test-framework:0.4.0:dev")
+    testImplementation("com.github.stannismod.forge:forge-test-framework:0.4.2:dev")
 }
 
 // The client harness (testClient) launches the real Minecraft client through
