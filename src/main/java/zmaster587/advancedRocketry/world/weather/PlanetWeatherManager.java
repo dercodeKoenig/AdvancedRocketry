@@ -39,10 +39,17 @@ public final class PlanetWeatherManager {
 
     private static final Logger LOGGER = LogManager.getLogger("ARWeather");
 
-    // Codes for SPacketChangeGameState (matches vanilla; cannot use the
-    // constants from the inner class because some are package-private).
-    private static final int STATE_END_RAINING = 1;
-    private static final int STATE_BEGIN_RAINING = 2;
+    // Codes for SPacketChangeGameState. CAREFUL: the vanilla protocol
+    // numbers don't match the human-readable names in the wiki. Decompile
+    // NetHandlerPlayClient.handleChangeGameState to verify:
+    //   code 1 → world.getWorldInfo().setRaining(true)  + world.setRainStrength(0)
+    //   code 2 → world.getWorldInfo().setRaining(false) + world.setRainStrength(1)
+    // So "send code 1 when rain is on" is correct, and "send code 2 when
+    // rain is off". Earlier revisions of this manager had these constants
+    // swapped (named per the wiki, not per actual client behaviour), which
+    // produced inverted weather on every sync.
+    private static final int STATE_BEGIN_RAINING = 1;
+    private static final int STATE_END_RAINING = 2;
     private static final int STATE_RAIN_STRENGTH = 7;
     private static final int STATE_THUNDER_STRENGTH = 8;
 

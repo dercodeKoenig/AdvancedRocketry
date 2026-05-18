@@ -9,8 +9,6 @@
     "MixinWorldServerMulti",
     "MixinPlayerList"
   ],
-  "client": [
-    "MixinNetHandlerPlayClient"
-  ],
+  "client": [],
   "server": []
 }

@@ -10,28 +10,33 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 /**
- * Fixes a vanilla 1.12.2 bug in
- * {@link PlayerList#updateTimeAndWeatherForPlayer}:
+ * Tightens vanilla 1.12.2 {@link PlayerList#updateTimeAndWeatherForPlayer}.
+ *
+ * <p>The vanilla packet codes themselves are correct (a careful read of
+ * {@link net.minecraft.client.network.NetHandlerPlayClient#handleChangeGameState}
+ * shows code 1 → {@code setRaining(true)} and code 2 → {@code setRaining(false)};
+ * the wiki/MCP docstrings have the labels swapped, but server + client are
+ * consistent with each other). What vanilla DOES get wrong is the gate:
  *
  * <pre>
  * if (worldIn.isRaining()) {
- *     playerIn.connection.sendPacket(new SPacketChangeGameState(1, 0.0F));  // ← wrong: state 1 = STOP RAINING
+ *     // World.isRaining() returns getRainStrength(1.0F) > 0.2D — i.e. the
+ *     // current LERPED strength, NOT the WorldInfo flag.
  *     ...
  * }
  * </pre>
  *
- * <p>The packet code should be {@code 2} (BEGIN_RAINING) when the world is
- * raining — vanilla sends STOP, so any player joining or transitioning into
- * a raining world initially sees the rain as cleared until something else
- * resyncs. For AR-planet weather this is especially visible: every cross-dim
- * teleport into a raining planet flickered through "no rain" until our
- * {@code syncToPlayer} re-broadcast caught up.</p>
+ * <p>So immediately after {@code /weather rain} (flag=true, strength still
+ * climbing from 0), vanilla skips the entire weather-sync block: a joining /
+ * dim-transitioning player sees no rain until the strength catches up
+ * naturally. For AR per-dim weather this is especially visible — every
+ * cross-dim teleport into a freshly-raining planet showed clear weather for
+ * the first second.</p>
  *
- * <p>This mixin runs the corrected sync at {@code HEAD} and cancels the
- * vanilla impl, so vanilla's buggy packet sequence never fires. Because
- * {@code updateTimeAndWeatherForPlayer} is short and well-known, an
- * {@code @Inject(cancellable=true)} replacement is safer than an
- * {@code @Overwrite} (no mapping surprises across Forge minor versions).</p>
+ * <p>We re-issue the same packets vanilla intended, but check the
+ * {@link net.minecraft.world.storage.WorldInfo} flag directly, so the
+ * client gets the correct begin/end-raining toggle the moment they enter
+ * the dim — independent of the lerp's current value.</p>
  */
 @Mixin(PlayerList.class)
 public abstract class MixinPlayerList {
@@ -52,32 +57,20 @@ public abstract class MixinPlayerList {
                 worldIn.getWorldTime(),
                 worldIn.getGameRules().getBoolean("doDaylightCycle")));
 
-        // Two bugs in the vanilla original we fix here:
-        //   1. `worldIn.isRaining()` checks rainStrength > 0.2 — NOT the
-        //      WorldInfo flag. Right after a "/weather rain" the flag is
-        //      true but strength is still climbing from 0, so vanilla
-        //      under-reports "not raining" and skips the entire block
-        //      (player sees no rain on dim transition until strength
-        //      catches up). We check the flag directly.
-        //   2. The `new SPacketChangeGameState(1, ...)` in the original is
-        //      state 1 = END_RAINING. It should be 2 (BEGIN_RAINING).
+        // Check the WorldInfo flag directly (not getRainStrength), so a
+        // freshly-set raining dim syncs even when the lerped strength is
+        // still 0. Packet codes match vanilla's NetHandlerPlayClient
+        // dispatch:  code 1 → setRaining(true);  code 2 → setRaining(false).
         net.minecraft.world.storage.WorldInfo info = worldIn.getWorldInfo();
-        System.err.println("[ARWeather-MIXIN] updateTimeAndWeatherForPlayer name=" + playerIn.getName()
-                + " dim=" + worldIn.provider.getDimension()
-                + " info.isRaining=" + info.isRaining()
-                + " info.class=" + info.getClass().getSimpleName()
-                + " rainStr=" + worldIn.getRainStrength(1.0F));
         if (info.isRaining()) {
-            playerIn.connection.sendPacket(new SPacketChangeGameState(2, 0.0F));
+            playerIn.connection.sendPacket(new SPacketChangeGameState(1, 0.0F));
             playerIn.connection.sendPacket(new SPacketChangeGameState(7, worldIn.getRainStrength(1.0F)));
             playerIn.connection.sendPacket(new SPacketChangeGameState(8, worldIn.getThunderStrength(1.0F)));
         } else {
-            // Worldinfo says "not raining" — explicitly tell the client.
-            // The client's fresh WorldInfo (post-SPacketRespawn) defaults to
-            // isRaining=false, but a previous dimension that DID rain may
-            // have left the client world in a partial-rain state, so spell
-            // it out.
-            playerIn.connection.sendPacket(new SPacketChangeGameState(1, 0.0F));
+            // WorldInfo says "not raining". Spell it out: a previous dimension
+            // that WAS raining may have left the client in a partial-rain
+            // state, so explicitly clear the flag + zero the strengths.
+            playerIn.connection.sendPacket(new SPacketChangeGameState(2, 0.0F));
             playerIn.connection.sendPacket(new SPacketChangeGameState(7, 0.0F));
             playerIn.connection.sendPacket(new SPacketChangeGameState(8, 0.0F));
         }
