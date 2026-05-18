@@ -10,6 +10,28 @@ log on close so the next iteration has packet trace available.
 
 ---
 
+> ## ✅ RESOLVED — 2026-05-18
+>
+> The END_RAINING packet spam was caused by **inverted protocol constants** —
+> the names `STATE_BEGIN_RAINING` / `STATE_END_RAINING` in
+> `PlanetWeatherManager` were swapped, and the "raining" branch of
+> `MixinPlayerList` was sending code 2 (actually END) instead of code 1
+> (actually BEGIN). Fixed in commit `96e12c2a`
+> ("fix: correct inverted weather packet codes and unblock client sync"):
+>
+> - Swapped `STATE_BEGIN_RAINING`/`STATE_END_RAINING` constants to match
+>   vanilla protocol (1=begin, 2=end — opposite of what we'd assumed)
+> - Flipped the `MixinPlayerList` branch accordingly
+> - No-op'd `ARHookLoader.registerHooks` to drop a server-boot NPE
+> - Deleted debug-only `MixinNetHandlerPlayClient` + its config entry
+> - Stripped the `System.err` debug print from `MixinPlayerList`
+>
+> **Full pyramid now 191 / 0 / 0** (pass / fail / skip) including
+> `WeatherClientSyncE2ETest`. Tree is clean on `fix/weather`.
+> See marker `2026-05-18-1745_weather-b1-shipped-eod.md` for the EOD snapshot.
+
+---
+
 ## TL;DR for next session
 
 1. **B1 implementation is DONE and working** — Mixin wrap of `WorldServerMulti`,
