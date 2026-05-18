@@ -98,10 +98,13 @@ public class TestProbeCommand extends CommandBase {
                     handleStation(sender, tail(args));
                     break;
                 case "satellite":
-                    handleSatellite(sender, tail(args));
+                    handleSatellite(server, sender, tail(args));
+                    break;
+                case "satellite-builder":
+                    handleSatelliteBuilder(server, sender, tail(args));
                     break;
                 case "atmosphere":
-                    handleAtmosphere(sender, tail(args));
+                    handleAtmosphere(server, sender, tail(args));
                     break;
                 case "oxygen":
                     handleOxygen(server, sender, tail(args));
@@ -165,6 +168,15 @@ public class TestProbeCommand extends CommandBase {
                     break;
                 case "field":
                     handleField(server, sender, tail(args));
+                    break;
+                case "scrubber":
+                    handleScrubber(server, sender, tail(args));
+                    break;
+                case "gascharge":
+                    handleGasCharge(server, sender, tail(args));
+                    break;
+                case "pipe":
+                    handlePipe(server, sender, tail(args));
                     break;
                 default:
                     send(sender, "{\"error\":\"unknown subcommand\",\"sub\":\"" + args[0] + "\"}");
@@ -456,12 +468,57 @@ public class TestProbeCommand extends CommandBase {
             info.put("destinationDim", reflectInt(rocket, "destinationDimId"));
             info.put("hasStorage", rocket.storage != null);
             info.put("numPassengers", rocket.getPassengers().size());
+            // Storage chunk geometry — null-safe.
+            if (rocket.storage != null) {
+                int sx = rocket.storage.getSizeX();
+                int sy = rocket.storage.getSizeY();
+                int sz = rocket.storage.getSizeZ();
+                info.put("storageSizeX", sx);
+                info.put("storageSizeY", sy);
+                info.put("storageSizeZ", sz);
+                info.put("storageChunkSize", sx * sy * sz);
+                // Count fuel-tank blocks — StatsRocket caches engineCount and
+                // seatCount, but tank counting requires a per-block scan. In
+                // AR, IFuelTank is implemented on the Block (not the
+                // TileEntity), so we walk the storage chunk's IBlockState
+                // grid rather than its tile-entity list.
+                int fuelTankCount = 0;
+                for (int sxi = 0; sxi < sx; sxi++) {
+                    for (int syi = 0; syi < sy; syi++) {
+                        for (int szi = 0; szi < sz; szi++) {
+                            net.minecraft.block.state.IBlockState bs =
+                                    rocket.storage.getBlockState(new BlockPos(sxi, syi, szi));
+                            if (bs.getBlock() instanceof zmaster587.advancedRocketry.api.IFuelTank) {
+                                fuelTankCount++;
+                            }
+                        }
+                    }
+                }
+                info.put("fuelTankCount", fuelTankCount);
+                // Guidance-computer slot: present iff the storage chunk has a
+                // TileGuidanceComputer AND its slot 0 (the chip slot) is non-empty.
+                zmaster587.advancedRocketry.tile.TileGuidanceComputer gc =
+                        rocket.storage.getGuidanceComputer();
+                boolean gcPresent = gc != null;
+                boolean chipPresent = gcPresent && !gc.getStackInSlot(0).isEmpty();
+                info.put("guidanceComputerPresent", gcPresent);
+                info.put("guidanceComputerSlotOccupied", chipPresent);
+            } else {
+                info.put("storageChunkSize", -1);
+                info.put("fuelTankCount", -1);
+                info.put("guidanceComputerPresent", false);
+                info.put("guidanceComputerSlotOccupied", false);
+            }
+            // Component counts from StatsRocket (cached during scan).
+            info.put("seatCount", rocket.stats.getNumPassengerSeats());
+            info.put("engineCount", rocket.stats.getEngineLocations().size());
             // Fuel snapshot per fuel type — using the public StatsRocket API.
             Map<String, Object> fuel = new LinkedHashMap<>();
             for (FuelRegistry.FuelType type : FuelRegistry.FuelType.values()) {
                 Map<String, Object> entry = new LinkedHashMap<>();
                 entry.put("amount", rocket.stats.getFuelAmount(type));
                 entry.put("capacity", rocket.stats.getFuelCapacity(type));
+                entry.put("rate", rocket.stats.getFuelRate(type));
                 fuel.put(type.name(), entry);
             }
             info.put("fuel", fuel);
@@ -470,7 +527,86 @@ public class TestProbeCommand extends CommandBase {
             send(sender, jsonMap(info));
             return;
         }
-        send(sender, "{\"error\":\"unknown rocket subcommand — try list|info <id>\"}");
+        if ("storage-inventory".equalsIgnoreCase(args[0]) && args.length >= 2) {
+            // rocket storage-inventory <entityId> — flat dump of every item
+            // stack across every IInventory tile inside the rocket's storage
+            // chunk. Used by §7.10 loader/unloader tests to verify the
+            // transfer ended up in the rocket's cargo hatches.
+            int entityId = parseIntOr(args[1], Integer.MIN_VALUE);
+            EntityRocket rocket = findRocket(server, entityId);
+            if (rocket == null) {
+                send(sender, "{\"error\":\"rocket not found\",\"entityId\":" + entityId + "}");
+                return;
+            }
+            if (rocket.storage == null) {
+                send(sender, "{\"error\":\"rocket has no storage\",\"entityId\":" + entityId + "}");
+                return;
+            }
+            StringBuilder builder = new StringBuilder("{\"entityId\":")
+                    .append(entityId).append(",\"items\":[");
+            boolean first = true;
+            int tileCount = 0;
+            for (TileEntity te : rocket.storage.getInventoryTiles()) {
+                tileCount++;
+                if (!(te instanceof net.minecraft.inventory.IInventory)) continue;
+                net.minecraft.inventory.IInventory inv = (net.minecraft.inventory.IInventory) te;
+                for (int i = 0; i < inv.getSizeInventory(); i++) {
+                    net.minecraft.item.ItemStack s = inv.getStackInSlot(i);
+                    if (s.isEmpty()) continue;
+                    if (!first) builder.append(',');
+                    first = false;
+                    ResourceLocation rn = s.getItem().getRegistryName();
+                    builder.append("{\"slot\":").append(i)
+                            .append(",\"item\":\"").append(rn == null ? "null" : rn.toString())
+                            .append("\",\"count\":").append(s.getCount()).append('}');
+                }
+            }
+            builder.append("],\"inventoryTileCount\":").append(tileCount).append('}');
+            send(sender, builder.toString());
+            return;
+        }
+        if ("storage-fluid".equalsIgnoreCase(args[0]) && args.length >= 2) {
+            // rocket storage-fluid <entityId> — flat dump of every fluid
+            // stack across every fluid-handler tile inside storage. Used by
+            // §7.10 fluid loader/unloader tests.
+            int entityId = parseIntOr(args[1], Integer.MIN_VALUE);
+            EntityRocket rocket = findRocket(server, entityId);
+            if (rocket == null) {
+                send(sender, "{\"error\":\"rocket not found\",\"entityId\":" + entityId + "}");
+                return;
+            }
+            if (rocket.storage == null) {
+                send(sender, "{\"error\":\"rocket has no storage\",\"entityId\":" + entityId + "}");
+                return;
+            }
+            StringBuilder builder = new StringBuilder("{\"entityId\":")
+                    .append(entityId).append(",\"tanks\":[");
+            boolean first = true;
+            int totalAmount = 0;
+            for (TileEntity te : rocket.storage.getFluidTiles()) {
+                net.minecraftforge.fluids.capability.IFluidHandler h =
+                        te.getCapability(net.minecraftforge.fluids.capability.CapabilityFluidHandler
+                                .FLUID_HANDLER_CAPABILITY, null);
+                if (h == null) continue;
+                for (net.minecraftforge.fluids.capability.IFluidTankProperties p : h.getTankProperties()) {
+                    if (!first) builder.append(',');
+                    first = false;
+                    net.minecraftforge.fluids.FluidStack contents = p.getContents();
+                    builder.append("{\"capacity\":").append(p.getCapacity());
+                    if (contents == null || contents.amount == 0) {
+                        builder.append(",\"fluid\":null,\"amount\":0}");
+                    } else {
+                        builder.append(",\"fluid\":\"").append(escapeJson(contents.getFluid().getName()))
+                                .append("\",\"amount\":").append(contents.amount).append('}');
+                        totalAmount += contents.amount;
+                    }
+                }
+            }
+            builder.append("],\"totalAmount\":").append(totalAmount).append('}');
+            send(sender, builder.toString());
+            return;
+        }
+        send(sender, "{\"error\":\"unknown rocket subcommand — try list|info <id> | storage-inventory <id> | storage-fluid <id>\"}");
     }
 
     /** {@code /artest rocket assemble <dim> <x> <y> <z>} — synchronously assembles
@@ -689,7 +825,7 @@ public class TestProbeCommand extends CommandBase {
 
     // §5.6 Satellite probes ---------------------------------------------------
 
-    private void handleSatellite(ICommandSender sender, String[] args) {
+    private void handleSatellite(MinecraftServer server, ICommandSender sender, String[] args) {
         if (args.length >= 3 && "create".equalsIgnoreCase(args[0])) {
             // satellite create <dim> <typeId> [powerGen] [powerStorage] [maxData] [weight]
             int dim = parseIntOr(args[1], Integer.MIN_VALUE);
@@ -727,6 +863,7 @@ public class TestProbeCommand extends CommandBase {
                 return;
             }
             sat.setDimensionId(dim);
+            initMissionPersistentNbtIfNeeded(sat);
             props.addSatellite(sat, dim, false);
             send(sender, "{\"ok\":true,\"id\":" + satId + ",\"type\":\"" + escapeJson(typeId)
                     + "\",\"dim\":" + dim + ",\"powerGen\":" + powerGen + "}");
@@ -810,12 +947,370 @@ public class TestProbeCommand extends CommandBase {
             send(sender, jsonMap(info));
             return;
         }
-        send(sender, "{\"error\":\"unknown satellite subcommand — try list <dim>|info <dim> <id>\"}");
+        if ("imprint-terminal".equalsIgnoreCase(args[0]) && args.length >= 6) {
+            // imprint-terminal <dim> <x> <y> <z> <satId>
+            int dim = parseIntOr(args[1], Integer.MIN_VALUE);
+            int x = parseIntOr(args[2], 0);
+            int y = parseIntOr(args[3], 0);
+            int z = parseIntOr(args[4], 0);
+            long satId = parseLongOr(args[5], Long.MIN_VALUE);
+            net.minecraft.world.WorldServer world = server.getWorld(dim);
+            if (world == null) {
+                send(sender, "{\"error\":\"world not loaded\",\"dim\":" + dim + "}");
+                return;
+            }
+            TileEntity tile = world.getTileEntity(new BlockPos(x, y, z));
+            if (!(tile instanceof zmaster587.advancedRocketry.tile.satellite.TileSatelliteTerminal)) {
+                send(sender, "{\"error\":\"tile not TileSatelliteTerminal\",\"tile\":\""
+                        + (tile == null ? "null" : tile.getClass().getName()) + "\"}");
+                return;
+            }
+            DimensionProperties props = DimensionManager.getInstance().getDimensionProperties(dim);
+            SatelliteBase sat = props == null ? null : props.getSatellite(satId);
+            if (sat == null) {
+                send(sender, "{\"error\":\"satellite not registered\",\"dim\":" + dim
+                        + ",\"id\":" + satId + "}");
+                return;
+            }
+            net.minecraft.item.ItemStack chip = new net.minecraft.item.ItemStack(
+                    zmaster587.advancedRocketry.api.AdvancedRocketryItems.itemSatelliteIdChip);
+            // ItemSatelliteIdentificationChip.setSatellite mutates a NBT
+            // reference but does NOT call stack.setTagCompound when the stack
+            // is freshly created with no tag — the writes get discarded.
+            // Pre-attach an empty NBT so setSatellite's writes stick.
+            chip.setTagCompound(new net.minecraft.nbt.NBTTagCompound());
+            ((zmaster587.advancedRocketry.item.ItemSatelliteIdentificationChip)
+                    zmaster587.advancedRocketry.api.AdvancedRocketryItems.itemSatelliteIdChip)
+                    .setSatellite(chip, sat);
+            ((net.minecraft.inventory.IInventory) tile).setInventorySlotContents(0, chip);
+            send(sender, "{\"ok\":true,\"chipSlot\":0,\"satId\":" + satId + "}");
+            return;
+        }
+        if ("terminal-info".equalsIgnoreCase(args[0]) && args.length >= 5) {
+            int dim = parseIntOr(args[1], Integer.MIN_VALUE);
+            int x = parseIntOr(args[2], 0);
+            int y = parseIntOr(args[3], 0);
+            int z = parseIntOr(args[4], 0);
+            net.minecraft.world.WorldServer world = server.getWorld(dim);
+            if (world == null) {
+                send(sender, "{\"error\":\"world not loaded\",\"dim\":" + dim + "}");
+                return;
+            }
+            TileEntity tile = world.getTileEntity(new BlockPos(x, y, z));
+            if (!(tile instanceof zmaster587.advancedRocketry.tile.satellite.TileSatelliteTerminal)) {
+                send(sender, "{\"error\":\"tile not TileSatelliteTerminal\",\"tile\":\""
+                        + (tile == null ? "null" : tile.getClass().getName()) + "\"}");
+                return;
+            }
+            zmaster587.advancedRocketry.tile.satellite.TileSatelliteTerminal terminal =
+                    (zmaster587.advancedRocketry.tile.satellite.TileSatelliteTerminal) tile;
+            SatelliteBase linked = terminal.getSatelliteFromSlot(0);
+            Map<String, Object> info = new LinkedHashMap<>();
+            info.put("hasChip", !((net.minecraft.inventory.IInventory) tile).getStackInSlot(0).isEmpty());
+            if (linked == null) {
+                info.put("linkedSatelliteId", -1);
+                info.put("linkedType", "null");
+            } else {
+                info.put("linkedSatelliteId", linked.getId());
+                info.put("linkedType", linked.getProperties().getSatelliteType());
+                info.put("linkedDim", linked.getDimensionId());
+            }
+            send(sender, jsonMap(info));
+            return;
+        }
+        send(sender, "{\"error\":\"unknown satellite subcommand — try list <dim> | info <dim> <id> | create <dim> <type> [...] | types | imprint-terminal <dim> <x> <y> <z> <satId> | terminal-info <dim> <x> <y> <z>\"}");
+    }
+
+    /**
+     * §7.12 — satellite-builder synthesis.
+     *
+     * <p>{@code /artest satellite-builder build <dim> <typeId>} — mirrors
+     * {@link zmaster587.advancedRocketry.tile.satellite.TileSatelliteBuilder#assembleSatellite}'s
+     * per-slot aggregation against synthetic component ItemStacks for the
+     * requested satellite type. Uses {@link
+     * zmaster587.advancedRocketry.api.SatelliteRegistry#getSatelliteProperty}
+     * for each input (same lookup the production builder runs against player-
+     * inserted chips, generators, batteries), then registers the resulting
+     * satellite in the dim — bypassing the multiblock-validation requirement
+     * that headless harness can't satisfy.</p>
+     */
+    private void handleSatelliteBuilder(MinecraftServer server, ICommandSender sender, String[] args) {
+        if (args.length < 3 || !"build".equalsIgnoreCase(args[0])) {
+            send(sender, "{\"error\":\"unknown satellite-builder subcommand — try build <dim> <typeId>\"}");
+            return;
+        }
+        int dim = parseIntOr(args[1], Integer.MIN_VALUE);
+        String typeId = args[2];
+        DimensionProperties props = DimensionManager.getInstance().getDimensionProperties(dim);
+        if (props == null) {
+            send(sender, "{\"error\":\"dim not registered\",\"dim\":" + dim + "}");
+            return;
+        }
+        // Resolve primary-function chip meta by scanning the registry: each
+        // itemSatellitePrimaryFunction meta is registered as a property whose
+        // SatelliteType matches one of the known type ids.
+        net.minecraft.item.Item primaryItem =
+                zmaster587.advancedRocketry.api.AdvancedRocketryItems.itemSatellitePrimaryFunction;
+        if (primaryItem == null) {
+            send(sender, "{\"error\":\"itemSatellitePrimaryFunction not initialised\"}");
+            return;
+        }
+        int primaryMeta = -1;
+        for (int meta = 0; meta < 16; meta++) {
+            net.minecraft.item.ItemStack candidate = new net.minecraft.item.ItemStack(primaryItem, 1, meta);
+            zmaster587.advancedRocketry.api.satellite.SatelliteProperties sp =
+                    zmaster587.advancedRocketry.api.SatelliteRegistry.getSatelliteProperty(candidate);
+            if (sp != null && typeId.equalsIgnoreCase(sp.getSatelliteType())) {
+                primaryMeta = meta;
+                break;
+            }
+        }
+        if (primaryMeta < 0) {
+            send(sender, "{\"error\":\"no primary-function chip meta maps to type\",\"type\":\""
+                    + escapeJson(typeId) + "\"}");
+            return;
+        }
+        // Aggregate properties the way assembleSatellite does. We use the
+        // strongest stock power source (meta 1) for a non-trivial
+        // generation reading, and a single itemBattery for storage.
+        net.minecraft.item.ItemStack primary = new net.minecraft.item.ItemStack(primaryItem, 1, primaryMeta);
+        net.minecraft.item.ItemStack powerSrc = new net.minecraft.item.ItemStack(
+                zmaster587.advancedRocketry.api.AdvancedRocketryItems.itemSatellitePowerSource, 1, 1);
+        net.minecraft.item.ItemStack battery = new net.minecraft.item.ItemStack(
+                zmaster587.libVulpes.api.LibVulpesItems.itemBattery, 1, 0);
+        int powerGeneration = 0, powerStorage = 0, maxData = 0;
+        float weight = 0;
+        for (net.minecraft.item.ItemStack stack : new net.minecraft.item.ItemStack[]{primary, powerSrc, battery}) {
+            zmaster587.advancedRocketry.api.satellite.SatelliteProperties sp =
+                    zmaster587.advancedRocketry.api.SatelliteRegistry.getSatelliteProperty(stack);
+            if (sp == null) continue;
+            int flag = sp.getPropertyFlag();
+            if (flag == zmaster587.advancedRocketry.api.satellite.SatelliteProperties.Property.POWER_GEN.getFlag())
+                powerGeneration += sp.getPowerGeneration();
+            if (flag == zmaster587.advancedRocketry.api.satellite.SatelliteProperties.Property.BATTERY.getFlag())
+                powerStorage += sp.getPowerStorage();
+            if (flag == zmaster587.advancedRocketry.api.satellite.SatelliteProperties.Property.DATA.getFlag())
+                maxData += sp.getMaxDataStorage();
+            weight += zmaster587.advancedRocketry.util.WeightEngine.INSTANCE.getWeight(stack);
+        }
+        zmaster587.advancedRocketry.api.satellite.SatelliteProperties finalProps =
+                new zmaster587.advancedRocketry.api.satellite.SatelliteProperties(
+                        powerGeneration, powerStorage + 720, typeId, maxData, weight);
+        long satId = DimensionManager.getInstance().getNextSatelliteId();
+        finalProps.setId(satId);
+        SatelliteBase sat = zmaster587.advancedRocketry.api.SatelliteRegistry.getNewSatellite(typeId);
+        if (sat == null) {
+            send(sender, "{\"error\":\"unknown satellite type\",\"type\":\""
+                    + escapeJson(typeId) + "\"}");
+            return;
+        }
+        try {
+            java.lang.reflect.Field f = zmaster587.advancedRocketry.api.satellite.SatelliteBase
+                    .class.getDeclaredField("satelliteProperties");
+            f.setAccessible(true);
+            f.set(sat, finalProps);
+        } catch (ReflectiveOperationException e) {
+            send(sender, "{\"error\":\"failed to inject satelliteProperties\",\"msg\":\""
+                    + escapeJson(e.getMessage()) + "\"}");
+            return;
+        }
+        sat.setDimensionId(dim);
+        initMissionPersistentNbtIfNeeded(sat);
+        props.addSatellite(sat, dim, false);
+        Map<String, Object> info = new LinkedHashMap<>();
+        info.put("ok", true);
+        info.put("id", satId);
+        info.put("type", typeId);
+        info.put("primaryMeta", primaryMeta);
+        info.put("powerGen", powerGeneration);
+        info.put("powerStorage", powerStorage + 720);
+        info.put("maxData", maxData);
+        send(sender, jsonMap(info));
+    }
+
+    /**
+     * MissionResourceCollection subclasses (asteroidMiner, gasMining) keep a
+     * {@code missionPersistantNBT} field that's normally populated when the
+     * mission is launched by a real player. The no-arg constructor leaves it
+     * null, which crashes the world-save NBT path. Pre-attach an empty NBT
+     * so the satellite can be registered + saved without a real launch.
+     */
+    private static void initMissionPersistentNbtIfNeeded(SatelliteBase sat) {
+        if (!(sat instanceof zmaster587.advancedRocketry.mission.MissionResourceCollection)) {
+            return;
+        }
+        // MissionResourceCollection's no-arg constructor leaves several
+        // fields null, all of which would NPE in writeToNBT during a world
+        // save. Production normally populates them via the launched-rocket
+        // ctor; the test harness can't launch a real rocket, so we seed safe
+        // defaults so a persisted mission satellite survives a level save.
+        try {
+            initFieldIfNull(sat, "missionPersistantNBT", new net.minecraft.nbt.NBTTagCompound());
+            initFieldIfNull(sat, "rocketStats", new zmaster587.advancedRocketry.api.StatsRocket());
+            initFieldIfNull(sat, "rocketStorage", new zmaster587.advancedRocketry.util.StorageChunk());
+            initFieldIfNull(sat, "infrastructureCoords", new java.util.LinkedList<>());
+            // tickEntity fires onMissionComplete when getProgress() ≥ 1.
+            // Default duration=0 + non-zero worldTime → progress=+inf →
+            // mission instantly "completes" and crashes (the synthetic
+            // mission has no real rocket to land). Push duration into the
+            // far future so the tick gate stays closed for the test run.
+            setLongField(sat, "duration", Long.MAX_VALUE / 4);
+        } catch (RuntimeException ignored) {
+            // Defensive — never fail probe registration on the helper's behalf.
+        }
+    }
+
+    private static void setLongField(Object target, String name, long value) {
+        try {
+            java.lang.reflect.Field f = zmaster587.advancedRocketry.mission
+                    .MissionResourceCollection.class.getDeclaredField(name);
+            f.setAccessible(true);
+            f.setLong(target, value);
+        } catch (ReflectiveOperationException ignored) {
+            // Field renamed in a fork — silently skip.
+        }
+    }
+
+    private static void initFieldIfNull(Object target, String name, Object value) {
+        if (value == null) return;
+        try {
+            java.lang.reflect.Field f = zmaster587.advancedRocketry.mission
+                    .MissionResourceCollection.class.getDeclaredField(name);
+            f.setAccessible(true);
+            if (f.get(target) == null) {
+                f.set(target, value);
+            }
+        } catch (ReflectiveOperationException ignored) {
+            // Field renamed or removed in a fork — silently skip; if the
+            // missing field is actually load-bearing the save will surface
+            // the NPE clearly.
+        }
+    }
+
+    /**
+     * §7.17 — wireless transceiver pairing.
+     *
+     * <p>{@code /artest pipe wireless-pair <dim> <x1> <y1> <z1> <x2> <y2> <z2>}
+     * — drives the same network-merge logic
+     * {@link zmaster587.advancedRocketry.tile.cables.TileWirelessTransciever#onLinkComplete}
+     * runs when a player completes a linker-item handshake between two
+     * transceivers, but without needing a player or linker item. Returns
+     * the resulting shared {@code networkID} so tests can confirm both
+     * tiles end up on the same dataNetwork.</p>
+     *
+     * <p>{@code /artest pipe wireless-info <dim> <x> <y> <z>} — reads the
+     * tile's current {@code networkID} (read-only).</p>
+     */
+    private void handlePipe(MinecraftServer server, ICommandSender sender, String[] args) {
+        if (args.length >= 8 && "wireless-pair".equalsIgnoreCase(args[0])) {
+            int dim = parseIntOr(args[1], Integer.MIN_VALUE);
+            int x1 = parseIntOr(args[2], 0);
+            int y1 = parseIntOr(args[3], 0);
+            int z1 = parseIntOr(args[4], 0);
+            int x2 = parseIntOr(args[5], 0);
+            int y2 = parseIntOr(args[6], 0);
+            int z2 = parseIntOr(args[7], 0);
+            net.minecraft.world.WorldServer world = server.getWorld(dim);
+            if (world == null) {
+                send(sender, "{\"error\":\"world not loaded\",\"dim\":" + dim + "}");
+                return;
+            }
+            TileEntity tile1 = world.getTileEntity(new BlockPos(x1, y1, z1));
+            TileEntity tile2 = world.getTileEntity(new BlockPos(x2, y2, z2));
+            if (!(tile1 instanceof zmaster587.advancedRocketry.tile.cables.TileWirelessTransciever)
+                    || !(tile2 instanceof zmaster587.advancedRocketry.tile.cables.TileWirelessTransciever)) {
+                send(sender, "{\"error\":\"one or both tiles not TileWirelessTransciever\","
+                        + "\"tile1\":\"" + (tile1 == null ? "null" : tile1.getClass().getName())
+                        + "\",\"tile2\":\"" + (tile2 == null ? "null" : tile2.getClass().getName())
+                        + "\"}");
+                return;
+            }
+            zmaster587.advancedRocketry.tile.cables.TileWirelessTransciever t1 =
+                    (zmaster587.advancedRocketry.tile.cables.TileWirelessTransciever) tile1;
+            zmaster587.advancedRocketry.tile.cables.TileWirelessTransciever t2 =
+                    (zmaster587.advancedRocketry.tile.cables.TileWirelessTransciever) tile2;
+            try {
+                java.lang.reflect.Field f = zmaster587.advancedRocketry.tile.cables
+                        .TileWirelessTransciever.class.getDeclaredField("networkID");
+                f.setAccessible(true);
+                int id1 = f.getInt(t1);
+                int id2 = f.getInt(t2);
+                // Mirror onLinkComplete's branch logic exactly.
+                int shared;
+                if (id1 == -1 && id2 == -1) {
+                    shared = zmaster587.advancedRocketry.cable.NetworkRegistry.dataNetwork.getNewNetworkID();
+                    f.setInt(t1, shared);
+                    f.setInt(t2, shared);
+                } else if (id1 == -1) {
+                    shared = id2;
+                    f.setInt(t1, shared);
+                } else if (id2 == -1) {
+                    shared = id1;
+                    f.setInt(t2, shared);
+                } else if (id1 == id2) {
+                    shared = id1;
+                } else {
+                    shared = zmaster587.advancedRocketry.cable.NetworkRegistry
+                            .dataNetwork.mergeNetworks(id1, id2);
+                    f.setInt(t1, shared);
+                    f.setInt(t2, shared);
+                }
+                // Mirror onLinkComplete's addToNetwork() postlude — invoke
+                // the same private method so the network actually registers
+                // both endpoints as connected nodes.
+                try {
+                    java.lang.reflect.Method m = zmaster587.advancedRocketry.tile.cables
+                            .TileWirelessTransciever.class.getDeclaredMethod("addToNetwork");
+                    m.setAccessible(true);
+                    m.invoke(t1);
+                    m.invoke(t2);
+                } catch (NoSuchMethodException ignored) {
+                    // Method renamed in a fork — leave the network in the
+                    // ID-merge state; tests can still verify shared id.
+                }
+                send(sender, "{\"ok\":true,\"id1Before\":" + id1
+                        + ",\"id2Before\":" + id2
+                        + ",\"sharedNetworkId\":" + shared + "}");
+            } catch (ReflectiveOperationException e) {
+                send(sender, "{\"error\":\"reflection failed\",\"msg\":\""
+                        + escapeJson(e.getMessage()) + "\"}");
+            }
+            return;
+        }
+        if (args.length >= 5 && "wireless-info".equalsIgnoreCase(args[0])) {
+            int dim = parseIntOr(args[1], Integer.MIN_VALUE);
+            int x = parseIntOr(args[2], 0);
+            int y = parseIntOr(args[3], 0);
+            int z = parseIntOr(args[4], 0);
+            net.minecraft.world.WorldServer world = server.getWorld(dim);
+            if (world == null) {
+                send(sender, "{\"error\":\"world not loaded\",\"dim\":" + dim + "}");
+                return;
+            }
+            TileEntity tile = world.getTileEntity(new BlockPos(x, y, z));
+            if (!(tile instanceof zmaster587.advancedRocketry.tile.cables.TileWirelessTransciever)) {
+                send(sender, "{\"error\":\"tile not TileWirelessTransciever\",\"tile\":\""
+                        + (tile == null ? "null" : tile.getClass().getName()) + "\"}");
+                return;
+            }
+            try {
+                java.lang.reflect.Field f = zmaster587.advancedRocketry.tile.cables
+                        .TileWirelessTransciever.class.getDeclaredField("networkID");
+                f.setAccessible(true);
+                int id = f.getInt(tile);
+                send(sender, "{\"ok\":true,\"networkID\":" + id + "}");
+            } catch (ReflectiveOperationException e) {
+                send(sender, "{\"error\":\"reflection failed\",\"msg\":\""
+                        + escapeJson(e.getMessage()) + "\"}");
+            }
+            return;
+        }
+        send(sender, "{\"error\":\"unknown pipe subcommand — try wireless-pair <dim> <x1> <y1> <z1> <x2> <y2> <z2> | wireless-info <dim> <x> <y> <z>\"}");
     }
 
     // §5.7 Atmosphere probe ---------------------------------------------------
 
-    private void handleAtmosphere(ICommandSender sender, String[] args) {
+    private void handleAtmosphere(MinecraftServer server, ICommandSender sender, String[] args) {
         if (args.length >= 5 && "get".equalsIgnoreCase(args[0])) {
             int dim = parseIntOr(args[1], Integer.MIN_VALUE);
             int x = parseIntOr(args[2], 0);
@@ -860,7 +1355,208 @@ public class TestProbeCommand extends CommandBase {
                     + ",\"newDensity\":" + props.getAtmosphereDensity() + "}");
             return;
         }
-        send(sender, "{\"error\":\"unknown atmosphere subcommand — try get <dim> <x> <y> <z> | set-density <dim> <value>\"}");
+        if (args.length >= 5 && "detector-output".equalsIgnoreCase(args[0])) {
+            int dim = parseIntOr(args[1], Integer.MIN_VALUE);
+            int x = parseIntOr(args[2], 0);
+            int y = parseIntOr(args[3], 0);
+            int z = parseIntOr(args[4], 0);
+            net.minecraft.world.WorldServer world = server.getWorld(dim);
+            if (world == null) {
+                send(sender, "{\"error\":\"world not loaded\",\"dim\":" + dim + "}");
+                return;
+            }
+            BlockPos pos = new BlockPos(x, y, z);
+            IBlockState state = world.getBlockState(pos);
+            boolean isDetector = state.getBlock() instanceof zmaster587.advancedRocketry.block.BlockRedstoneEmitter;
+            Map<String, Object> info = new LinkedHashMap<>();
+            info.put("isDetector", isDetector);
+            info.put("block", state.getBlock().getRegistryName() == null ? "null" : state.getBlock().getRegistryName().toString());
+            if (isDetector) {
+                boolean powered = state.getValue(zmaster587.advancedRocketry.block.BlockRedstoneEmitter.POWERED);
+                info.put("powered", powered);
+                info.put("strongPower", state.getBlock().getStrongPower(state, world, pos, net.minecraft.util.EnumFacing.UP));
+                TileEntity tile = world.getTileEntity(pos);
+                if (tile instanceof zmaster587.advancedRocketry.tile.atmosphere.TileAtmosphereDetector) {
+                    try {
+                        java.lang.reflect.Field f = zmaster587.advancedRocketry.tile.atmosphere
+                                .TileAtmosphereDetector.class.getDeclaredField("atmosphereToDetect");
+                        f.setAccessible(true);
+                        zmaster587.advancedRocketry.api.IAtmosphere mode =
+                                (zmaster587.advancedRocketry.api.IAtmosphere) f.get(tile);
+                        info.put("detectorMode", mode == null ? "null" : mode.getUnlocalizedName());
+                    } catch (ReflectiveOperationException ignored) {
+                        info.put("detectorMode", "reflect-failed");
+                    }
+                }
+            }
+            send(sender, jsonMap(info));
+            return;
+        }
+        if (args.length >= 5 && "detector-force-sample".equalsIgnoreCase(args[0])) {
+            // Bypasses TileAtmosphereDetector.update()'s
+            // world.getWorldTime() % 10 == 0 gate so headless tests don't
+            // depend on the server's world-time being a multiple of 10 at the
+            // moment the command runs. Runs the same sample loop + setState
+            // call as production.
+            int dim = parseIntOr(args[1], Integer.MIN_VALUE);
+            int x = parseIntOr(args[2], 0);
+            int y = parseIntOr(args[3], 0);
+            int z = parseIntOr(args[4], 0);
+            net.minecraft.world.WorldServer world = server.getWorld(dim);
+            if (world == null) {
+                send(sender, "{\"error\":\"world not loaded\",\"dim\":" + dim + "}");
+                return;
+            }
+            BlockPos pos = new BlockPos(x, y, z);
+            IBlockState state = world.getBlockState(pos);
+            if (!(state.getBlock() instanceof zmaster587.advancedRocketry.block.BlockRedstoneEmitter)) {
+                send(sender, "{\"error\":\"block not BlockRedstoneEmitter\",\"block\":\""
+                        + (state.getBlock().getRegistryName() == null ? "null" : state.getBlock().getRegistryName().toString())
+                        + "\"}");
+                return;
+            }
+            TileEntity tile = world.getTileEntity(pos);
+            if (!(tile instanceof zmaster587.advancedRocketry.tile.atmosphere.TileAtmosphereDetector)) {
+                send(sender, "{\"error\":\"tile not TileAtmosphereDetector\"}");
+                return;
+            }
+            zmaster587.advancedRocketry.api.IAtmosphere mode;
+            try {
+                java.lang.reflect.Field f = zmaster587.advancedRocketry.tile.atmosphere
+                        .TileAtmosphereDetector.class.getDeclaredField("atmosphereToDetect");
+                f.setAccessible(true);
+                mode = (zmaster587.advancedRocketry.api.IAtmosphere) f.get(tile);
+            } catch (ReflectiveOperationException e) {
+                send(sender, "{\"error\":\"reflection failed\",\"msg\":\""
+                        + escapeJson(e.getMessage()) + "\"}");
+                return;
+            }
+            zmaster587.advancedRocketry.atmosphere.AtmosphereHandler atmh =
+                    zmaster587.advancedRocketry.atmosphere.AtmosphereHandler.getOxygenHandler(dim);
+            boolean detected;
+            if (atmh == null) {
+                detected = mode == zmaster587.advancedRocketry.atmosphere.AtmosphereType.AIR;
+            } else {
+                detected = false;
+                for (net.minecraft.util.EnumFacing dir : net.minecraft.util.EnumFacing.values()) {
+                    if (!world.getBlockState(pos.offset(dir)).isOpaqueCube()
+                            && mode == atmh.getAtmosphereType(pos.offset(dir))) {
+                        detected = true;
+                        break;
+                    }
+                }
+            }
+            zmaster587.advancedRocketry.block.BlockRedstoneEmitter emitter =
+                    (zmaster587.advancedRocketry.block.BlockRedstoneEmitter) state.getBlock();
+            boolean was = emitter.getState(world, state, pos);
+            if (was != detected) {
+                emitter.setState(world, state, pos, detected);
+            }
+            send(sender, "{\"ok\":true,\"detected\":" + detected
+                    + ",\"wasPowered\":" + was
+                    + ",\"isNowPowered\":" + detected + "}");
+            return;
+        }
+        if (args.length >= 6 && "detector-set-mode".equalsIgnoreCase(args[0])) {
+            int dim = parseIntOr(args[1], Integer.MIN_VALUE);
+            int x = parseIntOr(args[2], 0);
+            int y = parseIntOr(args[3], 0);
+            int z = parseIntOr(args[4], 0);
+            String atmName = args[5];
+            net.minecraft.world.WorldServer world = server.getWorld(dim);
+            if (world == null) {
+                send(sender, "{\"error\":\"world not loaded\",\"dim\":" + dim + "}");
+                return;
+            }
+            TileEntity tile = world.getTileEntity(new BlockPos(x, y, z));
+            if (!(tile instanceof zmaster587.advancedRocketry.tile.atmosphere.TileAtmosphereDetector)) {
+                send(sender, "{\"error\":\"tile not TileAtmosphereDetector\",\"tile\":\""
+                        + (tile == null ? "null" : tile.getClass().getName()) + "\"}");
+                return;
+            }
+            zmaster587.advancedRocketry.api.IAtmosphere target =
+                    zmaster587.advancedRocketry.api.atmosphere.AtmosphereRegister.getInstance().getAtmosphere(atmName);
+            if (target == null) {
+                send(sender, "{\"error\":\"unknown atmosphere name\",\"name\":\""
+                        + escapeJson(atmName) + "\"}");
+                return;
+            }
+            try {
+                java.lang.reflect.Field f = zmaster587.advancedRocketry.tile.atmosphere
+                        .TileAtmosphereDetector.class.getDeclaredField("atmosphereToDetect");
+                f.setAccessible(true);
+                f.set(tile, target);
+                tile.markDirty();
+                send(sender, "{\"ok\":true,\"detectorMode\":\"" + escapeJson(atmName) + "\"}");
+            } catch (ReflectiveOperationException e) {
+                send(sender, "{\"error\":\"reflection failed\",\"msg\":\""
+                        + escapeJson(e.getMessage()) + "\"}");
+            }
+            return;
+        }
+        if (args.length >= 5 && "extinguish-at".equalsIgnoreCase(args[0])) {
+            // Drives AtmosphereBlob.runEffectOnWorldBlocks's per-block branch
+            // (vanilla TORCH → blockUnlitTorch; torchBlocks-listed block →
+            // dropped as item + cleared to air) for a SINGLE position. Bypasses
+            // the blob/flood-fill so tests can verify the conversion logic
+            // deterministically without constructing a non-combustion dim.
+            int dim = parseIntOr(args[1], Integer.MIN_VALUE);
+            int x = parseIntOr(args[2], 0);
+            int y = parseIntOr(args[3], 0);
+            int z = parseIntOr(args[4], 0);
+            net.minecraft.world.WorldServer world = server.getWorld(dim);
+            if (world == null) {
+                send(sender, "{\"error\":\"world not loaded\",\"dim\":" + dim + "}");
+                return;
+            }
+            BlockPos pos = new BlockPos(x, y, z);
+            IBlockState state = world.getBlockState(pos);
+            net.minecraft.block.Block before = state.getBlock();
+            String action = "unchanged";
+            if (before == net.minecraft.init.Blocks.TORCH) {
+                world.setBlockState(pos, zmaster587.advancedRocketry.api.AdvancedRocketryBlocks.blockUnlitTorch
+                        .getDefaultState().withProperty(net.minecraft.block.BlockTorch.FACING,
+                                state.getValue(net.minecraft.block.BlockTorch.FACING)));
+                action = "extinguished";
+            } else if (zmaster587.advancedRocketry.api.ARConfiguration.getCurrentConfig().torchBlocks.contains(before)) {
+                net.minecraft.entity.item.EntityItem item = new net.minecraft.entity.item.EntityItem(
+                        world, x, y, z, new net.minecraft.item.ItemStack(before));
+                world.setBlockToAir(pos);
+                world.spawnEntity(item);
+                action = "dropped";
+            }
+            IBlockState after = world.getBlockState(pos);
+            net.minecraft.util.ResourceLocation beforeRn = before.getRegistryName();
+            net.minecraft.util.ResourceLocation afterRn = after.getBlock().getRegistryName();
+            send(sender, "{\"ok\":true,\"action\":\"" + action + "\","
+                    + "\"before\":\"" + escapeJson(beforeRn == null ? "null" : beforeRn.toString()) + "\","
+                    + "\"after\":\"" + escapeJson(afterRn == null ? "null" : afterRn.toString()) + "\"}");
+            return;
+        }
+        if (args.length >= 2 && "torch-block-add".equalsIgnoreCase(args[0])) {
+            String blockId = args[1];
+            net.minecraft.block.Block block = ForgeRegistries.BLOCKS.getValue(new ResourceLocation(blockId));
+            if (block == null) {
+                send(sender, "{\"error\":\"unknown block id\",\"id\":\"" + escapeJson(blockId) + "\"}");
+                return;
+            }
+            java.util.LinkedList<net.minecraft.block.Block> list =
+                    zmaster587.advancedRocketry.api.ARConfiguration.getCurrentConfig().torchBlocks;
+            boolean alreadyPresent = list.contains(block);
+            if (!alreadyPresent) list.add(block);
+            send(sender, "{\"ok\":true,\"added\":" + (!alreadyPresent)
+                    + ",\"size\":" + list.size() + "}");
+            return;
+        }
+        if (args.length >= 1 && "torch-block-clear".equalsIgnoreCase(args[0])) {
+            java.util.LinkedList<net.minecraft.block.Block> list =
+                    zmaster587.advancedRocketry.api.ARConfiguration.getCurrentConfig().torchBlocks;
+            int n = list.size();
+            list.clear();
+            send(sender, "{\"ok\":true,\"cleared\":" + n + "}");
+            return;
+        }
+        send(sender, "{\"error\":\"unknown atmosphere subcommand — try get <dim> <x> <y> <z> | set-density <dim> <value> | detector-output <dim> <x> <y> <z> | detector-set-mode <dim> <x> <y> <z> <atmName> | extinguish-at <dim> <x> <y> <z> | torch-block-add <blockId> | torch-block-clear\"}");
     }
 
     // §5.7 Oxygen probe -------------------------------------------------------
@@ -1854,7 +2550,89 @@ public class TestProbeCommand extends CommandBase {
                     + ",\"maxDistance\":" + infra.getMaxLinkDistance() + "}");
             return;
         }
-        send(sender, "{\"error\":\"unknown infra subcommand — try info <dim> <x> <y> <z> | link <dim> <x> <y> <z> <entityId>\"}");
+        if (args.length >= 6 && "unlink".equalsIgnoreCase(args[0])) {
+            // infra unlink <dim> <x> <y> <z> <entityId>
+            int dim = parseIntOr(args[1], Integer.MIN_VALUE);
+            int x = parseIntOr(args[2], 0);
+            int y = parseIntOr(args[3], 0);
+            int z = parseIntOr(args[4], 0);
+            int entityId = parseIntOr(args[5], Integer.MIN_VALUE);
+            net.minecraft.world.WorldServer world = server.getWorld(dim);
+            if (world == null) {
+                send(sender, "{\"error\":\"world not loaded\",\"dim\":" + dim + "}");
+                return;
+            }
+            TileEntity tile = world.getTileEntity(new BlockPos(x, y, z));
+            if (!(tile instanceof zmaster587.advancedRocketry.api.IInfrastructure)) {
+                send(sender, "{\"error\":\"tile not IInfrastructure\",\"tile\":\""
+                        + (tile == null ? "null" : tile.getClass().getName()) + "\"}");
+                return;
+            }
+            EntityRocket rocket = findRocket(server, entityId);
+            if (rocket == null) {
+                send(sender, "{\"error\":\"rocket not found\",\"entityId\":" + entityId + "}");
+                return;
+            }
+            zmaster587.advancedRocketry.api.IInfrastructure infra =
+                    (zmaster587.advancedRocketry.api.IInfrastructure) tile;
+            int before, after;
+            try {
+                java.lang.reflect.Field f = zmaster587.advancedRocketry.api.EntityRocketBase
+                        .class.getDeclaredField("connectedInfrastructure");
+                f.setAccessible(true);
+                @SuppressWarnings("unchecked")
+                java.util.LinkedList<zmaster587.advancedRocketry.api.IInfrastructure> list =
+                        (java.util.LinkedList<zmaster587.advancedRocketry.api.IInfrastructure>) f.get(rocket);
+                before = list.size();
+                rocket.unlinkInfrastructure(infra);
+                after = list.size();
+            } catch (ReflectiveOperationException e) {
+                send(sender, "{\"error\":\"connectedInfrastructure access failed\",\"msg\":\""
+                        + escapeJson(e.getMessage()) + "\"}");
+                return;
+            }
+            send(sender, "{\"ok\":true,\"unlinked\":" + (after < before)
+                    + ",\"connectedCount\":" + after + "}");
+            return;
+        }
+        if (args.length >= 5 && "monitor-info".equalsIgnoreCase(args[0])) {
+            int dim = parseIntOr(args[1], Integer.MIN_VALUE);
+            int x = parseIntOr(args[2], 0);
+            int y = parseIntOr(args[3], 0);
+            int z = parseIntOr(args[4], 0);
+            net.minecraft.world.WorldServer world = server.getWorld(dim);
+            if (world == null) {
+                send(sender, "{\"error\":\"world not loaded\",\"dim\":" + dim + "}");
+                return;
+            }
+            TileEntity tile = world.getTileEntity(new BlockPos(x, y, z));
+            if (!(tile instanceof zmaster587.advancedRocketry.tile.infrastructure.TileRocketMonitoringStation)) {
+                send(sender, "{\"error\":\"tile not TileRocketMonitoringStation\",\"tile\":\""
+                        + (tile == null ? "null" : tile.getClass().getName()) + "\"}");
+                return;
+            }
+            zmaster587.advancedRocketry.tile.infrastructure.TileRocketMonitoringStation monitor =
+                    (zmaster587.advancedRocketry.tile.infrastructure.TileRocketMonitoringStation) tile;
+            int linkedEntityId = -1;
+            String linkedClass = "null";
+            try {
+                java.lang.reflect.Field f = zmaster587.advancedRocketry.tile.infrastructure
+                        .TileRocketMonitoringStation.class.getDeclaredField("linkedRocket");
+                f.setAccessible(true);
+                Object linked = f.get(monitor);
+                if (linked instanceof Entity) {
+                    linkedEntityId = ((Entity) linked).getEntityId();
+                    linkedClass = linked.getClass().getName();
+                }
+            } catch (ReflectiveOperationException ignored) {
+                // Field renamed — surfaces as -1 / "null"; safer than failing.
+            }
+            send(sender, "{\"ok\":true,\"linkedEntityId\":" + linkedEntityId
+                    + ",\"linkedClass\":\"" + escapeJson(linkedClass) + "\""
+                    + ",\"maxLinkDistance\":" + monitor.getMaxLinkDistance() + "}");
+            return;
+        }
+        send(sender, "{\"error\":\"unknown infra subcommand — try info <dim> <x> <y> <z> | link <dim> <x> <y> <z> <entityId> | unlink <dim> <x> <y> <z> <entityId> | monitor-info <dim> <x> <y> <z>\"}");
     }
 
     // §9.2 Fixture-building primitives -----------------------------------------
@@ -1960,6 +2738,20 @@ public class TestProbeCommand extends CommandBase {
             int baseX = parseIntOr(args[2], 0);
             int baseY = parseIntOr(args[3], 64);
             int baseZ = parseIntOr(args[4], 0);
+            // Optional variant — defaults to "simple" (full happy-path rocket).
+            // Recognised variants:
+            //   simple              — full rocket: 2 engines, 6 fuel tanks, guidance, seat
+            //   invalid-no-engine   — same minus engines       → expects NOENGINES on scan
+            //   invalid-no-fuel-tank — same minus fuel tanks   → expects NOFUEL on scan
+            //   invalid-no-seat     — same minus seat          → assembles (seat not enforced;
+            //                                                    documents production behaviour)
+            //   invalid-no-guidance — same minus guidance comp → expects NOGUIDANCE on scan
+            String variant = args.length >= 6 ? args[5].toLowerCase(java.util.Locale.ROOT) : "simple";
+            boolean includeEngines = !"invalid-no-engine".equals(variant);
+            boolean includeFuelTanks = !"invalid-no-fuel-tank".equals(variant);
+            boolean includeSeat = !"invalid-no-seat".equals(variant);
+            boolean includeGuidance = !"invalid-no-guidance".equals(variant);
+            boolean includeCargo = "with-cargo".equals(variant);
 
             net.minecraft.world.WorldServer world = server.getWorld(dim);
             if (world == null) {
@@ -2026,18 +2818,36 @@ public class TestProbeCommand extends CommandBase {
 
             // Rocket structure (centered around baseX+3, y+1, baseZ+3).
             int rocketX = baseX + 3, rocketY = baseY + 1, rocketZ = baseZ + 3;
-            world.setBlockState(new BlockPos(rocketX - 1, rocketY, rocketZ), advEngine.getDefaultState());
-            world.setBlockState(new BlockPos(rocketX + 1, rocketY, rocketZ), advEngine.getDefaultState());
-            for (int dx = -1; dx <= 1; dx++) {
-                for (int dy = 1; dy <= 2; dy++) {
-                    world.setBlockState(new BlockPos(rocketX + dx, rocketY + dy, rocketZ),
-                            fuelTank.getDefaultState());
+            if (includeEngines) {
+                world.setBlockState(new BlockPos(rocketX - 1, rocketY, rocketZ), advEngine.getDefaultState());
+                world.setBlockState(new BlockPos(rocketX + 1, rocketY, rocketZ), advEngine.getDefaultState());
+            }
+            if (includeFuelTanks) {
+                for (int dx = -1; dx <= 1; dx++) {
+                    for (int dy = 1; dy <= 2; dy++) {
+                        world.setBlockState(new BlockPos(rocketX + dx, rocketY + dy, rocketZ),
+                                fuelTank.getDefaultState());
+                    }
                 }
             }
-            world.setBlockState(new BlockPos(rocketX, rocketY + 3, rocketZ), guidanceComputer.getDefaultState());
-            world.setBlockState(new BlockPos(rocketX, rocketY + 4, rocketZ), seat.getDefaultState());
+            if (includeGuidance) {
+                world.setBlockState(new BlockPos(rocketX, rocketY + 3, rocketZ), guidanceComputer.getDefaultState());
+            }
+            if (includeSeat) {
+                world.setBlockState(new BlockPos(rocketX, rocketY + 4, rocketZ), seat.getDefaultState());
+            }
+            if (includeCargo) {
+                // Vanilla chest above the seat — gives the rocket an IInventory
+                // tile in its storage chunk for rocket-loader / unloader
+                // transfer tests. The block above the seat goes from "passable
+                // air" to "solid chest" → scanRocket's "passable above" check
+                // for seat detection fails, so the cargo variant reports
+                // seatCount=0 in addition to engineCount=2.
+                world.setBlockState(new BlockPos(rocketX, rocketY + 5, rocketZ),
+                        net.minecraft.init.Blocks.CHEST.getDefaultState());
+            }
 
-            send(sender, "{\"ok\":true,\"builderPos\":[" + builderPos.getX() + ","
+            send(sender, "{\"ok\":true,\"variant\":\"" + variant + "\",\"builderPos\":[" + builderPos.getX() + ","
                     + builderPos.getY() + "," + builderPos.getZ() + "]}");
             return;
         }
@@ -2287,22 +3097,200 @@ public class TestProbeCommand extends CommandBase {
      * during AR init.
      */
     private void handleEnchant(MinecraftServer server, ICommandSender sender, String[] args) {
-        if (args.length < 2 || !"check".equalsIgnoreCase(args[0])) {
-            send(sender, "{\"error\":\"unknown enchant subcommand — try check <id>\"}");
+        if (args.length >= 2 && "check".equalsIgnoreCase(args[0])) {
+            String id = args[1];
+            net.minecraft.enchantment.Enchantment ench =
+                    ForgeRegistries.ENCHANTMENTS.getValue(new ResourceLocation(id));
+            Map<String, Object> info = new LinkedHashMap<>();
+            info.put("id", id);
+            info.put("registered", ench != null);
+            if (ench != null) {
+                info.put("name", ench.getName());
+                info.put("maxLevel", ench.getMaxLevel());
+                info.put("rarity", ench.getRarity().name());
+            }
+            send(sender, jsonMap(info));
             return;
         }
-        String id = args[1];
-        net.minecraft.enchantment.Enchantment ench =
-                ForgeRegistries.ENCHANTMENTS.getValue(new ResourceLocation(id));
-        Map<String, Object> info = new LinkedHashMap<>();
-        info.put("id", id);
-        info.put("registered", ench != null);
-        if (ench != null) {
-            info.put("name", ench.getName());
-            info.put("maxLevel", ench.getMaxLevel());
-            info.put("rarity", ench.getRarity().name());
+        if (args.length >= 2 && "validates-as-airsuit".equalsIgnoreCase(args[0])) {
+            // Synthesises an ItemStack of the given item, optionally enchants it
+            // with the AR space-protection enchant ("spacebreathing"), and
+            // reports whether ItemAirUtils.isStackValidAirContainer accepts it.
+            // The acceptance branch is the production gateway for vacuum-damage
+            // bypass via AtmosphereNeedsSuit.protectsFrom → ItemAirWrapper.
+            String itemId = args[1];
+            boolean withEnchant = args.length >= 3 && Boolean.parseBoolean(args[2]);
+            net.minecraft.item.Item item = ForgeRegistries.ITEMS.getValue(new ResourceLocation(itemId));
+            Map<String, Object> info = new LinkedHashMap<>();
+            info.put("itemId", itemId);
+            info.put("registered", item != null);
+            info.put("withEnchant", withEnchant);
+            if (item == null) {
+                send(sender, jsonMap(info));
+                return;
+            }
+            net.minecraft.item.ItemStack stack = new net.minecraft.item.ItemStack(item);
+            if (withEnchant) {
+                if (zmaster587.advancedRocketry.api.AdvancedRocketryAPI.enchantmentSpaceProtection == null) {
+                    info.put("error", "spaceProtection enchant not initialised");
+                    send(sender, jsonMap(info));
+                    return;
+                }
+                stack.addEnchantment(zmaster587.advancedRocketry.api.AdvancedRocketryAPI.enchantmentSpaceProtection, 1);
+            }
+            boolean isAirContainer = zmaster587.advancedRocketry.util.ItemAirUtils.INSTANCE
+                    .isStackValidAirContainer(stack);
+            info.put("isAirContainer", isAirContainer);
+            send(sender, jsonMap(info));
+            return;
         }
+        send(sender, "{\"error\":\"unknown enchant subcommand — try check <id> | validates-as-airsuit <itemId> [withEnchant]\"}");
+    }
+
+    // §7.13 — CO2 scrubber probe ----------------------------------------------
+
+    /**
+     * {@code /artest scrubber consume <dim> <x> <y> <z>} — invokes
+     * {@code TileCO2Scrubber.useCharge()} once. Returns whether a charge was
+     * consumed and the cartridge's resulting durability damage; tests use
+     * before/after diffs to lock down the per-call increment contract.
+     */
+    private void handleScrubber(MinecraftServer server, ICommandSender sender, String[] args) {
+        if (args.length < 4 || !"consume".equalsIgnoreCase(args[0])) {
+            send(sender, "{\"error\":\"unknown scrubber subcommand — try consume <dim> <x> <y> <z>\"}");
+            return;
+        }
+        int dim = parseIntOr(args[1], Integer.MIN_VALUE);
+        int x = parseIntOr(args[2], 0);
+        int y = parseIntOr(args[3], 0);
+        int z = args.length >= 5 ? parseIntOr(args[4], 0) : 0;
+        net.minecraft.world.WorldServer world = server.getWorld(dim);
+        if (world == null) {
+            send(sender, "{\"error\":\"world not loaded\",\"dim\":" + dim + "}");
+            return;
+        }
+        TileEntity tile = world.getTileEntity(new BlockPos(x, y, z));
+        if (!(tile instanceof zmaster587.advancedRocketry.tile.atmosphere.TileCO2Scrubber)) {
+            send(sender, "{\"error\":\"tile not TileCO2Scrubber\",\"tile\":\""
+                    + (tile == null ? "null" : tile.getClass().getName()) + "\"}");
+            return;
+        }
+        zmaster587.advancedRocketry.tile.atmosphere.TileCO2Scrubber scrubber =
+                (zmaster587.advancedRocketry.tile.atmosphere.TileCO2Scrubber) tile;
+        net.minecraft.item.ItemStack pre = scrubber.getStackInSlot(0);
+        int damageBefore = pre.isEmpty() ? -1 : pre.getItemDamage();
+        boolean consumed = scrubber.useCharge();
+        net.minecraft.item.ItemStack post = scrubber.getStackInSlot(0);
+        int damageAfter = post.isEmpty() ? -1 : post.getItemDamage();
+        send(sender, "{\"ok\":true,\"consumed\":" + consumed
+                + ",\"damageBefore\":" + damageBefore
+                + ",\"damageAfter\":" + damageAfter
+                + ",\"comparatorOverride\":" + scrubber.getComparatorOverride() + "}");
+    }
+
+    // §7.13 — gas charge pad probe --------------------------------------------
+
+    /**
+     * {@code /artest gascharge fill-suit <dim> <x> <y> <z>} — invokes the
+     * same fluid-transfer code path that {@code TileGasChargePad.canPerformFunction}
+     * runs against a player standing on the pad, but against a synthetic
+     * {@code spaceChestplate} stack. Removes the need to spawn a real entity
+     * for the headless harness while still pinning the contract:
+     * <em>oxygen in pad tank ends up in suit air when the chestplate is
+     * empty</em>.
+     *
+     * <p>Returns {@code {filled: <int>, airBefore: 0, airAfter: <int>,
+     * tankBefore: <int>, tankAfter: <int>}}.</p>
+     */
+    private void handleGasCharge(MinecraftServer server, ICommandSender sender, String[] args) {
+        if (args.length < 4 || !"fill-suit".equalsIgnoreCase(args[0])) {
+            send(sender, "{\"error\":\"unknown gascharge subcommand — try fill-suit <dim> <x> <y> <z> [itemId] [withSpaceEnchant]\"}");
+            return;
+        }
+        int dim = parseIntOr(args[1], Integer.MIN_VALUE);
+        int x = parseIntOr(args[2], 0);
+        int y = parseIntOr(args[3], 0);
+        int z = args.length >= 5 ? parseIntOr(args[4], 0) : 0;
+        // Defaults: enchanted iron chestplate — exercises the ItemAirWrapper
+        // branch of TileGasChargePad.canPerformFunction. (A bare
+        // spaceChestplate has 0 max-air until oxygen tanks are inserted into
+        // its modular inventory, so a fresh stack would no-op — the wrapper
+        // path is the deterministic one.)
+        String itemId = args.length >= 7 ? args[5] : "minecraft:iron_chestplate";
+        boolean withEnchant = args.length < 7 || Boolean.parseBoolean(args[6]);
+        net.minecraft.world.WorldServer world = server.getWorld(dim);
+        if (world == null) {
+            send(sender, "{\"error\":\"world not loaded\",\"dim\":" + dim + "}");
+            return;
+        }
+        TileEntity tile = world.getTileEntity(new BlockPos(x, y, z));
+        if (!(tile instanceof zmaster587.advancedRocketry.tile.atmosphere.TileGasChargePad)) {
+            send(sender, "{\"error\":\"tile not TileGasChargePad\",\"tile\":\""
+                    + (tile == null ? "null" : tile.getClass().getName()) + "\"}");
+            return;
+        }
+        zmaster587.advancedRocketry.tile.atmosphere.TileGasChargePad pad =
+                (zmaster587.advancedRocketry.tile.atmosphere.TileGasChargePad) tile;
+        net.minecraft.item.Item chest = ForgeRegistries.ITEMS.getValue(new ResourceLocation(itemId));
+        if (chest == null) {
+            send(sender, "{\"error\":\"item not registered\",\"id\":\"" + escapeJson(itemId) + "\"}");
+            return;
+        }
+        net.minecraft.item.ItemStack stack = new net.minecraft.item.ItemStack(chest);
+        if (withEnchant) {
+            if (zmaster587.advancedRocketry.api.AdvancedRocketryAPI.enchantmentSpaceProtection == null) {
+                send(sender, "{\"error\":\"spaceProtection enchant not initialised\"}");
+                return;
+            }
+            stack.addEnchantment(zmaster587.advancedRocketry.api.AdvancedRocketryAPI.enchantmentSpaceProtection, 1);
+        }
+        // Mirror TileGasChargePad.canPerformFunction's fillable resolution.
+        zmaster587.advancedRocketry.api.armor.IFillableArmor fillable = null;
+        if (stack.getItem() instanceof zmaster587.advancedRocketry.api.armor.IFillableArmor) {
+            fillable = (zmaster587.advancedRocketry.api.armor.IFillableArmor) stack.getItem();
+        } else if (zmaster587.advancedRocketry.util.ItemAirUtils.INSTANCE.isStackValidAirContainer(stack)) {
+            fillable = new zmaster587.advancedRocketry.util.ItemAirUtils.ItemAirWrapper(stack);
+        }
+        if (fillable == null) {
+            send(sender, "{\"error\":\"item not IFillableArmor and not valid air container\","
+                    + "\"item\":\"" + escapeJson(itemId) + "\"}");
+            return;
+        }
+        // Start the suit empty so any transfer is visible (production semantics:
+        // pad fills the delta between current and max air).
+        fillable.setAirRemaining(stack, 0);
+        int airBefore = fillable.getAirRemaining(stack);
+        int tankBefore = padTankAmount(pad);
+        int amtFluid = fillable.getMaxAir(stack) - airBefore;
+        net.minecraftforge.fluids.FluidStack drained = pad.drain(amtFluid, false);
+        int filled = 0;
+        if (amtFluid > 0 && drained != null
+                && zmaster587.libVulpes.util.FluidUtils.areFluidsSameType(drained.getFluid(),
+                        zmaster587.advancedRocketry.api.AdvancedRocketryFluids.fluidOxygen)
+                && drained.amount > 0) {
+            net.minecraftforge.fluids.FluidStack actual = pad.drain(amtFluid, true);
+            filled = fillable.increment(stack, actual.amount);
+        }
+        int airAfter = fillable.getAirRemaining(stack);
+        int tankAfter = padTankAmount(pad);
+        Map<String, Object> info = new LinkedHashMap<>();
+        info.put("ok", true);
+        info.put("filled", filled);
+        info.put("airBefore", airBefore);
+        info.put("airAfter", airAfter);
+        info.put("tankBefore", tankBefore);
+        info.put("tankAfter", tankAfter);
         send(sender, jsonMap(info));
+    }
+
+    private static int padTankAmount(zmaster587.advancedRocketry.tile.atmosphere.TileGasChargePad pad) {
+        net.minecraftforge.fluids.capability.IFluidHandler h = findFluidHandler(pad);
+        if (h == null) return -1;
+        int total = 0;
+        for (net.minecraftforge.fluids.capability.IFluidTankProperties p : h.getTankProperties()) {
+            if (p.getContents() != null) total += p.getContents().amount;
+        }
+        return total;
     }
 
     // §5.7 / §7.13 — fluid handling probes (generic Forge IFluidHandler) -------

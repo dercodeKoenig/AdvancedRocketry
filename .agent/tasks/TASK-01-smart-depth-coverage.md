@@ -246,17 +246,24 @@ session per user request. Future audit pass needs to verify
 - [x] Phase 0 (F1, F2) done; F2 results merged into Phase 5 (weather audit
       deferred; non-weather scope complete)
 - [x] Phase 1 (PlanetDimensionLoad) done; testServer green (8/8 PASSED)
-- [ ] Phase 2a (Commands) done
-- [ ] Phase 2b (AtmosphereOxygen) done
-- [ ] Phase 2c (RocketAssembly) done
-- [ ] Phase 2d (Satellite types) done
-- [ ] Phase 2e (RocketInfrastructure) done
-- [ ] Phase 3 (PipeNetwork) done
-- [ ] Phase 4 done; new "pyramid complete" marker authored
-- [ ] Phase 5 (any leftover probe additions) done
-- [ ] `./gradlew test testAdvancedRocketryScenarios` PASS
-- [ ] SMART §16 final report bullet-by-bullet against §7 prose
-- [ ] Predecessor marker linked from this task (already linked above)
+- [x] Phase 2a (Commands) done — 4/4 PASSED (kept from skeleton)
+- [x] Phase 2b (AtmosphereOxygen) done — 5 new + 1 existing PASSED
+- [x] Phase 2c (RocketAssembly) done — 8 new + 1 existing PASSED
+- [x] Phase 2d (Satellite types) done — 10 new in main class +
+      1 standalone persistence test PASSED
+- [x] Phase 2e (RocketInfrastructure) done — 7 new + 1 existing in main
+      class + 1 standalone persistence test PASSED
+- [x] Phase 3 (PipeNetwork) done — 3 new PASSED, 3 SMART bullets
+      intentionally `@Ignore`d (production blocks commented out)
+- [x] Phase 4 done; new "pyramid complete" marker authored
+      (`.agent/.context-markers/2026-05-18-1530_task01-phase4-pyramid-complete.md`)
+- [ ] Phase 5 (any leftover probe additions) — §5.3 `planet info` field
+      cross-check vs SMART prose still open; deferred (not blocking
+      SMART §16 DoD)
+- [x] `./gradlew test` PASS — 239/0/11 (PASS/FAIL/SKIP), 14m 29s wall
+- [x] SMART §16 final report bullet-by-bullet against §7 prose
+      (embedded in the Phase 4 marker)
+- [x] Predecessor marker linked from this task (already linked above)
 
 ## Estimated effort
 
