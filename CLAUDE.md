@@ -150,6 +150,36 @@ Navigator config in `.agent/.nav-config.json`:
 - Concise and descriptive
 - **Never auto-commit** — always show the diff and wait for explicit approval
 
+### Commit message prompt
+
+When the user asks for a commit message, generate it with this template:
+
+```
+Write a git commit message based on the following changes.
+
+Rules:
+- Header: max 72 chars, imperative mood, no trailing period
+  (e.g. "Add user authentication", "Fix null pointer in payment flow")
+- Body: bullet list with dashes, each bullet a single complete thought,
+  max 10 words per bullet
+- Blank line between header and body
+- No filler, no explanations, no preamble
+
+Output format:
+<type>: <header>
+
+- <change 1>
+- <change 2>
+- <change 3>
+
+Types: feat, fix, refactor, chore, docs, test, style, perf
+
+Changes:
+[diff or change description]
+```
+
+Commit messages stay in English regardless of conversation language.
+
 ---
 
 ## Success Metrics

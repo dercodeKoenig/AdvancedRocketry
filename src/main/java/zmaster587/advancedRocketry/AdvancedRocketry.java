@@ -1098,6 +1098,11 @@ public class AdvancedRocketry {
         // Async weather fix
         MinecraftForge.EVENT_BUS.register(new EntityEventHandler());
 
+        // Per-dimension vanilla weather (B1 wrapper). The Mixin on
+        // WorldServerMulti.<init> is the primary wrap point; this handler
+        // provides the WorldEvent.Load fallback + the player sync edges.
+        MinecraftForge.EVENT_BUS.register(new zmaster587.advancedRocketry.world.weather.PlanetWeatherEventHandler());
+
         CableTickHandler cable = new CableTickHandler();
         MinecraftForge.EVENT_BUS.register(cable);
 

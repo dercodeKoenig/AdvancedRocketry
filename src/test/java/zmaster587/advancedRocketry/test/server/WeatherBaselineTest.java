@@ -12,6 +12,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
@@ -109,11 +110,25 @@ public class WeatherBaselineTest {
                 fail("expected 'shared' baseline but AR dims didn't follow overworld\n"
                         + "  overworld=" + w0 + "\n  A=" + wA + "\n  B=" + wB);
             }
+            // Shared baseline: AR dims must NOT have the per-dim wrapper.
+            // Pre-B1 we'd see DerivedWorldInfo here; post-B1 with the wrapper
+            // forcibly disabled (e.g. enableCustomPlanetWeather=false in the
+            // mode=shared run), we'd expect the same.
+            assertFalse("shared mode but AR planet A has the per-dim wrapper: " + wA,
+                    wA.contains("ARWeatherWorldInfo"));
         } else {
             if (aRaining || bRaining) {
                 fail("expected 'per_dimension' isolation but AR dim followed overworld\n"
                         + "  overworld=" + w0 + "\n  A=" + wA + "\n  B=" + wB);
             }
+            // per_dimension: AR planet WorldInfo MUST be the wrapper. If it
+            // isn't, the isolation assertion above passed for the wrong
+            // reason (e.g. server tick simply didn't propagate weather yet),
+            // and we'd ship a regression.
+            assertTrue("per_dimension expected but planet A is NOT wrapped: " + wA,
+                    wA.contains("ARWeatherWorldInfo"));
+            assertTrue("per_dimension expected but planet B is NOT wrapped: " + wB,
+                    wB.contains("ARWeatherWorldInfo"));
         }
     }
 }
