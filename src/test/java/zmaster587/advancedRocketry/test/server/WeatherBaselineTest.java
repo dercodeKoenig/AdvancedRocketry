@@ -6,7 +6,6 @@ import org.junit.After;
 import org.junit.Assume;
 import org.junit.Before;
 import org.junit.Test;
-import zmaster587.advancedRocketry.test.AdvancedRocketryTestConstants;
 
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -17,14 +16,13 @@ import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
 /**
- * SMART §7.5 — weather baseline + future B1 regression.
+ * SMART §7.5 — weather baseline / B1 regression.
  *
  * Pre-writes a 2-planet fixture XML, sets rain on the overworld, observes both
- * AR planets. Behavior depends on the {@code expectedWeatherMode} flag:
- * <ul>
- *   <li>{@code shared} (pre-B1 default): rain on overworld → AR planets follow.</li>
- *   <li>{@code per_dimension} (post-B1): rain on overworld → AR planets clear.</li>
- * </ul>
+ * AR planets. After the B1 Mixin weather wrapper landed, per-dimension weather
+ * is the only supported behaviour: rain on the overworld must NOT propagate to
+ * AR planets, and each AR planet's {@code WorldInfo} must be the
+ * {@code ARWeatherWorldInfo} wrapper.
  */
 public class WeatherBaselineTest {
 
@@ -83,7 +81,6 @@ public class WeatherBaselineTest {
 
     @Test
     public void weatherPropagationMatchesExpectedMode() throws Exception {
-        String mode = AdvancedRocketryTestConstants.expectedWeatherMode();
         harness = RealDedicatedServerHarness.startWith(workDir, /*cleanupOnClose=*/true);
 
         String dimList = String.join("\n", harness.client().execute("artest dim list"));
@@ -105,30 +102,14 @@ public class WeatherBaselineTest {
 
         assertTrue("overworld failed to start raining after set: " + w0, overRaining);
 
-        if (AdvancedRocketryTestConstants.WEATHER_MODE_SHARED.equals(mode)) {
-            if (!aRaining || !bRaining) {
-                fail("expected 'shared' baseline but AR dims didn't follow overworld\n"
-                        + "  overworld=" + w0 + "\n  A=" + wA + "\n  B=" + wB);
-            }
-            // Shared baseline: AR dims must NOT have the per-dim wrapper.
-            // Pre-B1 we'd see DerivedWorldInfo here; post-B1 with the wrapper
-            // forcibly disabled (e.g. enableCustomPlanetWeather=false in the
-            // mode=shared run), we'd expect the same.
-            assertFalse("shared mode but AR planet A has the per-dim wrapper: " + wA,
-                    wA.contains("ARWeatherWorldInfo"));
-        } else {
-            if (aRaining || bRaining) {
-                fail("expected 'per_dimension' isolation but AR dim followed overworld\n"
-                        + "  overworld=" + w0 + "\n  A=" + wA + "\n  B=" + wB);
-            }
-            // per_dimension: AR planet WorldInfo MUST be the wrapper. If it
-            // isn't, the isolation assertion above passed for the wrong
-            // reason (e.g. server tick simply didn't propagate weather yet),
-            // and we'd ship a regression.
-            assertTrue("per_dimension expected but planet A is NOT wrapped: " + wA,
-                    wA.contains("ARWeatherWorldInfo"));
-            assertTrue("per_dimension expected but planet B is NOT wrapped: " + wB,
-                    wB.contains("ARWeatherWorldInfo"));
+        if (aRaining || bRaining) {
+            fail("expected per-dimension isolation but AR dim followed overworld\n"
+                    + "  overworld=" + w0 + "\n  A=" + wA + "\n  B=" + wB);
         }
+        // AR planet WorldInfo MUST be the B1 wrapper. If it isn't, the
+        // isolation assertion above passed for the wrong reason (e.g. server
+        // tick simply didn't propagate weather yet), and we'd ship a regression.
+        assertTrue("planet A is NOT wrapped: " + wA, wA.contains("ARWeatherWorldInfo"));
+        assertTrue("planet B is NOT wrapped: " + wB, wB.contains("ARWeatherWorldInfo"));
     }
 }

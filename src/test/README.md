@@ -30,7 +30,7 @@ test to FAIL.
 | 2 | registry_smoke | P0 | entity registry > 1 (AR loaded) |
 | 3 | planet_dimension_load | P0 | AR dim list non-empty |
 | 4 | planet_xml_config_integration | P0 | **fixture XML** pre-written to workDir → AR parses it → `/artest planet info <fixture-dim>` returns expected gravity/distance/atmosphere/period |
-| 5 | weather_baseline | P0 | 2-planet fixture XML, set rain on overworld → assert shared/per-dimension propagation per `-Pweather=shared\|per_dimension` flag |
+| 5 | weather_baseline | P0 | 2-planet fixture XML, set rain on overworld → assert per-dimension isolation (B1 wrapper present on AR dims, rain does NOT propagate) |
 | 6 | weather_persistence | P0 | first boot sets rain → close → second boot on same workDir → rain survived |
 | 7 | non_ar_dimension_isolation | P0 | nether (-1) and end (1) NOT classified as AR planets |
 | 8 | machine_recipe_integration | P1 | (3 @Test methods) `recipes-summary` registry check, probe-wiring smoke, **full recipe end-to-end**: `fixture machine cutting` → `try-complete` → `recipe-info` resolves first recipe → `hatch fill` input → `energy inject` power → `machine set-enabled true` → `tile force-tick` 300 → assert expected output appears in output hatch |
@@ -182,10 +182,6 @@ stay free of AR imports.
 ./gradlew testAdvancedRocketryScenarios --tests "*.client.*"     # only client E2E
 ./gradlew test --tests "*.unit.*"                                # only unit
 ./gradlew test --tests "*.integration.*"                         # only integration
-
-# Override expected weather mode for §7.5 baseline scenario.
-./gradlew testAdvancedRocketryScenarios -Pweather=shared          # default
-./gradlew testAdvancedRocketryScenarios -Pweather=per_dimension   # post-B1
 
 # Skip server boot (every harness-bound test SKIPs via Assume).
 ./gradlew testAdvancedRocketryScenarios -Pharness=false

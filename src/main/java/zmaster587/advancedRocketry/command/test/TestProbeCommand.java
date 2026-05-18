@@ -340,10 +340,25 @@ public class TestProbeCommand extends CommandBase {
             info.put("thunderStartLength", props.thunderStartLength);
             info.put("rainMarker", props.getRainMarker());
             info.put("thunderMarker", props.getThunderMarker());
+            info.put("averageTemperature", props.averageTemperature);
+            info.put("genType", props.getGenType());
+            IBlockState ocean = props.getOceanBlock();
+            // null is meaningful — vanilla water fallback — so emit explicitly.
+            info.put("oceanBlock",
+                    ocean == null ? null : ocean.getBlock().getRegistryName().toString());
+            info.put("skyColor", floatArrayToList(props.skyColor));
+            info.put("sunriseSunsetColors", floatArrayToList(props.sunriseSunsetColors));
             send(sender, jsonMap(info));
             return;
         }
         send(sender, "{\"error\":\"unknown planet subcommand\"}");
+    }
+
+    private static List<Double> floatArrayToList(float[] arr) {
+        if (arr == null) return null;
+        List<Double> out = new java.util.ArrayList<>(arr.length);
+        for (float f : arr) out.add((double) f);
+        return out;
     }
 
     private void handleWeather(MinecraftServer server, ICommandSender sender, String[] args) {
@@ -3031,6 +3046,17 @@ public class TestProbeCommand extends CommandBase {
                 for (int i = 0; i < arr.length; i++) {
                     if (i > 0) builder.append(',');
                     builder.append(arr[i]);
+                }
+                builder.append(']');
+            } else if (v instanceof java.util.List) {
+                builder.append('[');
+                boolean firstItem = true;
+                for (Object item : (java.util.List<?>) v) {
+                    if (!firstItem) builder.append(',');
+                    firstItem = false;
+                    if (item == null) builder.append("null");
+                    else if (item instanceof Number || item instanceof Boolean) builder.append(item);
+                    else builder.append('"').append(escapeJson(item.toString())).append('"');
                 }
                 builder.append(']');
             } else {

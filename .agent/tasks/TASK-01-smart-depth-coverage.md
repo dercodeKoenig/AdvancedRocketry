@@ -185,15 +185,16 @@ intentionally skipped per session scoping):
 - [x] **§5.10 `/artest oxygen player <name>` — present**
       (`TestProbeCommand.java:814`). Returns
       `{name, dim, posX, posY, posZ, atmosphere, breathable, pressure}`.
-- [ ] **§5.3 `/artest planet info <dim>` — present but verify field coverage.**
-      Currently returns 15 fields: `dim, name, starId, parent,
-      atmosphereDensity, gravity, orbitalDistance, rotationalPeriod, hasRings,
-      hasOxygen, seaLevel, rainStartLength, thunderStartLength, rainMarker,
-      thunderMarker`. SMART §5.3 prose calls for the *full* DimensionProperties
-      field list; cross-check against SMART source before Phase 4 and file any
-      missing field (e.g. `averageTemperature`, `originalAtmosphereDensity`,
-      `oceanBlock`, `sunriseSunsetColors`, `skyColor`, `genType`) as a follow-up
-      bullet here.
+- [x] **§5.3 `/artest planet info <dim>` field coverage — DONE 2026-05-18.**
+      Extended `handlePlanet` to also emit `averageTemperature`, `genType`,
+      `oceanBlock` (registry name, or `null` when vanilla water fallback),
+      `skyColor`, `sunriseSunsetColors`. `jsonMap` extended to encode
+      `List<?>` as a JSON array (`float[]` colour tuples are mapped to
+      `List<Double>` via a local helper to use that path). 20 fields total.
+      `originalAtmosphereDensity` deliberately omitted: no public accessor
+      on `DimensionProperties`, and reflection-poking a private field from
+      a probe is not worth the maintenance cost — add an accessor if a
+      test actually needs the distinction.
 - [ ] **Advisory: no top-level category implements `case "help"`.** Calling
       `/artest <cat> help` falls through to each category's "unknown
       subcommand" error string. Not a SMART §5 hard requirement, but adding a
@@ -201,9 +202,31 @@ intentionally skipped per session scoping):
       text wrapped as `{"usage":...}` instead of `{"error":...}`) would make
       future audits self-documenting. Optional unless SMART §16 enforces it.
 
-**Weather scope (deferred):** `/artest weather` subcommands NOT audited in this
-session per user request. Future audit pass needs to verify
-`weather get/set/clear/rain/thunder` and any SMART §5 weather-specific verbs.
+**Weather scope (audited 2026-05-18, post-B1 ship):**
+- `/artest weather get <dim>` — present (`TestProbeCommand.handleWeather`,
+  returns dim/worldInfoClass/isRaining/isThundering/rainTime/thunderTime/
+  cleanWeatherTime/rainStrength/thunderStrength).
+- `/artest weather set <dim> {clear|rain|thunder} <ticks>` — all three
+  modes present, each correctly resets `cleanWeatherTime` to avoid the
+  vanilla force-clear edge case (commented inline in `handleWeather`).
+- All callers in `src/test/` (WeatherClientSyncE2ETest,
+  PerDimensionWeatherIsolationTest, WeatherBaselineTest,
+  WeatherPersistenceTest) only invoke `weather get` / `weather set`.
+  No SMART §5 weather verb is missing.
+
+**Post-B1 cleanup (2026-05-18):** `WEATHER_MODE_SHARED` retirement.
+Now that the old `CustomDerivedWorldInfo` shared-weather path is deleted,
+the `-Pweather=shared` Gradle override and the
+`-Dadvancedrocketry.tests.expectedWeatherMode=shared` test toggle are
+unreachable. Removed:
+- `AdvancedRocketryTestConstants.WEATHER_MODE_*` constants and
+  `expectedWeatherMode()` method
+- `weatherMode` Kotlin val + `systemProperty(...)` injection in
+  `build.gradle.kts`; comment block updated
+- The `if (WEATHER_MODE_SHARED)` branch in `WeatherBaselineTest`
+  (test now asserts per-dimension isolation + wrapper presence
+  unconditionally)
+- README mentions of `-Pweather=shared|per_dimension`
 
 ## Technical Decisions
 
@@ -257,9 +280,10 @@ session per user request. Future audit pass needs to verify
       intentionally `@Ignore`d (production blocks commented out)
 - [x] Phase 4 done; new "pyramid complete" marker authored
       (`.agent/.context-markers/2026-05-18-1530_task01-phase4-pyramid-complete.md`)
-- [ ] Phase 5 (any leftover probe additions) — §5.3 `planet info` field
-      cross-check vs SMART prose still open; deferred (not blocking
-      SMART §16 DoD)
+- [x] Phase 5 (probe additions) — §5.3 `planet info` field coverage
+      extended (20 fields); weather subcommands audited (no gaps);
+      `WEATHER_MODE_SHARED` retired post-B1. Only the optional
+      `case "help"` advisory remains open.
 - [x] `./gradlew test` PASS — 239/0/11 (PASS/FAIL/SKIP), 14m 29s wall
 - [x] SMART §16 final report bullet-by-bullet against §7 prose
       (embedded in the Phase 4 marker)
