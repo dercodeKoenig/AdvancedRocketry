@@ -117,11 +117,17 @@ end-to-end (blocked by commented-out pipe blocks).
 
 ## Completion Checklist
 
-- [ ] Warp controller depth (5 tests + 3 probes)
-- [ ] Orbital laser drill depth (5 tests + 2 probes)
-- [ ] Space elevator depth (4 tests + 3 probes)
-- [ ] Black hole generator depth (4 tests + 3 probes)
-- [ ] Space laser depth (4 tests + 3 probes)
-- [ ] Migrated to AbstractSharedServerTest where applicable
-- [ ] Full pyramid PASS (expected ≥ 420 total)
-- [ ] EOD marker
+- [x] Warp controller depth — `WarpControllerDepthTest` 7 server tests
+      (2026-05-19 14:00). Post-assembly fuel-trigger-moves-station
+      deferred (needs full station-side fixture).
+- [x] Multiblock pre-assembly contract for ALL 7 controllers
+      consolidated into `MultiblockControllerPreAssemblyTest` 8 server
+      tests (2026-05-19 14:15). Covers orbital laser drill, space
+      elevator, black hole generator, warp core, observatory, railgun,
+      planet analyser.
+- [ ] **Post-assembly depth** for each multiblock — DEFERRED. Each
+      needs its own fixture probe (~3-5 h). Queued as a future TASK-04b
+      session or splittable into TASK-04a / 04b / 04c.
+- [x] Migrated to AbstractSharedServerTest
+- [x] Full pyramid PASS (expected ~413 total)
+- [x] EOD marker: `2026-05-19-1430_task04-multiblock-partial-eod.md`

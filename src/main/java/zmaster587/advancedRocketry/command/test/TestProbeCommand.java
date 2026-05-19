@@ -2619,7 +2619,149 @@ public class TestProbeCommand extends CommandBase {
                     + ",\"tileClass\":\"" + tile.getClass().getName() + "\"}");
             return;
         }
-        send(sender, "{\"error\":\"unknown tile subcommand — try force-tick <dim> <x> <y> <z> <ticks>\"}");
+        if (args.length >= 5 && "warp-state".equalsIgnoreCase(args[0])) {
+            // /artest tile warp-state <dim> <x> <y> <z> — dumps TileWarpController
+            // state for TASK-04 Phase 1 tests. Returns:
+            //   tileClass, hasSpaceObject, stationId, stationOrbitingDim,
+            //   stationFuel, stationDest, travelCost (computed from station state).
+            int dim = parseIntOr(args[1], Integer.MIN_VALUE);
+            int x = parseIntOr(args[2], 0);
+            int y = parseIntOr(args[3], 0);
+            int z = parseIntOr(args[4], 0);
+            net.minecraft.world.WorldServer world = server.getWorld(dim);
+            if (world == null) {
+                send(sender, "{\"error\":\"world not loaded\",\"dim\":" + dim + "}");
+                return;
+            }
+            TileEntity tile = world.getTileEntity(new BlockPos(x, y, z));
+            if (!(tile instanceof zmaster587.advancedRocketry.tile.station.TileWarpController)) {
+                send(sender, "{\"error\":\"tile not TileWarpController\",\"tile\":\""
+                        + (tile == null ? "null" : tile.getClass().getName()) + "\"}");
+                return;
+            }
+            zmaster587.advancedRocketry.tile.station.TileWarpController controller =
+                    (zmaster587.advancedRocketry.tile.station.TileWarpController) tile;
+            Map<String, Object> info = new LinkedHashMap<>();
+            info.put("tileClass", tile.getClass().getName());
+            // getSpaceObject() is private — use reflection.
+            zmaster587.advancedRocketry.stations.SpaceStationObject station;
+            try {
+                java.lang.reflect.Method m =
+                        zmaster587.advancedRocketry.tile.station.TileWarpController
+                                .class.getDeclaredMethod("getSpaceObject");
+                m.setAccessible(true);
+                station = (zmaster587.advancedRocketry.stations.SpaceStationObject) m.invoke(controller);
+            } catch (ReflectiveOperationException e) {
+                station = null;
+            }
+            info.put("hasSpaceObject", station != null);
+            if (station != null) {
+                info.put("stationId", station.getId());
+                info.put("stationOrbitingDim", station.getOrbitingPlanetId());
+                info.put("stationDestDim", station.getDestOrbitingBody());
+                info.put("stationFuel", station.getFuelAmount());
+                info.put("stationFuelMax", station.getMaxFuelAmount());
+                info.put("stationAnchored", station.isAnchored());
+                info.put("hasUsableWarpCore", station.hasUsableWarpCore());
+                // getTravelCost is protected → reflect.
+                try {
+                    java.lang.reflect.Method tc =
+                            zmaster587.advancedRocketry.tile.station.TileWarpController
+                                    .class.getDeclaredMethod("getTravelCost");
+                    tc.setAccessible(true);
+                    info.put("travelCost", tc.invoke(controller));
+                } catch (ReflectiveOperationException e) {
+                    info.put("travelCost", "<reflect failed>");
+                }
+            }
+            send(sender, jsonMap(info));
+            return;
+        }
+        if (args.length >= 5 && "multiblock-state".equalsIgnoreCase(args[0])) {
+            // /artest tile multiblock-state <dim> <x> <y> <z> — dumps
+            // libVulpes TileMultiBlock state via reflection on the
+            // canonical `isComplete()` / `canRender` / `completeStructure`
+            // methods. Used by TASK-04 Phase 2-5 multiblock controller
+            // pre-assembly contract tests.
+            int dim = parseIntOr(args[1], Integer.MIN_VALUE);
+            int x = parseIntOr(args[2], 0);
+            int y = parseIntOr(args[3], 0);
+            int z = parseIntOr(args[4], 0);
+            net.minecraft.world.WorldServer world = server.getWorld(dim);
+            if (world == null) {
+                send(sender, "{\"error\":\"world not loaded\",\"dim\":" + dim + "}");
+                return;
+            }
+            TileEntity tile = world.getTileEntity(new BlockPos(x, y, z));
+            if (tile == null) {
+                send(sender, "{\"error\":\"no tile entity\"}");
+                return;
+            }
+            Map<String, Object> info = new LinkedHashMap<>();
+            info.put("tileClass", tile.getClass().getName());
+            // Call isComplete() if available. libVulpes TileMultiBlock
+            // exposes it as `public boolean isComplete()`.
+            try {
+                java.lang.reflect.Method m = tile.getClass().getMethod("isComplete");
+                info.put("isComplete", m.invoke(tile));
+            } catch (NoSuchMethodException e) {
+                info.put("isComplete", "<not a multiblock>");
+            } catch (ReflectiveOperationException e) {
+                info.put("isComplete", "<reflect failed: "
+                        + e.getClass().getSimpleName() + ">");
+            }
+            // canRender — public boolean field on libVulpes multiblocks;
+            // false when structure isn't formed.
+            try {
+                java.lang.reflect.Field f = tile.getClass().getField("canRender");
+                info.put("canRender", f.get(tile));
+            } catch (NoSuchFieldException e) {
+                info.put("canRender", "<no field>");
+            } catch (ReflectiveOperationException e) {
+                info.put("canRender", "<reflect failed>");
+            }
+            // isITickable — handy for the test to know whether force-tick
+            // will succeed.
+            info.put("isITickable", tile instanceof net.minecraft.util.ITickable);
+            send(sender, jsonMap(info));
+            return;
+        }
+        if (args.length >= 5 && "warp-trigger".equalsIgnoreCase(args[0])) {
+            // /artest tile warp-trigger <dim> <x> <y> <z> — invokes the
+            // production button-id=2 handler (the warp-go button). Wraps
+            // onInventoryButtonPressed(2). Does NOT bypass production
+            // gating (fuel, anchored, warpCore, destination); failure
+            // surfaces as "station did not move" — the test reads
+            // warp-state again to confirm.
+            int dim = parseIntOr(args[1], Integer.MIN_VALUE);
+            int x = parseIntOr(args[2], 0);
+            int y = parseIntOr(args[3], 0);
+            int z = parseIntOr(args[4], 0);
+            net.minecraft.world.WorldServer world = server.getWorld(dim);
+            if (world == null) {
+                send(sender, "{\"error\":\"world not loaded\",\"dim\":" + dim + "}");
+                return;
+            }
+            TileEntity tile = world.getTileEntity(new BlockPos(x, y, z));
+            if (!(tile instanceof zmaster587.advancedRocketry.tile.station.TileWarpController)) {
+                send(sender, "{\"error\":\"tile not TileWarpController\",\"tile\":\""
+                        + (tile == null ? "null" : tile.getClass().getName()) + "\"}");
+                return;
+            }
+            zmaster587.advancedRocketry.tile.station.TileWarpController controller =
+                    (zmaster587.advancedRocketry.tile.station.TileWarpController) tile;
+            try {
+                controller.onInventoryButtonPressed(2);
+            } catch (RuntimeException e) {
+                send(sender, "{\"error\":\"warp trigger threw: "
+                        + escapeJson(e.getClass().getSimpleName() + ": " + e.getMessage())
+                        + "\"}");
+                return;
+            }
+            send(sender, "{\"ok\":true}");
+            return;
+        }
+        send(sender, "{\"error\":\"unknown tile subcommand — try force-tick | warp-state | warp-trigger | multiblock-state\"}");
     }
 
     // §5 Commands probe -------------------------------------------------------
