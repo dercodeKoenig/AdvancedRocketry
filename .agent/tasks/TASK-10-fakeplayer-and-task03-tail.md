@@ -53,23 +53,31 @@ is **out of scope** for this task. It will be planned separately as a
   station fuel falls (matched accounting).
 - [ ] `FluidTankNBTRoundTripsAcrossRestart` — multi-boot test.
 
-### Phase 2: B3 — suite-group single-method smokes (~2-3 h)
+### Phase 2: B3 — suite-group single-method smokes ✅ COMPLETE
 
-14 single-method `*SmokeTest` classes spawn 14 separate JVMs today.
-Group by domain:
+Merged single-method `*SmokeTest` classes into shared-harness suites
+(one server boot per suite class instead of one per smoke class).
 
-- [ ] `ServerBootSmokeSuite` — combine ServerStartupSmokeTest,
-  RegistrySmokeTest, CommandsSmokeTest, HarnessDiagnosticTest,
-  NonARDimensionIsolationTest.
-- [ ] `RocketDomainSmokeSuite` — RocketLaunchSmokeTest +
-  RocketInfrastructureSmokeTest fragments that don't need
-  persistence isolation.
-- [ ] `MachineDomainSmokeSuite` — MultiMachineControllerSmokeTest,
-  MultiblockValidationSmokeTest, EnergySystemsSmokeTest,
-  SealedRoomOxygenVentTest, SuitVacuumSubsystemSmokeTest,
-  SpecialInfrastructureSmokeTest, ForceFieldProjectionSmokeTest,
-  MicrowaveReceiverSmokeTest, BlackHoleGeneratorSmokeTest.
-- [ ] Verify wall-time saving (~120 s expected at 3-way parallelism).
+- [x] `MachineDomainSmokeSuite` — 9 classes → 1
+  (MultiMachineControllerSmokeTest, MultiblockValidationSmokeTest,
+  EnergySystemsSmokeTest, SealedRoomOxygenVentTest,
+  SuitVacuumSubsystemSmokeTest, SpecialInfrastructureSmokeTest,
+  ForceFieldProjectionSmokeTest, MicrowaveReceiverSmokeTest,
+  BlackHoleGeneratorSmokeTest).
+- [x] `ServerBootSmokeSuite` — 2 classes → 1
+  (ServerStartupSmokeTest, RegistrySmokeTest). CommandsSmokeTest
+  already shared; HarnessDiagnosticTest and NonARDimensionIsolationTest
+  must remain per-method (diagnostic / requires-pristine-JVM).
+- [x] `RocketDomainSmokeSuite` — **SKIPPED**. The only single-method
+  class in this domain is `RocketLaunchSmokeTest`; wrapping a single
+  class saves zero JVM-boots. `RocketInfrastructureSmokeTest` already
+  uses the shared harness since TASK-03 B2.
+- [x] Wall-time delta measured:
+  - pre-merge baseline: testServer ~8 m 27 s
+  - post-merge:        testServer    7 m 59 s
+  - delta:             −28 s wall (parallelism diluted the per-JVM-boot
+    saving; full-serial save would be ~108 s with 9 merged JVMs).
+  - MachineDomainSmokeSuite: 9 / 9 PASSED in 16.3 s.
 
 ### Phase 3: Cross-cutting + EOD (~1 h)
 
@@ -98,7 +106,8 @@ for the testClient-based plan.)
 ## Completion Checklist
 
 - [ ] 4 deep-tile tests (A2 remainder)
-- [ ] 3 single-method-smoke suites grouped (B3)
-- [ ] Wall-time delta measured for B3
+- [x] Single-method-smoke suites grouped (B3): 2 suites shipped
+      (Machine + ServerBoot); Rocket suite dropped as not useful.
+- [x] Wall-time delta measured for B3
 - [ ] Full pyramid PASS
 - [ ] EOD marker
