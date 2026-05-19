@@ -471,6 +471,37 @@ public class TestProbeCommand extends CommandBase {
             handleRocketLaunch(server, sender, args);
             return;
         }
+        if ("fuel".equalsIgnoreCase(args[0]) && args.length >= 2) {
+            // /artest rocket fuel <entityId> — exposes stats.getFuelAmount /
+            // getFuelCapacity per FuelType + primary rocket fuel type.
+            // Consumers: TileFuelingStation cause-effect tests that need to
+            // assert "rocket received fuel" without poking the rocket's
+            // dataManager directly.
+            int entityId = parseIntOr(args[1], Integer.MIN_VALUE);
+            EntityRocket rocket = findRocket(server, entityId);
+            if (rocket == null) {
+                send(sender, "{\"error\":\"rocket not found\",\"entityId\":" + entityId + "}");
+                return;
+            }
+            zmaster587.advancedRocketry.api.fuel.FuelRegistry.FuelType primary = rocket.getRocketFuelType();
+            StringBuilder builder = new StringBuilder("{\"entityId\":").append(entityId)
+                    .append(",\"primaryFuelType\":\"")
+                    .append(primary == null ? "null" : primary.name())
+                    .append("\",\"fuels\":{");
+            boolean first = true;
+            for (zmaster587.advancedRocketry.api.fuel.FuelRegistry.FuelType ft :
+                    zmaster587.advancedRocketry.api.fuel.FuelRegistry.FuelType.values()) {
+                if (!first) builder.append(',');
+                first = false;
+                int amount = rocket.getFuelAmount(ft);
+                int capacity = rocket.getFuelCapacity(ft);
+                builder.append("\"").append(ft.name()).append("\":{\"amount\":")
+                        .append(amount).append(",\"capacity\":").append(capacity).append("}");
+            }
+            builder.append("}}");
+            send(sender, builder.toString());
+            return;
+        }
         if ("override-landing".equalsIgnoreCase(args[0]) && args.length >= 3) {
             // /artest rocket override-landing <rocketId> <stationId> —
             // production cause-effect: TileGuidanceComputer.overrideLandingStation
@@ -2463,8 +2494,12 @@ public class TestProbeCommand extends CommandBase {
      * — sets a stack into an {@link net.minecraft.inventory.IInventory} slot
      * (typically a libVulpes input hatch).
      *
-     * {@code /artest hatch read <dim> <x> <y> <z>} — dumps every non-empty slot
-     * as {@code {"slot":N,"item":"<id>","count":K,"meta":M}}.
+     * {@code /artest hatch read <dim> <x> <y> <z> [nbt]} — dumps every
+     * non-empty slot as {@code {"slot":N,"item":"<id>","count":K,"meta":M}}.
+     * Pass the literal {@code nbt} as the 6th arg to additionally include
+     * {@code "nbt":"<Mojangson dump>"} per slot (the stack's
+     * {@code getTagCompound().toString()}, JSON-escaped, or empty string
+     * when the stack has no tag).
      */
     private void handleHatch(MinecraftServer server, ICommandSender sender, String[] args) {
         if (args.length >= 6 && "fill".equalsIgnoreCase(args[0])) {
@@ -2523,6 +2558,12 @@ public class TestProbeCommand extends CommandBase {
                 return;
             }
             net.minecraft.inventory.IInventory inv = (net.minecraft.inventory.IInventory) tile;
+            // Optional trailing "nbt" flag → include each slot's stack NBT
+            // as a Mojangson string (NBTTagCompound.toString()). Used by
+            // tests that need to verify a stack's tag-compound shape (e.g.
+            // suit component lists) without adding a per-tile probe verb.
+            boolean includeNbt = args.length >= 6
+                    && "nbt".equalsIgnoreCase(args[5]);
             StringBuilder builder = new StringBuilder("{\"size\":")
                     .append(inv.getSizeInventory()).append(",\"slots\":[");
             boolean first = true;
@@ -2535,13 +2576,20 @@ public class TestProbeCommand extends CommandBase {
                 builder.append("{\"slot\":").append(i)
                         .append(",\"item\":\"").append(regName == null ? "null" : regName.toString())
                         .append("\",\"count\":").append(stack.getCount())
-                        .append(",\"meta\":").append(stack.getMetadata()).append('}');
+                        .append(",\"meta\":").append(stack.getMetadata());
+                if (includeNbt) {
+                    net.minecraft.nbt.NBTTagCompound tag = stack.getTagCompound();
+                    builder.append(",\"nbt\":\"")
+                            .append(tag == null ? "" : escapeJson(tag.toString()))
+                            .append("\"");
+                }
+                builder.append('}');
             }
             builder.append("]}");
             send(sender, builder.toString());
             return;
         }
-        send(sender, "{\"error\":\"unknown hatch subcommand — try fill <dim> <x> <y> <z> <slot> <itemId> [count] [meta] | read <dim> <x> <y> <z>\"}");
+        send(sender, "{\"error\":\"unknown hatch subcommand — try fill <dim> <x> <y> <z> <slot> <itemId> [count] [meta] | read <dim> <x> <y> <z> [nbt]\"}");
     }
 
     // §5 Planet selector probe --------------------------------------------------
@@ -2678,6 +2726,46 @@ public class TestProbeCommand extends CommandBase {
             }
             send(sender, "{\"ok\":true,\"ticked\":" + ticked
                     + ",\"tileClass\":\"" + tile.getClass().getName() + "\"}");
+            return;
+        }
+        if (args.length >= 5 && "init-modules".equalsIgnoreCase(args[0])) {
+            // /artest tile init-modules <dim> <x> <y> <z>
+            // Calls getModules(0, null) on an IModularInventory tile to
+            // populate any internal module/slot-array fields that
+            // production code lazily initialises in the GUI-open path.
+            // E.g. TileSuitWorkStation.slotArray is populated only inside
+            // getModules(); its setInventorySlotContents(0, ...) NPEs on
+            // a fresh server-side tile that hasn't seen a GUI open.
+            // Swallows any NPE from player-using modules (e.g.
+            // ModuleSlotArmor with a null player) — by the time those
+            // construct, the slot-array fields have already been set.
+            int dim = parseIntOr(args[1], Integer.MIN_VALUE);
+            int x = parseIntOr(args[2], 0);
+            int y = parseIntOr(args[3], 0);
+            int z = parseIntOr(args[4], 0);
+            net.minecraft.world.WorldServer world = server.getWorld(dim);
+            if (world == null) {
+                send(sender, "{\"error\":\"world not loaded\",\"dim\":" + dim + "}");
+                return;
+            }
+            TileEntity tile = world.getTileEntity(new BlockPos(x, y, z));
+            if (!(tile instanceof zmaster587.libVulpes.inventory.modules.IModularInventory)) {
+                send(sender, "{\"error\":\"tile not IModularInventory\",\"tile\":\""
+                        + (tile == null ? "null" : tile.getClass().getName()) + "\"}");
+                return;
+            }
+            zmaster587.libVulpes.inventory.modules.IModularInventory imi =
+                    (zmaster587.libVulpes.inventory.modules.IModularInventory) tile;
+            String swallowed = null;
+            try {
+                imi.getModules(0, null);
+            } catch (RuntimeException e) {
+                swallowed = e.getClass().getSimpleName() + ": " + e.getMessage();
+            }
+            send(sender, "{\"ok\":true,\"tileClass\":\"" + tile.getClass().getName() + "\""
+                    + (swallowed == null ? ""
+                            : ",\"playerModuleSkipped\":\"" + escapeJson(swallowed) + "\"")
+                    + "}");
             return;
         }
         if (args.length >= 5 && "warp-state".equalsIgnoreCase(args[0])) {
