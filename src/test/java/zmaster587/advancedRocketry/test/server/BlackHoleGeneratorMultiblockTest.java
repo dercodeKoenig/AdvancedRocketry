@@ -2,6 +2,10 @@ package zmaster587.advancedRocketry.test.server;
 
 import org.junit.Test;
 
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
 /**
@@ -88,7 +92,7 @@ public class BlackHoleGeneratorMultiblockTest extends AbstractSharedServerTest {
         assertTrue("baseline try-complete should pass: " + first,
                 first.contains("\"isComplete\":true"));
 
-        // Break one of the column blocks (lower1 — directly under centre).
+        // Break the lower1Mid column block (directly under centre at y=cy-1).
         // Production validator must notice and flip isComplete back to false.
         String breakBlock = join(client().execute(
                 "artest place 0 " + cx + " " + (cy - 1) + " " + (cz + 1) + " minecraft:air"));
@@ -102,6 +106,79 @@ public class BlackHoleGeneratorMultiblockTest extends AbstractSharedServerTest {
         assertTrue("structure stayed complete after column block removal — "
                         + "validator broken: " + broken,
                 broken.contains("\"isComplete\":false"));
+    }
+
+    @Test
+    public void powerOutputPlugExposesEnergyCapacityAfterFormation() throws Exception {
+        // Position-isolated patch.
+        int cx = CX + 60, cy = CY, cz = CZ;
+        String fixture = join(client().execute(
+                "artest fixture multiblock blackhole-gen 0 " + cx + " " + cy + " " + cz));
+        assertTrue("fixture build failed: " + fixture, fixture.contains("\"ok\":true"));
+
+        // Form it so the controller's MultiBattery wires up the output plug.
+        String formed = join(client().execute(
+                "artest machine try-complete 0 " + cx + " " + cy + " " + cz));
+        assertTrue("formation must succeed: " + formed,
+                formed.contains("\"isComplete\":true"));
+
+        // The forgePowerOutput plug at (cx+1, cy, cz+1) must expose an
+        // IEnergyStorage capability with non-zero max. After formation the
+        // libVulpes MultiBattery routes the controller's per-multiblock
+        // capacity through this plug; a regression that drops the energy-
+        // capability wiring would silently make the BHG un-drainable.
+        int px = cx + 1, py = cy, pz = cz + 1;
+        String energy = join(client().execute(
+                "artest energy stored 0 " + px + " " + py + " " + pz));
+        assertTrue("power output plug must expose IEnergyStorage: " + energy,
+                energy.contains("\"hasEnergy\":true"));
+        // Capacity is configured per-controller; just assert non-zero —
+        // the exact value depends on AR config defaults.
+        Matcher m = Pattern.compile("\"energyMax\":(\\d+)").matcher(energy);
+        assertTrue("could not parse energyMax: " + energy, m.find());
+        long capacity = Long.parseLong(m.group(1));
+        assertTrue("formed BHG must have non-zero energy capacity at the "
+                        + "output plug; got energyMax=" + capacity + " response=" + energy,
+                capacity > 0L);
+    }
+
+    @Test
+    public void formedBhgInOverworldStaysIdleWithoutBlackHole_documentsContract() throws Exception {
+        // Production contract: TileBlackHoleGenerator.update only produces
+        // energy when isAroundBlackHole() returns true, i.e. the controller
+        // is in the space dimension AND on a space station whose parent
+        // star is classified as a black hole. The test harness runs in dim
+        // 0 (overworld); the guard must fire and keep powerMadeLastTick=0
+        // even with a valid formation and force-ticks. A regression that
+        // removes the guard would let BHGs produce free power on any dim.
+        int cx = CX + 90, cy = CY, cz = CZ;
+        String fixture = join(client().execute(
+                "artest fixture multiblock blackhole-gen 0 " + cx + " " + cy + " " + cz));
+        assertTrue("fixture build failed: " + fixture, fixture.contains("\"ok\":true"));
+
+        String formed = join(client().execute(
+                "artest machine try-complete 0 " + cx + " " + cy + " " + cz));
+        assertTrue("formation must succeed: " + formed,
+                formed.contains("\"isComplete\":true"));
+
+        // Drive many controller updates — production update() consults
+        // isAroundBlackHole() each call. With no black-hole context, the
+        // guard returns false and powerMadeLastTick must stay 0.
+        String tick = join(client().execute(
+                "artest tile force-tick 0 " + cx + " " + cy + " " + cz + " 100"));
+        assertTrue("force-tick must complete without exception: " + tick,
+                tick.contains("\"ok\":true"));
+
+        // Energy stored at the output plug must remain 0 (no production).
+        int px = cx + 1, py = cy, pz = cz + 1;
+        String energy = join(client().execute(
+                "artest energy stored 0 " + px + " " + py + " " + pz));
+        Matcher m = Pattern.compile("\"energyStored\":(\\d+)").matcher(energy);
+        assertTrue("could not parse energyStored: " + energy, m.find());
+        long stored = Long.parseLong(m.group(1));
+        assertEquals("BHG in overworld must NOT produce power "
+                + "(isAroundBlackHole guard); response=" + energy,
+                0L, stored);
     }
 
     private static String join(java.util.List<String> resp) {

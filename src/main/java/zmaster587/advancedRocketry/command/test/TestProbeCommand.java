@@ -3433,7 +3433,106 @@ public class TestProbeCommand extends CommandBase {
                     parseIntOr(args[5], 0));
             return;
         }
-        send(sender, "{\"error\":\"unknown fixture subcommand — try rocket <dim> <x> <y> <z> | machine cutting <dim> <x> <y> <z> | multiblock blackhole-gen <dim> <x> <y> <z>\"}");
+        if (args.length >= 6 && "multiblock".equalsIgnoreCase(args[0])
+                && "beacon".equalsIgnoreCase(args[1])) {
+            handleFixtureBeacon(server, sender,
+                    parseIntOr(args[2], Integer.MIN_VALUE),
+                    parseIntOr(args[3], 0),
+                    parseIntOr(args[4], 64),
+                    parseIntOr(args[5], 0));
+            return;
+        }
+        send(sender, "{\"error\":\"unknown fixture subcommand — try rocket <dim> <x> <y> <z> | machine cutting <dim> <x> <y> <z> | multiblock blackhole-gen|beacon <dim> <x> <y> <z>\"}");
+    }
+
+    /**
+     * Builds a complete beacon multiblock with controller at (cx, cy, cz)
+     * NORTH-facing. Per {@code TileBeacon.structure} — a 5-layer 3×3 array
+     * with the controller 'c' at structure[4][0][1] (offset x=1, y=4, z=0):
+     * <pre>
+     *   y=0: REDSTONE_BLOCK at centre, AIR around (tip)
+     *   y=1..3: blockStructureBlock at centre, AIR around (pillar)
+     *   y=4: controller in front-row centre, 3 structureBlocks in mid-row,
+     *        1 structureBlock at z=2 centre (base)
+     * </pre>
+     *
+     * <p>For NORTH-facing controller (frontZ=-1, frontX=0) the libVulpes
+     * position formula simplifies to:</p>
+     * <ul>
+     *   <li>{@code globalX = cx - (x - 1)}</li>
+     *   <li>{@code globalY = cy - y + 4}</li>
+     *   <li>{@code globalZ = cz + z}</li>
+     * </ul>
+     *
+     * <p>The structure requires every Blocks.AIR cell to be {@code isAirBlock}
+     * at validation time, so the fixture pre-clears the full 5×3×3 footprint
+     * to air before placing the non-air blocks.</p>
+     */
+    private void handleFixtureBeacon(MinecraftServer server, ICommandSender sender,
+                                     int dim, int cx, int cy, int cz) {
+        net.minecraft.world.WorldServer world = server.getWorld(dim);
+        if (world == null) {
+            send(sender, "{\"error\":\"world not loaded\",\"dim\":" + dim + "}");
+            return;
+        }
+
+        net.minecraft.block.Block controller =
+                ForgeRegistries.BLOCKS.getValue(new ResourceLocation("advancedrocketry", "beacon"));
+        net.minecraft.block.Block structure =
+                ForgeRegistries.BLOCKS.getValue(new ResourceLocation("libvulpes", "structuremachine"));
+        if (controller == null || structure == null) {
+            send(sender, "{\"error\":\"missing block(s)\",\"controller\":" + (controller != null)
+                    + ",\"structure\":" + (structure != null) + "}");
+            return;
+        }
+
+        // Pre-clear the 5×3×3 footprint to air. Bounding box:
+        //   x: cx-1 .. cx+1
+        //   y: cy   .. cy+4
+        //   z: cz   .. cz+2
+        for (int dx = -1; dx <= 1; dx++) {
+            for (int dy = 0; dy <= 4; dy++) {
+                for (int dz = 0; dz <= 2; dz++) {
+                    world.setBlockToAir(new BlockPos(cx + dx, cy + dy, cz + dz));
+                }
+            }
+        }
+
+        // Controller NORTH-facing.
+        net.minecraft.block.state.IBlockState controllerState = controller.getDefaultState();
+        try {
+            controllerState = controllerState.withProperty(
+                    zmaster587.libVulpes.block.RotatableBlock.FACING,
+                    net.minecraft.util.EnumFacing.NORTH);
+        } catch (IllegalArgumentException ignored) {
+            // Property absent — fall back to default.
+        }
+
+        BlockPos controllerPos = new BlockPos(cx, cy, cz);
+        net.minecraft.block.state.IBlockState structState = structure.getDefaultState();
+        net.minecraft.block.state.IBlockState redstoneState = net.minecraft.init.Blocks.REDSTONE_BLOCK.getDefaultState();
+
+        // Pillar tip — REDSTONE_BLOCK at (cx, cy+4, cz+1).
+        world.setBlockState(new BlockPos(cx, cy + 4, cz + 1), redstoneState);
+        // Pillar shaft — 3 blockStructureBlock at (cx, cy+1..3, cz+1).
+        world.setBlockState(new BlockPos(cx, cy + 3, cz + 1), structState);
+        world.setBlockState(new BlockPos(cx, cy + 2, cz + 1), structState);
+        world.setBlockState(new BlockPos(cx, cy + 1, cz + 1), structState);
+        // Controller (y=4 in structure, z=0).
+        world.setBlockState(controllerPos, controllerState);
+        // y=4 z=1 row — three blockStructureBlock at (cx+1, cy, cz+1),
+        // (cx, cy, cz+1), (cx-1, cy, cz+1).
+        world.setBlockState(new BlockPos(cx + 1, cy, cz + 1), structState);
+        world.setBlockState(new BlockPos(cx,     cy, cz + 1), structState);
+        world.setBlockState(new BlockPos(cx - 1, cy, cz + 1), structState);
+        // y=4 z=2 — single blockStructureBlock at (cx, cy, cz+2).
+        world.setBlockState(new BlockPos(cx,     cy, cz + 2), structState);
+
+        Map<String, Object> info = new LinkedHashMap<>();
+        info.put("ok", true);
+        info.put("controllerPos", new int[]{cx, cy, cz});
+        info.put("tipPos",        new int[]{cx, cy + 4, cz + 1});
+        send(sender, jsonMap(info));
     }
 
     /**
