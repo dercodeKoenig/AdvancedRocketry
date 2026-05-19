@@ -106,17 +106,10 @@ Group by domain:
 
 ## Completion Checklist
 
-- [x] 7 new `/artest fakeplayer` probe verbs — create / teleport /
-      tick / destroy / info / list / fire-living-update.
-- [x] 4 player-event behavioural tests (A3) — including one
-      `_documentsFakePlayerNPE` pinning AR's player-tick chain
-      doesn't tolerate FakePlayer (production NPEs in
-      PlayerList.transferPlayerToDimension and
-      EntityPlayerMP.onNewPotionEffect).
-- [ ] **A2 remainder DEFERRED** — suit workstation real recipe,
-      UV vs RocketAssembler divergence, fueling-station-with-rocket,
-      fluid tank NBT round-trip. Each needs ~2-3 h fixture work.
-- [ ] **B3 suite-grouping DEFERRED** — mechanical wall-time win
-      (~120 s); worth a dedicated cleanup session.
-- [x] Full pyramid PASS (expected ~435 total)
-- [x] EOD marker: `2026-05-19-1600_task10-fakeplayer-eod.md`
+- [ ] 5 new `/artest fakeplayer` probe verbs
+- [ ] 4 player-event behavioural tests (A3)
+- [ ] 4 deep-tile tests (A2 remainder)
+- [ ] 3 single-method-smoke suites grouped (B3)
+- [ ] Wall-time delta measured for B3
+- [ ] Full pyramid PASS
+- [ ] EOD marker
