@@ -126,8 +126,9 @@ A regression in any phase ships a "rocket disappears mid-flight" or
       (`ticksExisted`).
 - [x] Orbit-reached chain: 5 tests in `RocketFlightCycleDepthTest` +
       sequencing tests in `RocketFlightCycleIntegrationTest`.
-- [ ] **Dimension transition: DEFERRED** — needs FakePlayer (TASK-10)
-      to keep chunks loaded so the transitionMap-drain loop runs.
+- [ ] **Dimension transition: DEFERRED** — needs a real player to
+      keep chunks loaded so the transitionMap-drain loop runs; belongs
+      in the testClient e2e harness (cross-link to TASK-10b).
 - [ ] **Descent + landing: DEFERRED** — same chunk-anchoring blocker.
       The descent-timer gate requires entity ticking which only
       happens when a player is in the chunk.

@@ -67,7 +67,8 @@ in a separate ticket if needed).
 
 - [ ] `missionCompletionFiresOnceAtTarget`.
 - [ ] `missionCompletionGrantsConfiguredRewardToSelectedPlayer` —
-  needs FakePlayer (TASK-10 / A3 dep).
+  needs a real EntityPlayer; belongs in **testClient** e2e
+  (cross-link to TASK-10b).
 - [ ] `missionRewardClampsByInventoryCapacity` — reward exceeds player
   inventory → overflow handled (drop on ground / refuse / queue).
 
@@ -86,14 +87,14 @@ in a separate ticket if needed).
 - Mission unit tests at unit-tier where state is in-memory.
 - Persistence / reward tests at server-tier (multi-boot) — extend
   `PersistenceRestartSmokeTest` pattern.
-- Reward-grant tests need FakePlayer; cross-link with TASK-10. If
-  TASK-10 lands first, this task's Phase 4 picks up its FakePlayer
-  probe; otherwise mark these tests as deferred.
+- Reward-grant tests need a real EntityPlayer — they live in the
+  **testClient** e2e harness (proposed TASK-10b), not here. Do NOT
+  introduce a FakePlayer probe to short-circuit this.
 
 ## Dependencies
 
-**Requires**: TASK-03 base. **Soft-requires**: TASK-10 / A3 (FakePlayer)
-for reward-grant tests.
+**Requires**: TASK-03 base.
+**Cross-cuts**: reward-grant tests live in testClient e2e (TASK-10b).
 
 ## Estimated effort
 

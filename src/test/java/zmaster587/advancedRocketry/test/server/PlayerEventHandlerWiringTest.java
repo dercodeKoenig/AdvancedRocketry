@@ -14,12 +14,12 @@ import static org.junit.Assert.assertTrue;
  * pre-join side-effects.
  *
  * The headless dedicated-server harness in this repo has NO connected
- * player, which makes the original "teleport player to AR planet →
- * assert sky/gravity/weather wrapper applied" plan from TASK-02 §1a
- * impossible without injecting a {@code FakePlayer} per test. What we
- * CAN test — and what the long-running marker
- * {@code 2026-05-19-0600_task02-round2-tile-rocket-eod.md} deferred —
- * is the SERVER-SIDE state that {@code PlanetEventHandler} maintains:
+ * player. "Player joins AR planet → sky/gravity/weather wrapper applied"
+ * is a behaviour that belongs in the {@code testClient} e2e harness
+ * (§2.4 — real GL client + dedicated server), not here. What this layer
+ * CAN — and what the long-running marker
+ * {@code 2026-05-19-0600_task02-round2-tile-rocket-eod.md} deferred — is
+ * pin the SERVER-SIDE state that {@code PlanetEventHandler} maintains:
  *
  * <ol>
  *   <li>The {@code ServerTickEvent} subscription is live (its public
@@ -39,10 +39,9 @@ import static org.junit.Assert.assertTrue;
  *       leaks a {@code TransitionEntity}.</li>
  * </ol>
  *
- * If a future session adds a {@code FakePlayer} harness, the full
- * "player joins AR dim → side effects fire" path can be appended; the
- * server-side state checked here is the necessary pre-condition for
- * that join to be coherent.
+ * The full "player joins AR dim → side effects fire" path is the job
+ * of the {@code testClient} e2e harness; the server-side state checked
+ * here is the necessary pre-condition for that join to be coherent.
  */
 public class PlayerEventHandlerWiringTest extends AbstractSharedServerTest {
 
@@ -84,8 +83,8 @@ public class PlayerEventHandlerWiringTest extends AbstractSharedServerTest {
     @Test
     public void planetEventHandlerTickCounterAdvancesUnderServerTicks() throws Exception {
         // Tick counter advance is the strongest "PlanetEventHandler is
-        // subscribed to the event bus" smoke we have without FakePlayer
-        // injection. The counter increments inside ServerTickEvent.END;
+        // subscribed to the event bus" smoke we have at the headless
+        // server layer. The counter increments inside ServerTickEvent.END;
         // if @Mod init failed to subscribe, the value freezes at zero.
         String first = ok(client().execute("artest event tick-counter"));
         long t1 = parseGroup(TIME_PATTERN, first, "time");

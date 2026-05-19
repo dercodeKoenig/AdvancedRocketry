@@ -13,7 +13,7 @@ testServer wall time: **8m 27s** (50 % faster than pre-B2).
 |---|---|---|
 | TASK-01 | SMART per-scenario depth coverage | ✅ |
 | TASK-02 | Functional coverage expansion (Phases 0–8, 11) | ✅ |
-| TASK-03 | Test depth deepening + harness consolidation (A1/A2/A4/A5/A6/A7 + B1/B2/B4/C) | ✅ partial — A3 and B3 deferred to TASK-10 |
+| TASK-03 | Test depth deepening + harness consolidation (A1/A2/A4/A5/A6/A7 + B1/B2/B4/C) | ✅ partial — A2 tail + B3 deferred to TASK-10; A3 reframed as testClient e2e (TASK-10b) |
 
 ## Backlog — prioritised
 
@@ -35,17 +35,26 @@ ship silent gameplay breakage if untouched code regresses.
 
 ### 🟡 P1 — broad surface, medium impact
 
-4. **TASK-10** — FakePlayer probe + TASK-03 tail (A3 / A2 remainder /
-   B3). ~14-18 h. **Unblocks** TASK-05 and TASK-06 reward tests.
+4. **TASK-10** — TASK-03 tail (A2 remainder + B3 suite-grouping).
+   ~8-10 h. Pure server-harness work. (Earlier FakePlayer phases
+   reverted on 2026-05-19 — see TASK-10 doc.)
 5. **TASK-05** — Item-behaviour suite. ~16-20 h. ~25 % of mod
-   surface; 0 % isolated coverage today. Soft-requires TASK-10.
+   surface; 0 % isolated coverage today. EntityPlayer-touching items
+   belong in the **testClient** e2e layer, not testServer.
 6. **TASK-09** — Per-satellite-type behavioural depth. ~10-12 h.
    Player-facing passive-production layer.
 
 ### 🟢 P2 — narrower, lower urgency
 
-7. **TASK-06** — Mission system depth. ~10-12 h. Soft-requires TASK-10
-   for reward tests. Player-facing but small surface.
+7. **TASK-06** — Mission system depth. ~10-12 h. Reward-grant tests
+   that need a real EntityPlayer go into **testClient** e2e.
+
+### 📝 Proposed (no doc yet)
+
+- **TASK-10b** — player-event behaviour in `testClient` e2e
+  (atmosphere apply on AR-dim join, space-dim teleport guard,
+  advancements). Replaces the rejected FakePlayer direction from the
+  original TASK-10 draft. ~10-14 h.
 
 ### Already-known deferred (no task doc yet — surface in a future plan)
 
@@ -66,18 +75,18 @@ ship silent gameplay breakage if untouched code regresses.
 
 ```
 TASK-03 ──┬─► TASK-04  (multiblock)
-          ├─► TASK-07  (rocket cycle)
-          ├─► TASK-08  (ASM)
+          ├─► TASK-05  (items)        ─┐
+          ├─► TASK-06  (missions)     ─┤── EntityPlayer paths
+          ├─► TASK-07  (rocket cycle) ─┤   live in testClient e2e
+          ├─► TASK-08  (ASM)           │   (TASK-10b proposal)
           ├─► TASK-09  (satellite types)
-          └─► TASK-10  (FakePlayer + A3/A2tail/B3)
-                  │
-                  ├─► TASK-05  (items — soft dep)
-                  └─► TASK-06  (missions — soft dep for rewards)
+          └─► TASK-10  (A2 tail + B3 grouping)
 ```
 
-TASK-04, TASK-07, TASK-08, TASK-09 are independent of each other and of
-TASK-10. TASK-05 and TASK-06 work without TASK-10 but with lower
-coverage (reward / EntityPlayer paths skipped).
+All P0/P1 tasks are independent of each other. TASK-05 / TASK-06 are
+NOT blocked by TASK-10 — their EntityPlayer-touching coverage is the
+responsibility of testClient e2e (planned as TASK-10b), not of a
+FakePlayer injection.
 
 ## Suggested session ordering
 
@@ -87,8 +96,8 @@ If picking the next session:
    start TASK-04 Phase 1 (Warp Controller depth).
 2. **If team wants the biggest risk-reduction win**: start TASK-08
    Phase 1 (ASM golden-snapshot infrastructure).
-3. **If team wants to unblock the most other tasks**: start TASK-10
-   Phase 1 (FakePlayer probe).
+3. **If team wants quick wall-time win**: start TASK-10 Phase 2 (B3
+   suite-grouping — mechanical, ~3 h).
 4. **If team wants the most "items checked off"**: start TASK-09
    (smallest task; ~3-4 sessions).
 

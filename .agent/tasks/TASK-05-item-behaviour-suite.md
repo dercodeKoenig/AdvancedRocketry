@@ -113,13 +113,17 @@ manipulation (no in-world placement needed).
   pattern (mirrors `XMLPlanetLoaderTest`).
 - **World-interaction items** need server-tier with `AbstractSharedServerTest`:
   Hovercraft, JackHammer, BiomeChanger, scanners.
-- **No FakePlayer required** for item NBT tests — use `new ItemStack(...)`
-  directly. Items that need `EntityPlayer.getHeldItem()` paths will
-  need FakePlayer (intersect with TASK-10 / A3).
+- **Item NBT tests use** `new ItemStack(...)` directly — no player
+  needed. Items that need `EntityPlayer.getHeldItem()` / on-use paths
+  belong in the **testClient** e2e harness (proposed TASK-10b), not
+  here. Do NOT introduce a FakePlayer.
 
 ## Dependencies
 
-**Requires**: TASK-03 base; some tests will need FakePlayer (TASK-10 / A3).
+**Requires**: TASK-03 base.
+**Cross-cuts**: items with EntityPlayer interaction live in testClient
+e2e (TASK-10b); this task covers the NBT / world-interaction surface
+only.
 **Does NOT block**: feature work.
 
 ## Estimated effort
@@ -133,6 +137,6 @@ manipulation (no in-world placement needed).
 - [ ] Scanners / detectors (4 classes, ~8 tests)
 - [ ] Entity-spawning items (3 classes, ~6 tests)
 - [ ] Special-purpose items (3 classes, ~6 tests)
-- [ ] Items requiring FakePlayer deferred / cross-linked to TASK-10
+- [ ] Items requiring real EntityPlayer cross-linked to TASK-10b (testClient e2e)
 - [ ] Full pyramid PASS (expected ≥ 440 total)
 - [ ] EOD marker

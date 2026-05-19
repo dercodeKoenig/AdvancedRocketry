@@ -215,8 +215,8 @@ public class RocketFlightCycleDepthTest extends AbstractSharedServerTest {
         // containing the assembled rocket may not be ticked by the
         // server tick loop if no player is present. We pin the read
         // contract here (the field is exposed and >= 0); the advancing
-        // assertion is deferred until a FakePlayer test (TASK-10) can
-        // keep the chunk hot.
+        // assertion belongs in the testClient e2e harness, where a
+        // real player keeps the chunk hot.
         int id = buildAndAssemble(3400, 64, 500);
         String info = ok(client().execute("artest rocket info " + id));
         assertTrue("rocket info must expose ticksExisted field: " + info,
