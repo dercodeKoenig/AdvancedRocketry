@@ -83,15 +83,23 @@
 
 ### Implementation Plans (`tasks/`)
 
-**Active tasks**:
-- [`TASK-01-smart-depth-coverage.md`](./tasks/TASK-01-smart-depth-coverage.md) —
-  **Pending**. Bring SMART per-scenario depth up from skeleton level (one
-  representative method per scenario) to SMART-prose level (4–9 bullets of
-  coverage per scenario). Targets §7.3/§7.9/§7.10/§7.12/§7.13/§7.17/§7.19 depth
-  plus the §6.7 #3 micro-fix and a §5 probes audit. Required for the suite to
-  become the real regression-safety net SMART §17 demands. ~25–35 h across
-  ~10 sessions. Predecessor:
-  `.agent/.context-markers/2026-05-15-1610_smart-pyramid-skeleton-complete.md`.
+**Active tasks**: see [`tasks/README.md`](./tasks/README.md) for the
+prioritised backlog (TASK-04 through TASK-10) and dependency graph.
+
+**Completed**:
+- TASK-01 — SMART per-scenario depth coverage ✅
+- TASK-02 — Functional coverage expansion ✅
+- TASK-03 — Test depth deepening + harness consolidation ✅
+  (A3 / B3 tail deferred to TASK-10)
+
+**Pending (prioritised)**:
+- TASK-04 — Multiblock machine depth (P0)
+- TASK-07 — Rocket flight cycle beyond launch (P0)
+- TASK-08 — ASM coremod safety net (P0, highest single-point-of-failure)
+- TASK-10 — FakePlayer probe + TASK-03 tail (P1, unblocks TASK-05/06)
+- TASK-05 — Item-behaviour suite (P1)
+- TASK-09 — Per-satellite-type behavioural depth (P1)
+- TASK-06 — Mission system depth (P2)
 
 **Format**: `TASK-XX-feature-slug.md`
 
