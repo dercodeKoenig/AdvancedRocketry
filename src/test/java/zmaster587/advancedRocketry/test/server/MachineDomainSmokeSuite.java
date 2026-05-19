@@ -14,8 +14,8 @@ import static org.junit.Assert.assertTrue;
 /**
  * TASK-10 Phase 2 (B3) — machine-domain smoke suite.
  *
- * <p>Consolidates 9 single-method smoke classes that each previously spawned
- * their own dedicated-server JVM (boot cost ~12 s × 9 ≈ 108 s wall) into a
+ * <p>Consolidates 8 single-method smoke classes that each previously spawned
+ * their own dedicated-server JVM (boot cost ~12 s × 8 ≈ 96 s wall) into a
  * single class scoped under {@link AbstractSharedServerTest} (one boot for
  * the whole suite).</p>
  *
@@ -31,10 +31,21 @@ import static org.junit.Assert.assertTrue;
  *   <li>{@code SealedRoomOxygenVentTest}       → {@link #sealedRoomBecomesBreathableThenLeaks()}</li>
  *   <li>{@code SuitVacuumSubsystemSmokeTest}   → {@link #suitItemsAndEnchantAreWiredUp()}</li>
  *   <li>{@code SpecialInfrastructureSmokeTest} → {@link #allSpecialBlocksPlaceAndTickWithoutException()}</li>
- *   <li>{@code ForceFieldProjectionSmokeTest}  → {@link #poweredProjectorProjectsAndUnpoweredCollapses()}</li>
  *   <li>{@code MicrowaveReceiverSmokeTest}     → {@link #multiblockValidatesAndTicksWithoutCrash()}</li>
  *   <li>{@code BlackHoleGeneratorSmokeTest}    → {@link #controllerWithoutStructureTicksWithoutCrash()}</li>
  * </ul>
+ *
+ * <h2>NOT consolidated: {@code ForceFieldProjectionSmokeTest}</h2>
+ *
+ * <p>The force-field projector relies on the server's natural tick loop to
+ * advance {@code world.getTotalWorldTime()} past the {@code % 5 == 0} gate
+ * that drives extension range. In the shared harness, by the time
+ * {@code poweredProjectorProjectsAndUnpoweredCollapses} runs, the projector's
+ * chunk may have been unloaded by chunk eviction from the prior 7 tests,
+ * stalling extension at range=0 despite the redstone being detected. Keeps
+ * the test isolated in its original {@code ForceFieldProjectionSmokeTest}
+ * class extending {@link com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest}
+ * — one extra JVM-boot, deterministic behaviour.</p>
  *
  * <h2>State-leak audit</h2>
  *
@@ -49,12 +60,12 @@ import static org.junit.Assert.assertTrue;
  *   <li><b>Time / weather</b>: {@link #solarPanelAccumulatesEnergyOverTicks()}
  *       sets {@code day} + {@code clear} (intentional, doesn't restore — both
  *       are friendly state for every other method in this suite).</li>
- *   <li><b>Force-field projector</b>: placed by both
+ *   <li><b>Force-field projector</b>: placed by
  *       {@link #allSpecialBlocksPlaceAndTickWithoutException()} (at 720,64,700)
- *       and {@link #poweredProjectorProjectsAndUnpoweredCollapses()}
- *       (at 2200,64,2200). The SpecialInfra projector is never powered, so it
- *       cannot project field blocks that would leak into the ForceField
- *       test's space.</li>
+ *       but never powered, so no field blocks are projected. The powered/
+ *       collapse cycle is tested separately in
+ *       {@code ForceFieldProjectionSmokeTest} (see "NOT consolidated" note
+ *       above).</li>
  * </ul>
  */
 public class MachineDomainSmokeSuite extends AbstractSharedServerTest {
@@ -70,8 +81,6 @@ public class MachineDomainSmokeSuite extends AbstractSharedServerTest {
     private static final Pattern VENT_BLOB_SIZE = Pattern.compile("\"blobSize\":(-?\\d+)");
     private static final Pattern VENT_FLUID_AMT = Pattern.compile("\"fluidAmount\":(\\d+)");
     private static final Pattern VENT_BREATHABLE = Pattern.compile("\"breathable\":(true|false)");
-    private static final Pattern FIELD_RANGE = Pattern.compile("\"extensionRange\":(-?\\d+)");
-    private static final Pattern FIELD_POWERED = Pattern.compile("\"isPowered\":(true|false)");
     private static final Pattern PLANET_DENSITY = Pattern.compile("\"atmosphereDensity\":(-?\\d+)");
 
     // ── Machine block-id → expected Tile* short class name (TASK-03 reused) ─
@@ -422,7 +431,8 @@ public class MachineDomainSmokeSuite extends AbstractSharedServerTest {
     // From SpecialInfrastructureSmokeTest — SMART §7.18
     // Position patch: 5 devices at x=700,710,720,730,740, y=64, z=700.
     // Note: forceFieldProjector at (720,64,700) is never powered (no redstone)
-    // → no field blocks projected → no leak into ForceField test's airspace.
+    // → no field blocks projected. Powered/collapse cycle for the projector
+    // lives in ForceFieldProjectionSmokeTest (own JVM).
     // ─────────────────────────────────────────────────────────────────────
 
     @Test
@@ -468,109 +478,6 @@ public class MachineDomainSmokeSuite extends AbstractSharedServerTest {
         }
 
         assertEquals("special infrastructure failures: " + failures, 0, errors);
-    }
-
-    // ─────────────────────────────────────────────────────────────────────
-    // From ForceFieldProjectionSmokeTest — SMART §7.18
-    // Position patch: projector at (2200,64,2200), 3-cube radius for field.
-    // ─────────────────────────────────────────────────────────────────────
-
-    @Test
-    public void poweredProjectorProjectsAndUnpoweredCollapses() throws Exception {
-        int px = 2200, py = 64, pz = 2200;
-
-        client().execute("artest fill 0 " + (px - 3) + " " + (py - 1) + " " + (pz - 3)
-                + " " + (px + 3) + " " + (py - 1) + " " + (pz + 3) + " minecraft:stone");
-        client().execute("artest fill 0 " + (px - 3) + " " + py + " " + (pz - 3)
-                + " " + (px + 3) + " " + (py + 4) + " " + (pz + 3) + " minecraft:air");
-
-        // Projector facing UP (meta=1) so the field can grow into clear airspace.
-        String placeProj = join(client().execute(
-                "artest place 0 " + px + " " + py + " " + pz
-                        + " advancedrocketry:forceFieldProjector 1"));
-        assertTrue("projector place failed: " + placeProj,
-                placeProj.contains("\"placed\":true"));
-
-        String pre = join(client().execute(
-                "artest field info-now 0 " + px + " " + py + " " + pz));
-        assertTrue("projector probe must recognise the tile: " + pre,
-                pre.contains("\"isProjector\":true"));
-        assertTrue("initial extensionRange must be 0: " + pre,
-                "0".equals(group(FIELD_RANGE, pre)));
-        assertTrue("projector must not be powered yet: " + pre,
-                "false".equals(group(FIELD_POWERED, pre)));
-
-        String placeRedstone = join(client().execute(
-                "artest place 0 " + px + " " + (py - 1) + " " + pz
-                        + " minecraft:redstone_block"));
-        assertTrue("redstone place failed: " + placeRedstone,
-                placeRedstone.contains("\"placed\":true"));
-
-        String poweredProbe = join(client().execute(
-                "artest field info-now 0 " + px + " " + py + " " + pz));
-        assertTrue("projector must be powered after adjacent redstone: " + poweredProbe,
-                "true".equals(group(FIELD_POWERED, poweredProbe)));
-
-        String grown = join(client().execute(
-                "artest field info 0 " + px + " " + py + " " + pz));
-        int rangeAfter = Integer.parseInt(group(FIELD_RANGE, grown));
-        assertTrue("extensionRange must grow above 0 once powered (got: " + grown + ")",
-                rangeAfter > 0);
-
-        // Diagnostic dump of 6 cardinal neighbours.
-        StringBuilder dump = new StringBuilder();
-        int[][] dirs6 = {{1,0,0},{-1,0,0},{0,1,0},{0,-1,0},{0,0,1},{0,0,-1}};
-        for (int[] d : dirs6) {
-            int qx = px + d[0], qy = py + d[1], qz = pz + d[2];
-            String at = join(client().execute(
-                    "artest block at 0 " + qx + " " + qy + " " + qz));
-            dump.append("\n  d=(").append(d[0]).append(',').append(d[1]).append(',').append(d[2])
-                    .append(") ").append(at);
-        }
-
-        // Locate the field block in a 3-cube radius.
-        int fieldX = Integer.MIN_VALUE, fieldY = 0, fieldZ = 0;
-        outer:
-        for (int dx = -3; dx <= 3; dx++) {
-            for (int dy = -3; dy <= 3; dy++) {
-                for (int dz = -3; dz <= 3; dz++) {
-                    if (dx == 0 && dy == 0 && dz == 0) continue;
-                    int qx = px + dx, qy = py + dy, qz = pz + dz;
-                    String at = join(client().execute(
-                            "artest block at 0 " + qx + " " + qy + " " + qz));
-                    if (at.toLowerCase().contains("forcefield")
-                            && !at.toLowerCase().contains("forcefieldproj")) {
-                        fieldX = qx; fieldY = qy; fieldZ = qz;
-                        break outer;
-                    }
-                }
-            }
-        }
-        assertTrue("force field block must exist within 3-block cube of projector; "
-                        + "extensionRange=" + rangeAfter + " neighbours:" + dump,
-                fieldX != Integer.MIN_VALUE);
-
-        // Remove redstone → projector unpowered.
-        client().execute("artest place 0 " + px + " " + (py - 1) + " " + pz + " minecraft:stone");
-
-        for (int waitIter = 0; waitIter < 5; waitIter++) {
-            String collapse = join(client().execute(
-                    "artest field info 0 " + px + " " + py + " " + pz));
-            int rangeNow = Integer.parseInt(group(FIELD_RANGE, collapse));
-            if (rangeNow == 0) break;
-        }
-
-        String finalProbe = join(client().execute(
-                "artest field info-now 0 " + px + " " + py + " " + pz));
-        int finalRange = Integer.parseInt(group(FIELD_RANGE, finalProbe));
-        String afterCollapse = join(client().execute(
-                "artest block at 0 " + fieldX + " " + fieldY + " " + fieldZ));
-        boolean cleared = !afterCollapse.contains("\"block\":\"advancedrocketry:forceField\"");
-        boolean shrunk = finalRange < rangeAfter;
-        assertTrue("either the recorded field neighbour must be cleared, or the "
-                        + "projector's extensionRange must have shrunk after redstone removal "
-                        + "(was=" + rangeAfter + " now=" + finalRange + " neighbour=" + afterCollapse + ")",
-                cleared || shrunk);
     }
 
     // ─────────────────────────────────────────────────────────────────────
@@ -676,11 +583,6 @@ public class MachineDomainSmokeSuite extends AbstractSharedServerTest {
         Matcher m = p.matcher(s);
         assertTrue("pattern " + p + " did not match in: " + s, m.find());
         return m.group(1);
-    }
-
-    private static String group(Pattern p, String s) {
-        Matcher m = p.matcher(s);
-        return m.find() ? m.group(1) : "";
     }
 
     private static String extract(String s, String regex) {

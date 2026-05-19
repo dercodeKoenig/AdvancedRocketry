@@ -42,16 +42,54 @@ is **out of scope** for this task. It will be planned separately as a
 
 ## Implementation Plan
 
-### Phase 1: A2 remainder — heavy tile depth (~5-6 h)
+### Phase 1: A2 remainder — heavy tile depth (~5-6 h) — PARTIAL
 
-- [ ] `SuitWorkStationAssemblesSuit` — fill component slots with
-  fixtures, tick, assert assembled suit in output.
-- [ ] `UvAssemblerDivergesFromRocketAssembler` — pin behavioural
-  delta in the unmanned-vehicle override.
-- [ ] `FuelingStationFuelsAdjacentRocket` — place fueling station
-  next to fueled rocket, link, tick, assert rocket fuel rises and
-  station fuel falls (matched accounting).
-- [ ] `FluidTankNBTRoundTripsAcrossRestart` — multi-boot test.
+Two of four tests shipped. The other two require small additions to
+the {@code /artest} probe surface that were out of scope for this
+session — see "Deferred" subsection.
+
+- [x] `FluidTankNBTRoundTripsAcrossRestartTest` — two-boot persistence
+  pin for libVulpes FluidTank NBT format on AR's TileFluidTank.
+  Boot 1 places `liquidTank`, injects 7 500 mB oxygen, closes harness
+  (drives chunk-save). Boot 2 reopens same workDir, asserts fluid +
+  amount round-tripped exactly.
+- [x] `UvAssemblerDivergesFromRocketAssemblerTest` — class-identity
+  pin: `rocketBuilder` and `deployableRocketBuilder` register distinct
+  tile classes (TileRocketAssemblingMachine vs
+  TileUnmannedVehicleAssembler). Catches any regression that collapses
+  UV onto the crewed code path. Deeper behavioural pin (pad bounds,
+  spawned entity type, fuel requirement) is deferred — see below.
+
+#### Deferred (need probe surface additions)
+
+- [ ] `SuitWorkStationAssemblesSuit` — needs an NBT-dump option on
+  `/artest hatch read` (or a new `/artest suit components` verb).
+  Rationale: `TileSuitWorkStation` is a passive container; the
+  "assembly" mutates the armor item's NBT via `addArmorComponent`
+  when a component is placed in slots 1+. The current `hatch read`
+  probe reports only `item / count / meta` — no NBT. Without NBT
+  visibility we cannot assert that the chestplate's components list
+  now contains the jetpack. **Estimated work**: +15-20 LOC in
+  TestProbeCommand.handleHatch + ~50 LOC test = ~1.5 h.
+- [ ] `FuelingStationFuelsAdjacentRocket` — needs a new
+  `/artest rocket fuel <entityId>` verb that exposes
+  `EntityRocket.stats.getFuelAmount(FuelType)` for each fuel type.
+  Rationale: production has `/artest infra link <dim> <x> <y> <z> <entityId>`
+  to link the fueling station to a rocket, but rocket fuel state is
+  not currently observable through `/artest`. Without it we can only
+  assert "station tank drained", not "rocket received fuel" (the
+  matched-accounting claim from TASK-10). **Estimated work**: +20-30
+  LOC in TestProbeCommand.handleRocket + ~80 LOC test (place rocket
+  fixture, place station adjacent, link, tick, assert) = ~2 h.
+
+#### Note: original TASK-10 Phase 1 spec mismatch
+
+The original Phase 1 spec ("fill component slots, tick, assert assembled
+suit in output") was based on a misunderstanding: `TileSuitWorkStation`
+does NOT tick to assemble, and there is no "output" slot — the armor
+piece in slot 0 IS the output and is mutated in place by
+`setInventorySlotContents` on a component slot. The deferred test above
+covers the correct semantics.
 
 ### Phase 2: B3 — suite-group single-method smokes ✅ COMPLETE
 
@@ -105,9 +143,11 @@ for the testClient-based plan.)
 
 ## Completion Checklist
 
-- [ ] 4 deep-tile tests (A2 remainder)
+- [/] 4 deep-tile tests (A2 remainder): 2 shipped (FluidTank NBT,
+      UV class-identity); 2 deferred pending probe additions (Suit,
+      Fueling) — see Phase 1 § "Deferred"
 - [x] Single-method-smoke suites grouped (B3): 2 suites shipped
       (Machine + ServerBoot); Rocket suite dropped as not useful.
 - [x] Wall-time delta measured for B3
-- [ ] Full pyramid PASS
+- [ ] Full pyramid PASS — pending final run
 - [ ] EOD marker
