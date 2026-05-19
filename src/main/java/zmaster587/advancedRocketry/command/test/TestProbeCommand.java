@@ -181,6 +181,9 @@ public class TestProbeCommand extends CommandBase {
                 case "tp":
                     handleTp(server, sender, tail(args));
                     break;
+                case "event":
+                    handleEvent(server, sender, tail(args));
+                    break;
                 default:
                     send(sender, "{\"error\":\"unknown subcommand\",\"sub\":\"" + args[0] + "\"}");
             }
@@ -872,11 +875,139 @@ public class TestProbeCommand extends CommandBase {
                 SpaceStationObject sso = (SpaceStationObject) station;
                 info.put("fuelAmount", sso.getFuelAmount());
                 info.put("fuelMax", sso.getMaxFuelAmount());
+                info.put("padCount", sso.getLandingPads().size());
+                info.put("hasFreePad", sso.hasFreeLandingPad());
             }
             send(sender, jsonMap(info));
             return;
         }
-        send(sender, "{\"error\":\"unknown station subcommand — try list|info <id>|fuel <id> set|add|use <amount>\"}");
+        if ("add-pad".equalsIgnoreCase(args[0]) && args.length >= 4) {
+            // /artest station add-pad <id> <x> <z> [name]
+            int id = parseIntOr(args[1], Integer.MIN_VALUE);
+            int x = parseIntOr(args[2], 0);
+            int z = parseIntOr(args[3], 0);
+            String name = args.length >= 5 ? args[4] : "pad-" + x + "-" + z;
+            ISpaceObject st = SpaceObjectManager.getSpaceManager().getSpaceStation(id);
+            if (!(st instanceof SpaceStationObject)) {
+                send(sender, "{\"error\":\"station not found or wrong type\",\"id\":" + id + "}");
+                return;
+            }
+            SpaceStationObject sso = (SpaceStationObject) st;
+            sso.addLandingPad(x, z, name);
+            send(sender, "{\"ok\":true,\"id\":" + id + ",\"x\":" + x + ",\"z\":" + z
+                    + ",\"name\":\"" + escapeJson(name) + "\",\"padCount\":"
+                    + sso.getLandingPads().size() + "}");
+            return;
+        }
+        if ("remove-pad".equalsIgnoreCase(args[0]) && args.length >= 4) {
+            // /artest station remove-pad <id> <x> <z>
+            int id = parseIntOr(args[1], Integer.MIN_VALUE);
+            int x = parseIntOr(args[2], 0);
+            int z = parseIntOr(args[3], 0);
+            ISpaceObject st = SpaceObjectManager.getSpaceManager().getSpaceStation(id);
+            if (!(st instanceof SpaceStationObject)) {
+                send(sender, "{\"error\":\"station not found or wrong type\",\"id\":" + id + "}");
+                return;
+            }
+            SpaceStationObject sso = (SpaceStationObject) st;
+            int before = sso.getLandingPads().size();
+            sso.removeLandingPad(x, z);
+            int after = sso.getLandingPads().size();
+            send(sender, "{\"ok\":true,\"id\":" + id + ",\"removed\":"
+                    + (before - after) + ",\"padCount\":" + after + "}");
+            return;
+        }
+        if ("pads".equalsIgnoreCase(args[0]) && args.length >= 2) {
+            // /artest station pads <id> — dump all landing pads
+            int id = parseIntOr(args[1], Integer.MIN_VALUE);
+            ISpaceObject st = SpaceObjectManager.getSpaceManager().getSpaceStation(id);
+            if (!(st instanceof SpaceStationObject)) {
+                send(sender, "{\"error\":\"station not found or wrong type\",\"id\":" + id + "}");
+                return;
+            }
+            SpaceStationObject sso = (SpaceStationObject) st;
+            StringBuilder builder = new StringBuilder("{\"id\":");
+            builder.append(id).append(",\"pads\":[");
+            boolean first = true;
+            for (zmaster587.advancedRocketry.util.StationLandingLocation pad : sso.getLandingPads()) {
+                if (!first) builder.append(',');
+                first = false;
+                zmaster587.libVulpes.util.HashedBlockPosition pos = pad.getPos();
+                builder.append("{\"x\":").append(pos.x)
+                        .append(",\"z\":").append(pos.z)
+                        .append(",\"occupied\":").append(pad.getOccupied())
+                        .append(",\"allowAutoLand\":").append(pad.getAllowedForAutoLand());
+                if (pad.getName() != null) {
+                    builder.append(",\"name\":\"")
+                            .append(escapeJson(pad.getName())).append('"');
+                }
+                builder.append('}');
+            }
+            builder.append("]}");
+            send(sender, builder.toString());
+            return;
+        }
+        if ("dock".equalsIgnoreCase(args[0]) && args.length >= 2) {
+            // /artest station dock <id> [commit] — mirror production
+            // getNextLandingPad(true): find the next free auto-land pad
+            // and mark it occupied. Returns the chosen pad's pos or an
+            // error if no free pad was available.
+            int id = parseIntOr(args[1], Integer.MIN_VALUE);
+            boolean commit = args.length < 3 || Boolean.parseBoolean(args[2]);
+            ISpaceObject st = SpaceObjectManager.getSpaceManager().getSpaceStation(id);
+            if (!(st instanceof SpaceStationObject)) {
+                send(sender, "{\"error\":\"station not found or wrong type\",\"id\":" + id + "}");
+                return;
+            }
+            SpaceStationObject sso = (SpaceStationObject) st;
+            zmaster587.libVulpes.util.HashedBlockPosition pad = sso.getNextLandingPad(commit);
+            if (pad == null) {
+                send(sender, "{\"ok\":false,\"reason\":\"no free landing pad\",\"id\":" + id
+                        + ",\"padCount\":" + sso.getLandingPads().size() + "}");
+                return;
+            }
+            send(sender, "{\"ok\":true,\"id\":" + id + ",\"x\":" + pad.x
+                    + ",\"z\":" + pad.z + ",\"commit\":" + commit + "}");
+            return;
+        }
+        if ("undock".equalsIgnoreCase(args[0]) && args.length >= 4) {
+            // /artest station undock <id> <x> <z> — set the named pad free
+            // (setPadStatus(x, z, false) — production calls this when a
+            // rocket lifts off from a station pad).
+            int id = parseIntOr(args[1], Integer.MIN_VALUE);
+            int x = parseIntOr(args[2], 0);
+            int z = parseIntOr(args[3], 0);
+            ISpaceObject st = SpaceObjectManager.getSpaceManager().getSpaceStation(id);
+            if (!(st instanceof SpaceStationObject)) {
+                send(sender, "{\"error\":\"station not found or wrong type\",\"id\":" + id + "}");
+                return;
+            }
+            SpaceStationObject sso = (SpaceStationObject) st;
+            sso.setPadStatus(x, z, false);
+            send(sender, "{\"ok\":true,\"id\":" + id + ",\"x\":" + x + ",\"z\":" + z + "}");
+            return;
+        }
+        if ("set-autoland".equalsIgnoreCase(args[0]) && args.length >= 5) {
+            // /artest station set-autoland <id> <x> <z> <true|false>
+            int id = parseIntOr(args[1], Integer.MIN_VALUE);
+            int x = parseIntOr(args[2], 0);
+            int z = parseIntOr(args[3], 0);
+            boolean allowed = Boolean.parseBoolean(args[4]);
+            ISpaceObject st = SpaceObjectManager.getSpaceManager().getSpaceStation(id);
+            if (!(st instanceof SpaceStationObject)) {
+                send(sender, "{\"error\":\"station not found or wrong type\",\"id\":" + id + "}");
+                return;
+            }
+            SpaceStationObject sso = (SpaceStationObject) st;
+            sso.setLandingPadAutoLandStatus(x, z, allowed);
+            send(sender, "{\"ok\":true,\"id\":" + id + ",\"x\":" + x + ",\"z\":" + z
+                    + ",\"allowAutoLand\":" + allowed + "}");
+            return;
+        }
+        send(sender, "{\"error\":\"unknown station subcommand — try list|info <id>|"
+                + "fuel <id> set|add|use <amount>|add-pad <id> <x> <z> [name]|"
+                + "remove-pad <id> <x> <z>|pads <id>|dock <id> [commit]|"
+                + "undock <id> <x> <z>|set-autoland <id> <x> <z> <bool>\"}");
     }
 
     // §5.6 Satellite probes ---------------------------------------------------
@@ -3982,5 +4113,149 @@ public class TestProbeCommand extends CommandBase {
                 new zmaster587.advancedRocketry.world.util.TeleporterNoPortalSeekBlock(destWorld));
         send(sender, "{\"ok\":true,\"player\":\"" + target.getName() + "\",\"fromDim\":"
                 + fromDim + ",\"toDim\":" + dim + "}");
+    }
+
+    // §5 Event handler probes -------------------------------------------------
+    //
+    // No real player in headless dedicated server tests → we can't assert
+    // player-dimension-change side effects directly. What we CAN assert is:
+    //   1. {@link zmaster587.advancedRocketry.event.PlanetEventHandler} is
+    //      actually subscribed to the Forge event bus (its tick counter must
+    //      advance under normal server ticks); a regression in the @Mod init
+    //      wiring would silently leave AR running without an event handler.
+    //   2. The dim-side wrap-up effects we DO have a probe surface for
+    //      (ARWeatherWorldInfo install, atmosphere registration, sky-color
+    //      override) are pinned on a freshly loaded AR dim.
+    //   3. The transition queue size is observable — a counter-test for the
+    //      "no leaked transitions when the harness has no players" invariant.
+    private void handleEvent(net.minecraft.server.MinecraftServer server,
+                             ICommandSender sender, String[] args) {
+        if (args.length == 0) {
+            send(sender, "{\"error\":\"usage: /artest event tick-counter | handlers | dim-side-effects <dim> | transitions\"}");
+            return;
+        }
+        String sub = args[0].toLowerCase();
+        if ("tick-counter".equals(sub)) {
+            // PlanetEventHandler.time is the simplest wiring smoke: it
+            // increments on every ServerTickEvent.END phase. If the
+            // subscription was lost, the value freezes at zero or wherever
+            // the last successful tick left it.
+            Map<String, Object> out = new LinkedHashMap<>();
+            out.put("time", zmaster587.advancedRocketry.event.PlanetEventHandler.time);
+            // World total time as a cross-check: if the world is also frozen
+            // (e.g. server paused), our counter wouldn't advance for a
+            // legitimate reason — surface both so the test author can
+            // disambiguate.
+            net.minecraft.world.WorldServer overworld = server.getWorld(0);
+            out.put("worldTotalTime", overworld == null ? -1L : overworld.getTotalWorldTime());
+            send(sender, jsonMap(out));
+            return;
+        }
+        if ("handlers".equals(sub)) {
+            // Heuristic registration check: instantiate the handler classes
+            // by name (via Class.forName) and probe the Forge event bus.
+            // Forge doesn't expose a "is X registered?" API directly, but
+            // the listeners list inside EventBus is reflectable. Simpler /
+            // less fragile: verify the well-known static field initial-state
+            // contracts that only run if the @Mod init phase completed.
+            Map<String, Object> out = new LinkedHashMap<>();
+            // PlanetEventHandler.time is 0 before any ServerTickEvent fires
+            // and >0 after at least one. Either way the field MUST be
+            // readable (regression would be a ClassNotFoundException or a
+            // static initializer crash).
+            try {
+                long t = zmaster587.advancedRocketry.event.PlanetEventHandler.time;
+                out.put("planetEventHandler", "loaded");
+                out.put("planetEventHandlerTime", t);
+            } catch (Throwable e) {
+                out.put("planetEventHandler", "missing: " + e.getClass().getSimpleName());
+            }
+            // RocketEventHandler imports client-only classes (LWJGL GL11,
+            // FontRenderer, etc.) so a static `.class` reference on a
+            // dedicated server triggers NoClassDefFoundError during
+            // class verification. Probe via resource lookup instead —
+            // the .class file IS shipped in the jar, we just can't load
+            // it cleanly server-side. Resource presence is enough proof
+            // that @Mod packaging didn't drop it.
+            out.put("rocketEventHandler", classResourcePresent(
+                    "zmaster587/advancedRocketry/event/RocketEventHandler") ? "shipped" : "missing");
+            // PlanetWeatherEventHandler is server-loadable — direct static
+            // reference works and additionally proves the class verifies.
+            out.put("planetWeatherEventHandler",
+                    zmaster587.advancedRocketry.world.weather.PlanetWeatherEventHandler.class.getName());
+            send(sender, jsonMap(out));
+            return;
+        }
+        if ("dim-side-effects".equals(sub) && args.length >= 2) {
+            // For the given AR dim, dump the player-facing side effects
+            // that *would* fire when a player joins:
+            //   - WorldInfo class (ARWeatherWorldInfo wrapper present? — B1)
+            //   - AtmosphereHandler registered? (dictates oxygen/vacuum on join)
+            //   - DimensionProperties.skyColor (rendered by client on join)
+            //   - DimensionProperties.gravity (applied by gravity handler)
+            // No player needed — we just confirm the SERVER-SIDE state is
+            // ready for the join to be coherent.
+            int dim = parseIntOr(args[1], Integer.MIN_VALUE);
+            if (dim == Integer.MIN_VALUE) {
+                send(sender, "{\"error\":\"invalid dim id\",\"value\":\"" + args[1] + "\"}");
+                return;
+            }
+            net.minecraftforge.common.DimensionManager.keepDimensionLoaded(dim, true);
+            if (net.minecraftforge.common.DimensionManager.getWorld(dim) == null) {
+                net.minecraftforge.common.DimensionManager.initDimension(dim);
+            }
+            net.minecraft.world.WorldServer world =
+                    net.minecraftforge.common.DimensionManager.getWorld(dim);
+            zmaster587.advancedRocketry.dimension.DimensionProperties props =
+                    zmaster587.advancedRocketry.dimension.DimensionManager
+                            .getInstance().getDimensionProperties(dim);
+            Map<String, Object> out = new LinkedHashMap<>();
+            out.put("dim", dim);
+            out.put("loaded", world != null);
+            out.put("worldInfoClass", world == null ? "null"
+                    : world.getWorldInfo().getClass().getName());
+            out.put("hasAtmosphereHandler",
+                    zmaster587.advancedRocketry.atmosphere.AtmosphereHandler
+                            .hasAtmosphereHandler(dim));
+            out.put("isARPlanet",
+                    zmaster587.advancedRocketry.dimension.DimensionManager
+                            .getInstance().isDimensionCreated(dim));
+            if (props != null) {
+                out.put("planetName", props.getName());
+                out.put("gravity", props.getGravitationalMultiplier());
+                out.put("hasSkyColor", props.skyColor != null && props.skyColor.length > 0);
+            }
+            send(sender, jsonMap(out));
+            return;
+        }
+        if ("transitions".equals(sub)) {
+            // PlanetEventHandler.transitionMap is package-private static;
+            // reach it via reflection just for read-back. The size of the
+            // queue is the only piece test code legitimately needs.
+            try {
+                java.lang.reflect.Field f =
+                        zmaster587.advancedRocketry.event.PlanetEventHandler
+                                .class.getDeclaredField("transitionMap");
+                f.setAccessible(true);
+                @SuppressWarnings("unchecked")
+                java.util.List<?> list = (java.util.List<?>) f.get(null);
+                send(sender, "{\"ok\":true,\"size\":" + list.size() + "}");
+            } catch (ReflectiveOperationException e) {
+                send(sender, "{\"error\":\"could not read transitionMap\",\"msg\":\""
+                        + escapeJson(e.getMessage()) + "\"}");
+            }
+            return;
+        }
+        send(sender, "{\"error\":\"unknown event subcommand — try tick-counter | handlers | dim-side-effects <dim> | transitions\"}");
+    }
+
+    /** True if the {@code <slashed>.class} resource is reachable via the
+     *  current thread's context classloader. Used to verify the presence of
+     *  client-only event handler classes on dedicated server without
+     *  triggering verification (which references LWJGL / client classes
+     *  that aren't on the dedicated-server classpath). */
+    private static boolean classResourcePresent(String slashed) {
+        return Thread.currentThread().getContextClassLoader()
+                .getResource(slashed + ".class") != null;
     }
 }

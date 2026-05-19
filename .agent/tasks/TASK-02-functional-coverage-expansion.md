@@ -338,22 +338,38 @@ Hot files (large + many imports + no individual tests):
 - [x] Phase 0 done; probe gaps documented (2026-05-18: station fuel +
       ore-stats AIR-fallback fix; uniform `case "help"` still optional)
 - [x] Phase 1 covered (shallow `EventHandlerWiringTest` 2026-05-18 +
-      deep `RocketLaunchEventTest` 2026-05-19); player dim-change side
-      effects still deferred (requires new probe verbs)
+      deep `RocketLaunchEventTest` 2026-05-19 + player-event wiring
+      `PlayerEventHandlerWiringTest` 2026-05-19 11:00 — 5 server tests
+      covering tick-counter advance, handler class-load smoke, AR-dim
+      pre-join side effects, non-AR counter-test, transition-queue
+      invariant); full FakePlayer-driven dim-change side effects still
+      deferred
 - [x] Phase 2 worldgen has a regression net (2026-05-18 — 6 server +
       8 unit; cross-session determinism deferred)
 - [x] Phase 3 armor/breathing covered (2026-05-18 — 20 unit tests)
 - [x] Phase 4 done — `TileMachineDepthTest` 8 server tests covering
       solar generator, fluid tank, force field, guidance computer,
       oxygen vent, pump, satellite builder, sanity counter-test
-      (2026-05-19). Full 10+ tile depth still possible but the
-      contract-surface for the top 7 is pinned.
+      (2026-05-19). Round 2 (2026-05-19 11:00) adds
+      `TileMachineDepthRound2Test` 6 server tests for suit workstation,
+      UV assembler, landing pad, fueling station, terraformer
+      pre-assembly + force-tick safety. Full 10+ tile depth essentially
+      covered now.
 - [x] Phase 5 done; recipes covered (2026-05-18, 10 unit tests)
 - [x] Phase 6 done; missions covered (2026-05-18, 7 unit tests)
-- [x] Phase 7 unit slice done (2026-05-18, 5 unit tests);
-      end-to-end network handlers (real pipe multiblock) deferred
+- [x] Phase 7 unit slice done (2026-05-18, 5 unit tests); deep handler
+      contract covered in `PipeNetworkHandlerDeepTest` 2026-05-19 11:00
+      (17 unit, including 3 `_documentsKnownBug` pinning real prod bugs
+      in HandlerCableNetwork.mergeNetworks assert polarity, CableNetwork.merge
+      addAll-before-dedup ordering, and EnergyNetwork.merge battery-migration
+      cascade). End-to-end with PLACED pipes blocked by commented-out
+      pipe block registrations (`AdvancedRocketry.java:782-787`).
 - [x] Phase 8 done; stations depth extended (2026-05-18, 4 server + 7
-      unit tests); dock/undock + cross-restart still deferred
+      unit tests); dock/undock + cross-restart covered 2026-05-19 11:00:
+      `SpaceStationDockUndockTest` (9 server tests) +
+      `SpaceStationPadPersistenceTest` (1 multi-boot server test).
+      6 new `/artest station` probe verbs (add-pad, remove-pad, pads,
+      dock, undock, set-autoland).
 - [ ] Phase 9 — DEFERRED (mod compat: companion mods not in this dev
       environment's classpath; tests would `Assume.assumeTrue(false)`
       trivially). Pick up when GC / MO / JEI are in scope.
@@ -365,6 +381,13 @@ Hot files (large + many imports + no individual tests):
       (was 263/0/3 baseline). Target ≥300 hit; 3 SKIPs are pre-existing
       PipeNetworkSmokeTest blocks waiting for commented-out production
       paths to be reinstated.
+- [x] Round 3 (2026-05-19 11:00) PASS — testUnit **159**/0/1,
+      testServer **136**/0/3, testIntegration 80/0/0, testClient
+      6/0/0 (or 1/0/0 headless) = **381/0/4** total (with DISPLAY)
+      / 376/0/4 (headless). +33 tests over previous round, 0 failures.
+      New testUnit SKIP is an Assume guard on
+      `mergeNetworksProducesLowerIdSurvivor_assertionsDisabled` (JVM
+      assertion flag can't be retroactively flipped post-class-init).
 
 ## Estimated effort
 
