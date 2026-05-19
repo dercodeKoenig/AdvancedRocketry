@@ -471,6 +471,74 @@ public class TestProbeCommand extends CommandBase {
             handleRocketLaunch(server, sender, args);
             return;
         }
+        if ("override-landing".equalsIgnoreCase(args[0]) && args.length >= 3) {
+            // /artest rocket override-landing <rocketId> <stationId> —
+            // production cause-effect: TileGuidanceComputer.overrideLandingStation
+            // → getStationLocation(commit=true) → either marks an existing
+            // chosen pad as occupied OR calls getNextLandingPad(true). Used
+            // by the A5 dock cause-effect tests: assert that this production
+            // method's side effect actually reaches station-side state.
+            int entityId = parseIntOr(args[1], Integer.MIN_VALUE);
+            int stationId = parseIntOr(args[2], Integer.MIN_VALUE);
+            EntityRocket rocket = findRocket(server, entityId);
+            if (rocket == null) {
+                send(sender, "{\"error\":\"rocket not found\",\"entityId\":" + entityId + "}");
+                return;
+            }
+            zmaster587.advancedRocketry.tile.TileGuidanceComputer gc =
+                    rocket.storage == null ? null : rocket.storage.getGuidanceComputer();
+            if (gc == null) {
+                send(sender, "{\"error\":\"rocket has no guidance computer\",\"entityId\":"
+                        + entityId + "}");
+                return;
+            }
+            zmaster587.advancedRocketry.api.stations.ISpaceObject station =
+                    SpaceObjectManager.getSpaceManager().getSpaceStation(stationId);
+            if (station == null) {
+                send(sender, "{\"error\":\"station not found\",\"id\":" + stationId + "}");
+                return;
+            }
+            gc.overrideLandingStation(station);
+            send(sender, "{\"ok\":true,\"entityId\":" + entityId
+                    + ",\"stationId\":" + stationId + "}");
+            return;
+        }
+        if ("set-destination".equalsIgnoreCase(args[0]) && args.length >= 3) {
+            // /artest rocket set-destination <entityId> <dimId> — programs
+            // the rocket's guidance computer chip so production launch()
+            // can route to the destination. Needed for the rocket-launch
+            // depth tests (TASK-03 A1): without a programmed destination,
+            // rocket.launch() bails with "error.rocket.cannotGetThere"
+            // and isInFlight stays false.
+            int entityId = parseIntOr(args[1], Integer.MIN_VALUE);
+            int dimId = parseIntOr(args[2], Integer.MIN_VALUE);
+            EntityRocket rocket = findRocket(server, entityId);
+            if (rocket == null) {
+                send(sender, "{\"error\":\"rocket not found\",\"entityId\":" + entityId + "}");
+                return;
+            }
+            zmaster587.advancedRocketry.tile.TileGuidanceComputer gc =
+                    rocket.storage == null ? null : rocket.storage.getGuidanceComputer();
+            if (gc == null) {
+                send(sender, "{\"error\":\"rocket has no guidance computer\",\"entityId\":"
+                        + entityId + "}");
+                return;
+            }
+            net.minecraft.item.Item chipItem = ForgeRegistries.ITEMS.getValue(
+                    new ResourceLocation("advancedrocketry", "planetIdChip"));
+            if (!(chipItem instanceof zmaster587.advancedRocketry.item.ItemPlanetIdentificationChip)) {
+                send(sender, "{\"error\":\"ItemPlanetIdentificationChip not registered\"}");
+                return;
+            }
+            zmaster587.advancedRocketry.item.ItemPlanetIdentificationChip chip =
+                    (zmaster587.advancedRocketry.item.ItemPlanetIdentificationChip) chipItem;
+            net.minecraft.item.ItemStack stack = new net.minecraft.item.ItemStack(chip);
+            chip.setDimensionId(stack, dimId);
+            gc.setInventorySlotContents(0, stack);
+            send(sender, "{\"ok\":true,\"entityId\":" + entityId + ",\"dim\":" + dimId
+                    + ",\"chipDim\":" + chip.getDimensionId(stack) + "}");
+            return;
+        }
         if ("info".equalsIgnoreCase(args[0]) && args.length >= 2) {
             int entityId = parseIntOr(args[1], Integer.MIN_VALUE);
             EntityRocket rocket = findRocket(server, entityId);
@@ -487,6 +555,19 @@ public class TestProbeCommand extends CommandBase {
             info.put("isInFlight", rocket.isInFlight());
             info.put("isInOrbit", rocket.isInOrbit());
             info.put("destinationDim", reflectInt(rocket, "destinationDimId"));
+            // errorStr is private + set by setError(...) when launch() bails
+            // on a precondition. Without surfacing it, A1 launch-depth tests
+            // can't discriminate "launched successfully" from "silently
+            // bailed before setInFlight". Empty string = no error reported.
+            try {
+                java.lang.reflect.Field errF =
+                        EntityRocket.class.getDeclaredField("errorStr");
+                errF.setAccessible(true);
+                Object v = errF.get(rocket);
+                info.put("errorMessage", v == null ? "" : v.toString());
+            } catch (ReflectiveOperationException e) {
+                info.put("errorMessage", "<reflection failed: " + e.getClass().getSimpleName() + ">");
+            }
             info.put("hasStorage", rocket.storage != null);
             info.put("numPassengers", rocket.getPassengers().size());
             // Storage chunk geometry — null-safe.

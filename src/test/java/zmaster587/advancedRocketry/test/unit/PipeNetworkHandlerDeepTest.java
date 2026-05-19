@@ -74,6 +74,81 @@ public class PipeNetworkHandlerDeepTest {
         }
     }
 
+    /** A no-op {@link net.minecraftforge.energy.IEnergyStorage} that accepts
+     *  no energy and exposes none — sufficient to satisfy
+     *  {@code EnergyNetwork.tick}'s receiveEnergy / extractEnergy calls
+     *  without NPE-ing. */
+    private static final net.minecraftforge.energy.IEnergyStorage NO_OP_ENERGY =
+            new net.minecraftforge.energy.IEnergyStorage() {
+                @Override public int receiveEnergy(int max, boolean sim) { return 0; }
+                @Override public int extractEnergy(int max, boolean sim) { return 0; }
+                @Override public int getEnergyStored() { return 0; }
+                @Override public int getMaxEnergyStored() { return 0; }
+                @Override public boolean canExtract() { return false; }
+                @Override public boolean canReceive() { return false; }
+            };
+
+    /** A no-op {@link net.minecraftforge.fluids.capability.IFluidHandler} —
+     *  empty tank with no fillable / drainable capacity. */
+    private static final net.minecraftforge.fluids.capability.IFluidHandler NO_OP_FLUID =
+            new net.minecraftforge.fluids.capability.IFluidHandler() {
+                @Override
+                public net.minecraftforge.fluids.capability.IFluidTankProperties[] getTankProperties() {
+                    return new net.minecraftforge.fluids.capability.IFluidTankProperties[0];
+                }
+                @Override
+                public int fill(net.minecraftforge.fluids.FluidStack resource, boolean doFill) { return 0; }
+                @Override
+                public net.minecraftforge.fluids.FluidStack drain(
+                        net.minecraftforge.fluids.FluidStack resource, boolean doDrain) { return null; }
+                @Override
+                public net.minecraftforge.fluids.FluidStack drain(int max, boolean doDrain) { return null; }
+            };
+
+    /** A {@link TileEntity} stub that records every {@code getCapability}
+     *  call. Returns the no-op IEnergyStorage / IFluidHandler stubs above
+     *  regardless of which capability key is asked, because in the unit
+     *  tier {@code CapabilityEnergy.ENERGY} / {@code FLUID_HANDLER_CAPABILITY}
+     *  are uninitialised (null) statics — so we can't discriminate by key.
+     *  This is acceptable here because the tests using this stub only need
+     *  to know the lookup HAPPENED, not what it returned. */
+    @SuppressWarnings("unchecked")
+    private static class CapabilityRecordingTile extends TileEntity {
+        int capabilityCalls = 0;
+
+        CapabilityRecordingTile(int x, int y, int z) {
+            this.setPos(new BlockPos(x, y, z));
+        }
+
+        @Override
+        public boolean hasCapability(net.minecraftforge.common.capabilities.Capability<?> capability,
+                                     net.minecraft.util.EnumFacing facing) {
+            return true;
+        }
+
+        @Override
+        public <T> T getCapability(net.minecraftforge.common.capabilities.Capability<T> capability,
+                                   net.minecraft.util.EnumFacing facing) {
+            capabilityCalls++;
+            // EnergyNetwork.tick / LiquidNetwork.tick are the only callers;
+            // they're typed to ask for either IEnergyStorage or IFluidHandler.
+            // We can't discriminate at unit-tier (the capability key is null)
+            // so return one or the other based on what the caller's type
+            // erasure leads to. EnergyNetwork.tick assigns to
+            // `IEnergyStorage` and immediately calls receiveEnergy, so it
+            // must get the energy stub. LiquidNetwork.tick assigns to
+            // `IFluidHandler` and immediately calls getTankProperties, so
+            // it must get the fluid stub. Inspect the local stack to pick
+            // — cheap heuristic via the calling thread's stack trace, since
+            // we don't have a richer signal.
+            for (StackTraceElement frame : Thread.currentThread().getStackTrace()) {
+                if (frame.getClassName().endsWith(".EnergyNetwork")) return (T) NO_OP_ENERGY;
+                if (frame.getClassName().endsWith(".LiquidNetwork")) return (T) NO_OP_FLUID;
+            }
+            return null;
+        }
+    }
+
     /**
      * <em>DOCUMENTS KNOWN PRODUCTION BUG</em> — see {@code
      * HandlerCableNetwork.java:67}:
@@ -103,61 +178,15 @@ public class PipeNetworkHandlerDeepTest {
         handler.mergeNetworks(idA, idB); // throws AssertionError under -ea
     }
 
-    /**
-     * Same bug, observed differently: with assertions OFF, the merge does
-     * progress, but {@link CableNetwork#merge} has a separate de-dupe bug
-     * (next test) that makes the result unreliable. Here we exercise
-     * mergeNetworks with assertions disabled at the class level to prove
-     * the higher-id IS removed and numCables IS accumulated — the only
-     * two outcomes that aren't affected by the merge() de-dupe bug.
-     */
-    @Test
-    public void mergeNetworksProducesLowerIdSurvivor_assertionsDisabled() throws Exception {
-        // Force assertions off on the target class — leaves -ea active for
-        // every other class in this test run.
-        Class.forName(HandlerCableNetwork.class.getName())
-                .getClassLoader()
-                .setClassAssertionStatus(HandlerCableNetwork.class.getName(), false);
-        // Re-load? We can't easily; the assertion-status field is read
-        // once at class init. Skip if assertions are still on for the
-        // class — the documents-known-bug test above is the alternative.
-        // We use reflection to detect $assertionsDisabled.
-        Field assertField;
-        try {
-            assertField = HandlerCableNetwork.class.getDeclaredField("$assertionsDisabled");
-            assertField.setAccessible(true);
-            // $assertionsDisabled is static final boolean — value frozen
-            // at class init. If it's still false, skip rather than fail.
-            if (!assertField.getBoolean(null)) {
-                org.junit.Assume.assumeTrue(
-                        "Cannot retroactively disable assertions on HandlerCableNetwork; "
-                                + "skipping — the documents-known-bug counterpart covers this path",
-                        false);
-            }
-        } catch (NoSuchFieldException e) {
-            // Class compiled without assertions (-source/-target old) — fine.
-        }
-        HandlerCableNetwork handler = new HandlerCableNetwork();
-        int idA = handler.getNewNetworkID();
-        int idB = handler.getNewNetworkID();
-        int lo = Math.min(idA, idB);
-        int hi = Math.max(idA, idB);
-        bumpCables(handler.getNetwork(lo), 3);
-        bumpCables(handler.getNetwork(hi), 5);
-
-        int merged;
-        try {
-            merged = handler.mergeNetworks(idA, idB);
-        } catch (AssertionError e) {
-            org.junit.Assume.assumeNoException(
-                    "Assertion is still firing — can't exercise the post-merge path", e);
-            return;
-        }
-        assertEquals(lo, merged);
-        assertFalse(handler.doesNetworkExist(hi));
-        assertEquals("numCables must accumulate", 3 + 5,
-                readNumCables(handler.getNetwork(lo)));
-    }
+    // mergeNetworksProducesLowerIdSurvivor_assertionsDisabled removed
+    // (TASK-03 A6): the test relied on retroactively flipping a class's
+    // $assertionsDisabled field, which is set once at class init and not
+    // mutable afterwards. Under Gradle's default -ea the test always
+    // Assume-skipped → null coverage. The
+    // mergeNetworksAssertionPolarityIsInverted_documentsKnownBug counterpart
+    // above already pins the bug; the post-merge happy path will be
+    // exercisable once the assertion-polarity bug is fixed in a separate
+    // ticket.
 
     /**
      * <em>DOCUMENTS KNOWN PRODUCTION BUG</em> — see {@link CableNetwork#merge}:
@@ -300,19 +329,92 @@ public class PipeNetworkHandlerDeepTest {
     }
 
     @Test
-    public void tickOnEmptyEnergyNetworkIsNoOp() {
+    public void energyNetworkTickEarlyReturnsOnEmptySinks() {
+        // EnergyNetwork.tick contract: short-circuit when sinks.isEmpty()
+        // regardless of sources/battery. A regression that dropped the
+        // sinks-empty guard would call sinks.iterator().next() on an
+        // empty CopyOnWriteArraySet and NPE.
         EnergyNetwork net = EnergyNetwork.initNetwork();
-        // No sources, no sinks → tick must NOT NPE / throw.
-        net.tick();
-        // No assertion on state — just "did not throw" is the contract.
-        // A regression that dereferences sources.iterator().next() without
-        // an isEmpty() guard would crash here.
+        // Sources non-empty but sinks empty → must return cleanly.
+        net.addSource(new StubTile(0, 0, 0), EnumFacing.UP);
+        net.tick(); // no throw
     }
 
     @Test
-    public void tickOnEmptyLiquidNetworkIsNoOp() {
-        LiquidNetwork net = LiquidNetwork.initNetwork();
+    public void energyNetworkTickEarlyReturnsOnEmptySourcesAndZeroBattery() {
+        // The second early-return branch: sources empty AND battery=0.
+        // (If only sources is empty but battery has stored RF, the network
+        // CAN still deliver to sinks — that path enters the meat.)
+        EnergyNetwork net = EnergyNetwork.initNetwork();
+        net.addSink(new StubTile(1, 1, 1), EnumFacing.DOWN);
+        // Battery starts at 0 by EnergyNetwork ctor; sources empty by default.
+        net.tick(); // no throw
+    }
+
+    @Test
+    public void energyNetworkTickMeatPathReachesSinkAndSourceCapabilityLookups() {
+        // Enter the post-early-return branch: sinks non-empty AND
+        // (sources non-empty OR battery > 0). Pin that the network DOES
+        // iterate sources + sinks and DOES call getCapability — verifiable
+        // via a stub TileEntity that records every getCapability call.
+        //
+        // Why this matters: a regression that swapped iteration order or
+        // skipped one side wouldn't show up in the empty-network tests; it
+        // would silently drop one of {producer, consumer} from the routing.
+        EnergyNetwork net = EnergyNetwork.initNetwork();
+        // Force battery > 0 so the early-return doesn't fire even if
+        // sources turn out empty (defensive — we also add a source).
+        net.acceptEnergy(50, false);
+
+        CapabilityRecordingTile source = new CapabilityRecordingTile(2, 0, 0);
+        CapabilityRecordingTile sink   = new CapabilityRecordingTile(3, 0, 0);
+        net.addSource(source, EnumFacing.NORTH);
+        net.addSink(sink, EnumFacing.SOUTH);
+
         net.tick();
+
+        // The network's tick body calls getCapability on BOTH sides
+        // multiple times (demand probe, supply probe, then the moveloop).
+        // Pin that at least one call landed on each side — that's what
+        // makes this not just "didn't throw" but "actually iterated".
+        assertTrue("EnergyNetwork.tick must call getCapability on sources at "
+                        + "least once (otherwise supply side is dropped)",
+                source.capabilityCalls >= 1);
+        assertTrue("EnergyNetwork.tick must call getCapability on sinks at "
+                        + "least once (otherwise demand side is dropped)",
+                sink.capabilityCalls >= 1);
+    }
+
+    @Test
+    public void liquidNetworkTickEarlyReturnsOnEmptySinks() {
+        LiquidNetwork net = LiquidNetwork.initNetwork();
+        net.addSource(new StubTile(0, 0, 0), EnumFacing.UP);
+        net.tick(); // no throw
+    }
+
+    @Test
+    public void liquidNetworkTickEarlyReturnsOnEmptySources() {
+        LiquidNetwork net = LiquidNetwork.initNetwork();
+        net.addSink(new StubTile(1, 1, 1), EnumFacing.DOWN);
+        net.tick(); // no throw
+    }
+
+    @Test
+    public void liquidNetworkTickMeatPathReachesAtLeastSinkCapabilityLookup() {
+        // LiquidNetwork.tick iterates sinks first; for EACH sink it queries
+        // its fluid capability. A regression that gated the entire sink
+        // loop on a wrong condition would silently stop fluid distribution.
+        LiquidNetwork net = LiquidNetwork.initNetwork();
+        CapabilityRecordingTile sink = new CapabilityRecordingTile(4, 0, 0);
+        CapabilityRecordingTile source = new CapabilityRecordingTile(5, 0, 0);
+        net.addSink(sink, EnumFacing.NORTH);
+        net.addSource(source, EnumFacing.SOUTH);
+
+        net.tick();
+
+        assertTrue("LiquidNetwork.tick must call getCapability on the sink "
+                        + "(start of the per-sink loop)",
+                sink.capabilityCalls >= 1);
     }
 
     @Test

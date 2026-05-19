@@ -1,6 +1,6 @@
 package zmaster587.advancedRocketry.test.server;
 
-import com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest;
+// migrated to AbstractSharedServerTest (TASK-03 B2)
 import org.junit.Test;
 
 import java.util.regex.Matcher;
@@ -26,7 +26,7 @@ import static org.junit.Assert.assertTrue;
  * terminal-chip linking, and an ID-chip persistence smoke (server-side
  * satellite survives a restart).</p>
  */
-public class SatelliteLifecycleSmokeTest extends AbstractHeadlessServerTest {
+public class SatelliteLifecycleSmokeTest extends AbstractSharedServerTest {
 
     private static final Pattern ID_PATTERN = Pattern.compile("\"id\":(\\d+)");
 

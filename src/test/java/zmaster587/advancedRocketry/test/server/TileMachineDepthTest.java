@@ -1,6 +1,5 @@
 package zmaster587.advancedRocketry.test.server;
 
-import com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest;
 import org.junit.Test;
 
 import static org.junit.Assert.assertTrue;
@@ -27,7 +26,7 @@ import static org.junit.Assert.assertTrue;
  * X RF/tick under simulated daylight" reference) — those belong in
  * a future tier.
  */
-public class TileMachineDepthTest extends AbstractHeadlessServerTest {
+public class TileMachineDepthTest extends AbstractSharedServerTest {
 
     private static final int DIM = 0;
     // Stay near spawn so the chunk is loaded; spread far enough apart that

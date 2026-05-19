@@ -1,6 +1,6 @@
 package zmaster587.advancedRocketry.test.server;
 
-import com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest;
+// migrated to AbstractSharedServerTest (TASK-03 B2)
 import org.junit.Assume;
 import org.junit.Test;
 
@@ -35,7 +35,7 @@ import static org.junit.Assert.assertTrue;
  * — those tests force-set rain first, masking the wrapping-is-missing
  * cause behind a more specific symptom.
  */
-public class EventHandlerWiringTest extends AbstractHeadlessServerTest {
+public class EventHandlerWiringTest extends AbstractSharedServerTest {
 
     private static final Pattern AR_DIMS_ARRAY_PATTERN =
             Pattern.compile("\"arDimensions\":\\[([^]]*)]");

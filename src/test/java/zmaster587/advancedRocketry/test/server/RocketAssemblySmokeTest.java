@@ -1,6 +1,6 @@
 package zmaster587.advancedRocketry.test.server;
 
-import com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest;
+// migrated to AbstractSharedServerTest (TASK-03 B2)
 import org.junit.Test;
 
 import java.util.regex.Matcher;
@@ -24,7 +24,7 @@ import static org.junit.Assert.assertTrue;
  * The "missing seat" path is documented as still-assembles because the
  * production scanRocket does not enforce seat presence.</p>
  */
-public class RocketAssemblySmokeTest extends AbstractHeadlessServerTest {
+public class RocketAssemblySmokeTest extends AbstractSharedServerTest {
 
     private static final Pattern BUILDER_POS = Pattern.compile("\"builderPos\":\\[(-?\\d+),(-?\\d+),(-?\\d+)]");
     private static final Pattern ROCKET_LIST_ID = Pattern.compile("\"id\":(-?\\d+)");

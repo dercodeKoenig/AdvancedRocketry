@@ -1,6 +1,6 @@
 package zmaster587.advancedRocketry.test.server;
 
-import com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest;
+// migrated to AbstractSharedServerTest (TASK-03 B2)
 import org.junit.Test;
 
 import java.util.regex.Matcher;
@@ -28,7 +28,7 @@ import static org.junit.Assert.assertTrue;
  *   - {@code launch <id> true prepare}: fills fuel + calls
  *     {@code prepareLaunch()} (the multi-tick path).
  */
-public class RocketLaunchEventTest extends AbstractHeadlessServerTest {
+public class RocketLaunchEventTest extends AbstractSharedServerTest {
 
     private static final Pattern BUILDER_POS =
             Pattern.compile("\"builderPos\":\\[(-?\\d+),(-?\\d+),(-?\\d+)]");

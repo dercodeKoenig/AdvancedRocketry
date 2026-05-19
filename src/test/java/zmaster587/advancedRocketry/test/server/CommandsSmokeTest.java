@@ -1,6 +1,6 @@
 package zmaster587.advancedRocketry.test.server;
 
-import com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest;
+// migrated to AbstractSharedServerTest (TASK-03 B2)
 import org.junit.Test;
 
 import static org.junit.Assert.assertTrue;
@@ -12,7 +12,7 @@ import static org.junit.Assert.assertTrue;
  * ({@code advancedrocketry}/{@code advrocketry}/{@code ar}) are registered on a
  * fresh server.
  */
-public class CommandsSmokeTest extends AbstractHeadlessServerTest {
+public class CommandsSmokeTest extends AbstractSharedServerTest {
 
     @Test
     public void primaryCommandsAreRegistered() throws Exception {

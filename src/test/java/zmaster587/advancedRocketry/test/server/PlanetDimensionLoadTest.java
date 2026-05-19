@@ -1,6 +1,6 @@
 package zmaster587.advancedRocketry.test.server;
 
-import com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest;
+// migrated to AbstractSharedServerTest (TASK-03 B2)
 import org.junit.Assume;
 import org.junit.Test;
 
@@ -22,7 +22,7 @@ import static org.junit.Assert.assertTrue;
  * configurations skip via {@link Assume} so an empty mod-pack doesn't gate
  * the suite.
  */
-public class PlanetDimensionLoadTest extends AbstractHeadlessServerTest {
+public class PlanetDimensionLoadTest extends AbstractSharedServerTest {
 
     private static final String AR_PROVIDER_FQN =
             "zmaster587.advancedRocketry.world.provider.WorldProviderPlanet";

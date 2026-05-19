@@ -1,6 +1,6 @@
 package zmaster587.advancedRocketry.test.server;
 
-import com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest;
+// migrated to AbstractSharedServerTest (TASK-03 B2)
 import org.junit.Test;
 
 import java.util.regex.Matcher;
@@ -16,7 +16,7 @@ import static org.junit.Assert.assertTrue;
  * {@code libvulpes:forgepowerinput} — the foundation every pipe network proxies
  * through.
  */
-public class PipeNetworkSmokeTest extends AbstractHeadlessServerTest {
+public class PipeNetworkSmokeTest extends AbstractSharedServerTest {
 
     private static final Pattern STORED = Pattern.compile("\"energyStored\":(\\d+)");
     private static final Pattern MAX = Pattern.compile("\"energyMax\":(\\d+)");

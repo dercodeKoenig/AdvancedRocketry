@@ -1,6 +1,6 @@
 package zmaster587.advancedRocketry.test.server;
 
-import com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest;
+// migrated to AbstractSharedServerTest (TASK-03 B2)
 import org.junit.Assume;
 import org.junit.Test;
 
@@ -33,7 +33,7 @@ import static org.junit.Assert.assertTrue;
  * harness boot time and the within-session check already catches the
  * majority of regenerator bugs.
  */
-public class WorldgenDeterminismAndSamplingTest extends AbstractHeadlessServerTest {
+public class WorldgenDeterminismAndSamplingTest extends AbstractSharedServerTest {
 
     private static final Pattern AR_DIMS_ARRAY_PATTERN =
             Pattern.compile("\"arDimensions\":\\[([^]]*)]");

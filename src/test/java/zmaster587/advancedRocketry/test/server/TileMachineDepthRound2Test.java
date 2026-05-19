@@ -1,6 +1,6 @@
 package zmaster587.advancedRocketry.test.server;
 
-import com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest;
+// migrated to AbstractSharedServerTest (TASK-03 B2)
 import org.junit.Test;
 
 import static org.junit.Assert.assertTrue;
@@ -29,7 +29,7 @@ import static org.junit.Assert.assertTrue;
  * Spread positions far enough apart from round 1's {@code BASE_X / BASE_Z}
  * (200,200 + offsets up to 100) that JVM-shared test state can't leak.
  */
-public class TileMachineDepthRound2Test extends AbstractHeadlessServerTest {
+public class TileMachineDepthRound2Test extends AbstractSharedServerTest {
 
     private static final int DIM = 0;
     private static final int BASE_X = 400;

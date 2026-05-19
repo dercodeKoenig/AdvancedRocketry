@@ -1,6 +1,6 @@
 package zmaster587.advancedRocketry.test.server;
 
-import com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest;
+// migrated to AbstractSharedServerTest (TASK-03 B2)
 import org.junit.Test;
 
 import java.util.regex.Matcher;
@@ -46,7 +46,7 @@ import static org.junit.Assert.assertTrue;
  *   <li>{@code dock(commit=false)} reads next-free without consuming.</li>
  * </ul>
  */
-public class SpaceStationDockUndockTest extends AbstractHeadlessServerTest {
+public class SpaceStationDockUndockTest extends AbstractSharedServerTest {
 
     private static final Pattern ID_PATTERN = Pattern.compile("\"id\":(-?\\d+)");
 

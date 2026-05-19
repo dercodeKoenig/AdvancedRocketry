@@ -123,38 +123,59 @@ public class SpaceStationPadPersistenceTest {
         assertTrue("padC must survive restart: " + padsAfter,
                 padsAfter.contains("\"x\":300"));
 
-        // Per-pad state assertion is harder against a JSON blob with
-        // multiple objects — count the (x:200, occupied:true) co-occurrence
-        // by extracting the pad-B object substring. The pads array follows
-        // a stable insertion order (LinkedList in production).
-        String padBObj = extractObjectContaining(padsAfter, "\"x\":200");
-        assertTrue("padB's occupied=true flag did NOT survive restart: " + padBObj,
-                padBObj.contains("\"occupied\":true"));
-        // The auto-land flag is also NBT-serialised; padB's auto-land=true
-        // must survive too, otherwise a future server restart would let
-        // an undocked rocket on padB reclaim a pad the player had
-        // specifically opted in.
-        // NOTE: AR's current spawnLocations NBT branch may or may not
-        // serialise allowedForAutoLanding — if it doesn't, the test below
-        // will surface that gap. Treat as a documented-gap signal rather
-        // than a hard regression: assertion uses Assume to skip if absent.
-        if (padBObj.contains("\"allowAutoLand\":true")) {
-            // explicit pass — survived.
-        } else {
-            Assume.assumeTrue(
-                    "padB allowAutoLand did NOT survive — SpaceStationObject "
-                            + "NBT branch likely does not serialise the flag. "
-                            + "File as separate known-gap if confirmed.",
-                    false);
-        }
-
-        // padA and padC must be free + auto-land=false (defaults preserved).
+        // Per-pad state assertions are extracted via substring isolation
+        // (pads is a flat array of LinkedList-ordered objects).
         String padAObj = extractObjectContaining(padsAfter, "\"x\":100");
+        String padBObj = extractObjectContaining(padsAfter, "\"x\":200");
         String padCObj = extractObjectContaining(padsAfter, "\"x\":300");
+
+        // occupied: padB is the only one that should be true (we docked it
+        // pre-restart). A and C stay free.
+        assertTrue("padB's occupied=true must survive restart: " + padBObj,
+                padBObj.contains("\"occupied\":true"));
         assertTrue("padA must restore to occupied=false: " + padAObj,
                 padAObj.contains("\"occupied\":false"));
         assertTrue("padC must restore to occupied=false: " + padCObj,
                 padCObj.contains("\"occupied\":false"));
+
+        // pad name field — writeToNBT.setString("name", …) + readFromNbt
+        // reads it back via tag.getString("name"). All three names must
+        // survive verbatim.
+        assertTrue("padA name must survive restart (\"padA\"): " + padAObj,
+                padAObj.contains("\"name\":\"padA\""));
+        assertTrue("padB name must survive restart (\"padB\"): " + padBObj,
+                padBObj.contains("\"name\":\"padB\""));
+        assertTrue("padC name must survive restart (\"padC\"): " + padCObj,
+                padCObj.contains("\"name\":\"padC\""));
+
+        // -- allowAutoLand: surface the known bug at
+        //    SpaceStationObject.java:801. The write side correctly writes
+        //    `tag.setBoolean("autoLand", pos.getAllowedForAutoLand())`,
+        //    but the read side reads from the WRONG KEY:
+        //      loc.setAllowedForAutoLand(!tag.hasKey("occupied")
+        //                                  || tag.getBoolean("occupied"));
+        //    This collapses allowAutoLand to "is the pad occupied?" plus
+        //    a weird hasKey defaults-to-true fallback. The result:
+        //    - padB (occupied=true) → allowAutoLand reads as true (lucky)
+        //    - padA / padC (occupied=false) → allowAutoLand reads as
+        //                                     false ALWAYS, regardless of
+        //                                     what was written.
+        // Our boot1 set padB autoLand=true and padA/C never opted in
+        // (default false), so the OBSERVED outcomes happen to all match
+        // what we want — but ONLY because of the collision between the
+        // semantic of occupied-on-padB and the read-key bug. If the
+        // boot1 sequence opted padA into autoLand WITHOUT docking it,
+        // the bug would surface. Pin both observations explicitly so a
+        // future read-side fix is forced to update this test.
+        assertTrue("padB allowAutoLand reads true after restart (lucky path "
+                        + "— SpaceStationObject:801 reads from \"occupied\" "
+                        + "key, and padB IS occupied): " + padBObj,
+                padBObj.contains("\"allowAutoLand\":true"));
+        assertTrue("padA allowAutoLand reads FALSE after restart (whatever "
+                        + "the original write was — read side ignores the "
+                        + "\"autoLand\" key, SpaceStationObject:801 bug): "
+                        + padAObj,
+                padAObj.contains("\"allowAutoLand\":false"));
 
         // Behavioural check: undock B → next dock must reclaim B again.
         String undock = String.join("\n", secondBoot.client().execute(
@@ -165,6 +186,67 @@ public class SpaceStationPadPersistenceTest {
                 "artest station dock " + stationId));
         assertTrue("post-restart dock must reclaim padB: " + dock2,
                 dock2.contains("\"ok\":true") && dock2.contains("\"x\":200"));
+    }
+
+    /**
+     * <em>DOCUMENTS KNOWN PRODUCTION BUG</em> at
+     * {@code SpaceStationObject.java:801}:
+     *
+     * <pre>
+     * tag.setBoolean("autoLand", pos.getAllowedForAutoLand());  // write
+     * ...
+     * loc.setAllowedForAutoLand(
+     *     !tag.hasKey("occupied") || tag.getBoolean("occupied"));  // read
+     * </pre>
+     *
+     * Write writes to {@code "autoLand"}; read reads from {@code "occupied"}.
+     * The read collapses allowAutoLand to "is the pad occupied?" — meaning
+     * any pad that was opted-in to auto-land BUT not currently docked
+     * silently loses its auto-land flag across server restart.
+     *
+     * <p>This test isolates the bug: pre-restart, set padA auto-land=true
+     * WITHOUT docking. Post-restart, padA's allowAutoLand reads as false.
+     * </p>
+     */
+    @Test
+    public void autoLandFlagWithoutDockDoesNotSurviveRestart_documentsKnownBug() throws Exception {
+        firstBoot = RealDedicatedServerHarness.startWith(workDir, /*cleanupOnClose=*/false);
+        String createStation = String.join("\n",
+                firstBoot.client().execute("artest station create 0"));
+        Matcher sm = STATION_ID.matcher(createStation);
+        assertTrue("could not extract station id: " + createStation, sm.find());
+        long stationId = Long.parseLong(sm.group(1));
+
+        // Add ONE pad and enable auto-land — but DO NOT dock it. occupied
+        // stays false; the read-side bug forces allowAutoLand to false too.
+        ok(firstBoot, "artest station add-pad " + stationId + " 999 999 lonely");
+        ok(firstBoot, "artest station set-autoland " + stationId + " 999 999 true");
+
+        // Sanity in boot1: the in-memory state correctly reports both flags.
+        String padsBefore = String.join("\n",
+                firstBoot.client().execute("artest station pads " + stationId));
+        assertTrue("boot1 padA must report allowAutoLand=true in memory: " + padsBefore,
+                padsBefore.contains("\"allowAutoLand\":true"));
+        assertTrue("boot1 padA must report occupied=false: " + padsBefore,
+                padsBefore.contains("\"occupied\":false"));
+
+        firstBoot.client().execute("save-all flush");
+        firstBoot.close();
+        firstBoot = null;
+
+        secondBoot = RealDedicatedServerHarness.startWith(workDir, /*cleanupOnClose=*/true);
+        String padsAfter = String.join("\n",
+                secondBoot.client().execute("artest station pads " + stationId));
+        // The bug: allowAutoLand reads as false after restart even though
+        // we set it to true. This assertion documents the current behaviour;
+        // a future fix to SpaceStationObject:801 must flip this to true
+        // and re-author this test as the happy-path assertion.
+        assertTrue("padA allowAutoLand should be true after restart but the "
+                        + "SpaceStationObject:801 wrong-key bug forces it to "
+                        + "false. If THIS assertion ever fails, the prod bug "
+                        + "was fixed — invert the assertion. pads dump: "
+                        + padsAfter,
+                padsAfter.contains("\"allowAutoLand\":false"));
     }
 
     /**

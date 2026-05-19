@@ -1,6 +1,6 @@
 package zmaster587.advancedRocketry.test.server;
 
-import com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest;
+// migrated to AbstractSharedServerTest (TASK-03 B2)
 import org.junit.Assume;
 import org.junit.Test;
 
@@ -44,7 +44,7 @@ import static org.junit.Assert.assertTrue;
  * server-side state checked here is the necessary pre-condition for
  * that join to be coherent.
  */
-public class PlayerEventHandlerWiringTest extends AbstractHeadlessServerTest {
+public class PlayerEventHandlerWiringTest extends AbstractSharedServerTest {
 
     private static final Pattern TIME_PATTERN = Pattern.compile("\"time\":(\\d+)");
     private static final Pattern WORLD_TIME_PATTERN =
