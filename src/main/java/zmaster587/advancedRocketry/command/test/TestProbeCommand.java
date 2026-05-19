@@ -3424,7 +3424,120 @@ public class TestProbeCommand extends CommandBase {
                     parseIntOr(args[5], 0));
             return;
         }
-        send(sender, "{\"error\":\"unknown fixture subcommand — try rocket <dim> <x> <y> <z> | machine cutting <dim> <x> <y> <z>\"}");
+        if (args.length >= 6 && "multiblock".equalsIgnoreCase(args[0])
+                && "blackhole-gen".equalsIgnoreCase(args[1])) {
+            handleFixtureBlackHoleGenerator(server, sender,
+                    parseIntOr(args[2], Integer.MIN_VALUE),
+                    parseIntOr(args[3], 0),
+                    parseIntOr(args[4], 64),
+                    parseIntOr(args[5], 0));
+            return;
+        }
+        send(sender, "{\"error\":\"unknown fixture subcommand — try rocket <dim> <x> <y> <z> | machine cutting <dim> <x> <y> <z> | multiblock blackhole-gen <dim> <x> <y> <z>\"}");
+    }
+
+    /**
+     * Builds a complete black-hole-generator multiblock with controller at
+     * (cx, cy, cz) NORTH-facing. The production {@code TileBlackHoleGenerator
+     * .structure} is a 5×3×3 array iterated [y][z][x] with controller offset
+     * (x=1, y=1, z=0). Translating to world coords for a NORTH-facing
+     * controller (frontZ=-1) simplifies to:
+     * <pre>
+     *   globalX = cx - (x - 1)
+     *   globalY = cy - y + 1
+     *   globalZ = cz + z
+     * </pre>
+     *
+     * <p>Concrete placements (10 cells — layer y=2 has TWO advStructure
+     * blocks at z=0 AND z=1, not one):</p>
+     * <ul>
+     *   <li>{@code (cx, cy+1, cz+1)} — advStructureBlock (top cap, y=0)</li>
+     *   <li>{@code (cx, cy,   cz)}   — controller (y=1, z=0)</li>
+     *   <li>{@code (cx, cy,   cz+1)} — advStructureBlock (centre, y=1, z=1)</li>
+     *   <li>{@code (cx+1, cy, cz+1)} — power-output plug ('*' at y=1, z=1, x=0;
+     *       provides the energy-capability access point)</li>
+     *   <li>{@code (cx-1, cy, cz+1)} — item-input hatch ('*' at y=1, z=1, x=2;
+     *       BHG consumes "fuel" through I)</li>
+     *   <li>{@code (cx, cy,   cz+2)} — advStructureBlock ('*' at y=1, z=2, x=1)</li>
+     *   <li>{@code (cx, cy-1, cz)}   — advStructureBlock (lower-1 front, y=2, z=0) ← easy to miss</li>
+     *   <li>{@code (cx, cy-1, cz+1)} — advStructureBlock (lower-1 mid, y=2, z=1)</li>
+     *   <li>{@code (cx, cy-2, cz+1)} — advStructureBlock (lower-2, y=3, z=1)</li>
+     *   <li>{@code (cx, cy-3, cz+1)} — advStructureBlock (lower-3, y=4, z=1)</li>
+     * </ul>
+     *
+     * <p>BHG's {@code getAllowableWildCardBlocks} permits 'I' / 'p' / the
+     * advStructureBlock itself at '*' positions, so the chosen mix forms
+     * a valid structure that production {@code attemptCompleteStructure}
+     * accepts.</p>
+     */
+    private void handleFixtureBlackHoleGenerator(MinecraftServer server, ICommandSender sender,
+                                                  int dim, int cx, int cy, int cz) {
+        net.minecraft.world.WorldServer world = server.getWorld(dim);
+        if (world == null) {
+            send(sender, "{\"error\":\"world not loaded\",\"dim\":" + dim + "}");
+            return;
+        }
+
+        net.minecraft.block.Block controller =
+                ForgeRegistries.BLOCKS.getValue(new ResourceLocation("advancedrocketry", "blackholegenerator"));
+        // libVulpes blocks. Registry names are derived from setUnlocalizedName
+        // substring(5), so case follows the production unlocalized-name string.
+        // libVulpes registry names are derived from setUnlocalizedName.substring(5)
+        // and lowercased by Forge ResourceLocation in 1.12.2.
+        net.minecraft.block.Block advStructure =
+                ForgeRegistries.BLOCKS.getValue(new ResourceLocation("libvulpes", "advstructuremachine"));
+        net.minecraft.block.Block hatch =
+                ForgeRegistries.BLOCKS.getValue(new ResourceLocation("libvulpes", "hatch"));
+        net.minecraft.block.Block powerOutput =
+                ForgeRegistries.BLOCKS.getValue(new ResourceLocation("libvulpes", "forgepoweroutput"));
+
+        if (controller == null || advStructure == null || hatch == null || powerOutput == null) {
+            send(sender, "{\"error\":\"missing block(s)\",\"controller\":"
+                    + (controller != null) + ",\"advStructure\":" + (advStructure != null)
+                    + ",\"hatch\":" + (hatch != null) + ",\"powerOutput\":" + (powerOutput != null) + "}");
+            return;
+        }
+
+        // Controller NORTH-facing.
+        net.minecraft.block.state.IBlockState controllerState = controller.getDefaultState();
+        try {
+            controllerState = controllerState.withProperty(
+                    zmaster587.libVulpes.block.RotatableBlock.FACING,
+                    net.minecraft.util.EnumFacing.NORTH);
+        } catch (IllegalArgumentException ignored) {
+            // Property absent — fall back to default state.
+        }
+
+        BlockPos controllerPos = new BlockPos(cx, cy, cz);
+        BlockPos topCap        = new BlockPos(cx,     cy + 1, cz + 1);
+        BlockPos centre        = new BlockPos(cx,     cy,     cz + 1);
+        BlockPos lower1Front   = new BlockPos(cx,     cy - 1, cz);      // y=2 z=0
+        BlockPos lower1Mid     = new BlockPos(cx,     cy - 1, cz + 1);  // y=2 z=1
+        BlockPos lower2        = new BlockPos(cx,     cy - 2, cz + 1);
+        BlockPos lower3        = new BlockPos(cx,     cy - 3, cz + 1);
+        BlockPos powerOutPos   = new BlockPos(cx + 1, cy,     cz + 1);
+        BlockPos itemInputPos  = new BlockPos(cx - 1, cy,     cz + 1);
+        BlockPos backFiller    = new BlockPos(cx,     cy,     cz + 2);
+
+        world.setBlockState(controllerPos, controllerState);
+        world.setBlockState(topCap, advStructure.getDefaultState());
+        world.setBlockState(centre, advStructure.getDefaultState());
+        world.setBlockState(lower1Front, advStructure.getDefaultState());
+        world.setBlockState(lower1Mid, advStructure.getDefaultState());
+        world.setBlockState(lower2, advStructure.getDefaultState());
+        world.setBlockState(lower3, advStructure.getDefaultState());
+        @SuppressWarnings("deprecation") net.minecraft.block.state.IBlockState itemInputState =
+                hatch.getStateFromMeta(0);  // meta 0 = TileInputHatch
+        world.setBlockState(itemInputPos, itemInputState);
+        world.setBlockState(powerOutPos, powerOutput.getDefaultState());
+        world.setBlockState(backFiller, advStructure.getDefaultState());
+
+        Map<String, Object> info = new LinkedHashMap<>();
+        info.put("ok", true);
+        info.put("controllerPos", new int[]{controllerPos.getX(), controllerPos.getY(), controllerPos.getZ()});
+        info.put("powerOutPos",   new int[]{powerOutPos.getX(),   powerOutPos.getY(),   powerOutPos.getZ()});
+        info.put("itemInputPos",  new int[]{itemInputPos.getX(),  itemInputPos.getY(),  itemInputPos.getZ()});
+        send(sender, jsonMap(info));
     }
 
     /**
