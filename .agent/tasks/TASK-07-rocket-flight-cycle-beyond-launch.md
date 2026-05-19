@@ -121,10 +121,18 @@ A regression in any phase ships a "rocket disappears mid-flight" or
 
 ## Completion Checklist
 
-- [ ] 3 new `/artest rocket` probe verbs + info-probe extension
-- [ ] Orbit-reached chain: 3 tests
-- [ ] Dimension transition: 3 tests
-- [ ] Descent + landing: 4 tests
-- [ ] Failure modes: 3 tests
-- [ ] Full pyramid PASS (expected ≥ 415 total)
-- [ ] EOD marker
+- [x] 3 new `/artest rocket` probe verbs (`force-orbit-reached`,
+      `dismantle`, `event-counts`) + info-probe extension
+      (`ticksExisted`).
+- [x] Orbit-reached chain: 5 tests in `RocketFlightCycleDepthTest` +
+      sequencing tests in `RocketFlightCycleIntegrationTest`.
+- [ ] **Dimension transition: DEFERRED** — needs FakePlayer (TASK-10)
+      to keep chunks loaded so the transitionMap-drain loop runs.
+- [ ] **Descent + landing: DEFERRED** — same chunk-anchoring blocker.
+      The descent-timer gate requires entity ticking which only
+      happens when a player is in the chunk.
+- [x] Failure modes: launch error path covered
+      (`erroredLaunchDoesNotFireRocketLaunchEvent`); out-of-fuel
+      / wear-system / weight gates deferred (same chunk-anchor blocker).
+- [x] Full pyramid PASS (expected ~425 total)
+- [x] EOD marker: `2026-05-19-1530_task07-rocket-flight-cycle-eod.md`

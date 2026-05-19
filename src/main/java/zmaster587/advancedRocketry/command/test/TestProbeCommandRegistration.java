@@ -40,6 +40,9 @@ public final class TestProbeCommandRegistration {
             return;
         }
         event.registerServerCommand(new TestProbeCommand());
+        // TASK-07: register the rocket-event recorder at server start so
+        // counters are accurate from the first rocket lifecycle event.
+        TestProbeCommand.RocketEventRecorder.ensureRegistered();
         AdvancedRocketry.logger.info("Registered /artest test-only probe commands (-D" + FLAG + "=true)");
     }
 }

@@ -539,6 +539,66 @@ public class TestProbeCommand extends CommandBase {
                     + ",\"chipDim\":" + chip.getDimensionId(stack) + "}");
             return;
         }
+        if ("force-orbit-reached".equalsIgnoreCase(args[0]) && args.length >= 2) {
+            // /artest rocket force-orbit-reached <entityId> — invokes the
+            // production EntityRocketBase.onOrbitReached. TASK-07 A2 cause-
+            // effect: this fires RocketReachesOrbitEvent and (if rocket is
+            // in spaceDim on a station pad) calls station.setPadStatus(false).
+            int entityId = parseIntOr(args[1], Integer.MIN_VALUE);
+            EntityRocket rocket = findRocket(server, entityId);
+            if (rocket == null) {
+                send(sender, "{\"error\":\"rocket not found\",\"entityId\":" + entityId + "}");
+                return;
+            }
+            int eventCountBefore = RocketEventRecorder.orbitReachedCount;
+            try {
+                rocket.onOrbitReached();
+            } catch (RuntimeException e) {
+                send(sender, "{\"error\":\"onOrbitReached threw: "
+                        + escapeJson(e.getClass().getSimpleName() + ": " + e.getMessage())
+                        + "\"}");
+                return;
+            }
+            send(sender, "{\"ok\":true,\"entityId\":" + entityId
+                    + ",\"isInOrbit\":" + rocket.isInOrbit()
+                    + ",\"orbitReachedEventDelta\":"
+                    + (RocketEventRecorder.orbitReachedCount - eventCountBefore) + "}");
+            return;
+        }
+        if ("dismantle".equalsIgnoreCase(args[0]) && args.length >= 2) {
+            // /artest rocket dismantle <entityId> — invokes production
+            // EntityRocketBase.deconstructRocket. Fires RocketDismantleEvent.
+            int entityId = parseIntOr(args[1], Integer.MIN_VALUE);
+            EntityRocket rocket = findRocket(server, entityId);
+            if (rocket == null) {
+                send(sender, "{\"error\":\"rocket not found\",\"entityId\":" + entityId + "}");
+                return;
+            }
+            int eventCountBefore = RocketEventRecorder.dismantleCount;
+            try {
+                rocket.deconstructRocket();
+            } catch (RuntimeException e) {
+                send(sender, "{\"error\":\"deconstructRocket threw: "
+                        + escapeJson(e.getClass().getSimpleName() + ": " + e.getMessage())
+                        + "\"}");
+                return;
+            }
+            send(sender, "{\"ok\":true,\"entityId\":" + entityId
+                    + ",\"dismantleEventDelta\":"
+                    + (RocketEventRecorder.dismantleCount - eventCountBefore) + "}");
+            return;
+        }
+        if ("event-counts".equalsIgnoreCase(args[0])) {
+            // /artest rocket event-counts — dump global counters for the
+            // 4 RocketEvent types. The recorder is registered once
+            // statically (see RocketEventRecorder.ensureRegistered).
+            RocketEventRecorder.ensureRegistered();
+            send(sender, "{\"launch\":" + RocketEventRecorder.launchCount
+                    + ",\"preLaunch\":" + RocketEventRecorder.preLaunchCount
+                    + ",\"orbitReached\":" + RocketEventRecorder.orbitReachedCount
+                    + ",\"dismantle\":" + RocketEventRecorder.dismantleCount + "}");
+            return;
+        }
         if ("info".equalsIgnoreCase(args[0]) && args.length >= 2) {
             int entityId = parseIntOr(args[1], Integer.MIN_VALUE);
             EntityRocket rocket = findRocket(server, entityId);
@@ -554,6 +614,7 @@ public class TestProbeCommand extends CommandBase {
             info.put("posZ", rocket.posZ);
             info.put("isInFlight", rocket.isInFlight());
             info.put("isInOrbit", rocket.isInOrbit());
+            info.put("ticksExisted", rocket.ticksExisted);
             info.put("destinationDim", reflectInt(rocket, "destinationDimId"));
             // errorStr is private + set by setError(...) when launch() bails
             // on a precondition. Without surfacing it, A1 launch-depth tests
@@ -4480,5 +4541,49 @@ public class TestProbeCommand extends CommandBase {
     private static boolean classResourcePresent(String slashed) {
         return Thread.currentThread().getContextClassLoader()
                 .getResource(slashed + ".class") != null;
+    }
+
+    /**
+     * TASK-07 — global event-bus listener that counts RocketEvent fires.
+     * Registered lazily on first /artest rocket event-counts query.
+     * Static counters are visible to all probe handlers and to the
+     * launch/orbit-reached/dismantle probes which include
+     * "*EventDelta" fields in their responses for inline cause-effect
+     * verification.
+     */
+    public static final class RocketEventRecorder {
+        public static volatile int launchCount = 0;
+        public static volatile int preLaunchCount = 0;
+        public static volatile int orbitReachedCount = 0;
+        public static volatile int dismantleCount = 0;
+
+        private static volatile boolean registered = false;
+
+        public static synchronized void ensureRegistered() {
+            if (registered) return;
+            net.minecraftforge.common.MinecraftForge.EVENT_BUS.register(new RocketEventRecorder());
+            registered = true;
+        }
+
+        @net.minecraftforge.fml.common.eventhandler.SubscribeEvent
+        public void onLaunch(
+                zmaster587.advancedRocketry.api.RocketEvent.RocketLaunchEvent e) {
+            launchCount++;
+        }
+        @net.minecraftforge.fml.common.eventhandler.SubscribeEvent
+        public void onPreLaunch(
+                zmaster587.advancedRocketry.api.RocketEvent.RocketPreLaunchEvent e) {
+            preLaunchCount++;
+        }
+        @net.minecraftforge.fml.common.eventhandler.SubscribeEvent
+        public void onOrbitReached(
+                zmaster587.advancedRocketry.api.RocketEvent.RocketReachesOrbitEvent e) {
+            orbitReachedCount++;
+        }
+        @net.minecraftforge.fml.common.eventhandler.SubscribeEvent
+        public void onDismantle(
+                zmaster587.advancedRocketry.api.RocketEvent.RocketDismantleEvent e) {
+            dismantleCount++;
+        }
     }
 }
