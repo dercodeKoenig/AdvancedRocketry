@@ -128,6 +128,28 @@ end-to-end (blocked by commented-out pipe blocks).
 - [ ] **Post-assembly depth** for each multiblock — DEFERRED. Each
       needs its own fixture probe (~3-5 h). Queued as a future TASK-04b
       session or splittable into TASK-04a / 04b / 04c.
+
+  Research note (2026-05-19, autonomous session): the libVulpes
+  structure-block registry names ARE recoverable from the deobf JAR:
+  - `libvulpes:structureMachine` (basic structure block)
+  - `libvulpes:advStructureMachine` (advanced structure block — used
+    by Black Hole Generator, Warp Core, Microwave Receiver, etc.)
+  - `libvulpes:advancedMotor` (advanced motor — for orbital laser
+    drill etc.)
+
+  Other production multiblocks reference more specific blocks (e.g.
+  `blockCoil`, `casingCentrifuge` per the existing cutting-fixture
+  pattern). The next session can implement
+  `/artest fixture multiblock blackhole-gen <dim> <x> <y> <z>` by
+  placing the 5-layer structure verbatim from
+  `TileBlackHoleGenerator.structure`. Most controllers ALSO need a
+  hatch block for I/O, which adds another lookup. The full
+  implementation is still ~3-5 h per multiblock.
+
+  Worth noting that `TileBlackHoleGenerator.writeToNBT` is a
+  pass-through (line 286-289): no controller-specific NBT key persists
+  across save, so a Phase 4 "NBT round-trip" test does not buy more
+  than the super-class TileMultiPowerProducer's NBT does.
 - [x] Migrated to AbstractSharedServerTest
 - [x] Full pyramid PASS (expected ~413 total)
 - [x] EOD marker: `2026-05-19-1430_task04-multiblock-partial-eod.md`

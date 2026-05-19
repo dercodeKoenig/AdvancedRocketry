@@ -109,3 +109,27 @@ in a separate ticket if needed).
 - [ ] Lifecycle: 2 tests
 - [ ] Full pyramid PASS
 - [ ] EOD marker
+
+## Status note (2026-05-19, autonomous session)
+
+The unit-tier surface for the three mission classes is already covered
+by `MissionResourceCollectionContractTest` (~9 tests: default ctor,
+canTick, failureChance, performAction, inheritance, NBT-null-state
+guard, etc.). Going deeper requires either:
+
+1. **`/artest mission ...` probe verbs** to drive the per-tick logic
+   from a headless server (Phase 1 plan, ~2 h). The mission's
+   data-carrying ctor requires `EntityRocket` + `LinkedList<IInfrastructure>`
+   + a fluid (for gas) — that's a fixture-builder problem like the
+   multiblock case.
+
+2. **Direct construction at server tier** — instantiate the mission via
+   reflection on a server-side `EntityRocket` from `/artest fixture rocket`.
+   Workable but requires either reflection (brittle to API changes) or
+   a dedicated probe verb that mints a mission and returns its handle.
+
+Either path is ~2-3 h infrastructure before the first behavioural test
+lands. Out of scope for the small-remainders autonomous batch.
+
+Reward-grant tests (Phase 4) belong in `testClient` (TASK-10b) per the
+"no FakePlayer" rule.
