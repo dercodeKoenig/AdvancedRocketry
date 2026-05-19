@@ -125,9 +125,20 @@ end-to-end (blocked by commented-out pipe blocks).
       tests (2026-05-19 14:15). Covers orbital laser drill, space
       elevator, black hole generator, warp core, observatory, railgun,
       planet analyser.
-- [ ] **Post-assembly depth** for each multiblock — DEFERRED. Each
-      needs its own fixture probe (~3-5 h). Queued as a future TASK-04b
-      session or splittable into TASK-04a / 04b / 04c.
+- [/] **Post-assembly depth** for each multiblock — IN PROGRESS.
+      Fixture-builder infrastructure landed (2026-05-19 evening
+      session). Two multiblocks shipped:
+      - `BlackHoleGenerator` — `/artest fixture multiblock blackhole-gen`
+        + 4 tests (validates / invalidates / energy-cap exposed /
+        isAroundBlackHole guard pinned in non-spaceDim)
+      - `Beacon` — `/artest fixture multiblock beacon` + 3 tests
+        (validates / invalidates on redstone tip / invalidates on shaft)
+
+      Pattern documented in EOD marker
+      `2026-05-19-2030_multiblock-fixtures-bhg-beacon.md`. Remaining
+      multiblocks (Railgun, Observatory, etc.) follow the same
+      recipe — ~1 h per small structure once libVulpes char-mapping
+      is in hand.
 
   Research note (2026-05-19, autonomous session): the libVulpes
   structure-block registry names ARE recoverable from the deobf JAR:
