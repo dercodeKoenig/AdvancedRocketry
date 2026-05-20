@@ -38,9 +38,6 @@ public abstract class MixinEntityPlayerInventoryAccess {
                     target = "Lnet/minecraft/inventory/Container;"
                             + "canInteractWith(Lnet/minecraft/entity/player/EntityPlayer;)Z"))
     private boolean ar$bypassForRocketGui(Container container, EntityPlayer player) {
-        if (RocketInventoryHelper.canPlayerBypassInvChecks(player)) {
-            return true;
-        }
-        return container.canInteractWith(player);
+        return RocketInventoryHelper.shouldAllowContainerInteract(container, player);
     }
 }

@@ -1,6 +1,7 @@
 package zmaster587.advancedRocketry.util;
 
 import net.minecraft.entity.player.EntityPlayer;
+import net.minecraft.inventory.Container;
 import net.minecraft.util.math.BlockPos;
 
 import java.lang.ref.WeakReference;
@@ -8,6 +9,38 @@ import java.util.HashSet;
 import java.util.WeakHashMap;
 
 public class RocketInventoryHelper {
+
+    /**
+     * Decides whether the vanilla {@code openContainer.canInteractWith}
+     * check inside {@code EntityPlayer(MP).onUpdate} should be force-skipped
+     * for a given player. Returns {@code true} (i.e. "behave as if the
+     * container is in interaction range") when the player is currently in
+     * the rocket-inventory bypass set; otherwise delegates to vanilla's
+     * own check.
+     *
+     * <p>Extracted so the
+     * {@code MixinEntityPlayer(MP)InventoryAccess @Redirect}
+     * bodies stay one line and the redirect's semantics are unit-testable
+     * without running the full Mixin pipeline. The mixin redirects to this
+     * helper; this helper is the single source of truth for "should AR
+     * keep the rocket inventory GUI open past the vanilla distance gate".
+     * </p>
+     *
+     * @param container the container vanilla was about to {@code
+     *                  canInteractWith}-check (never {@code null} on the
+     *                  vanilla call site — the {@code openContainer != null}
+     *                  guard fires first).
+     * @param player    the player whose {@code onUpdate} tick is running.
+     * @return {@code true} when AR's bypass set says yes (skips
+     *         close-screen path); otherwise the container's own
+     *         {@code canInteractWith} result.
+     */
+    public static boolean shouldAllowContainerInteract(Container container, EntityPlayer player) {
+        if (canPlayerBypassInvChecks(player)) {
+            return true;
+        }
+        return container.canInteractWith(player);
+    }
 
     //TODO: more robust way of inv checking
     //Has weak refs so if the player gets killed/logsout etc the entry doesnt stay trapped in RAM
