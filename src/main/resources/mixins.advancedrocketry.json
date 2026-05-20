@@ -6,8 +6,12 @@
   "refmap": "mixins.advancedrocketry.refmap.json",
   "mixins": [
     "AccessorWorld",
+    "MixinEntityGravity",
+    "MixinEntityPlayerInventoryAccess",
+    "MixinEntityPlayerMPInventoryAccess",
+    "MixinPlayerList",
     "MixinWorldServerMulti",
-    "MixinPlayerList"
+    "MixinWorldSetBlockState"
   ],
   "client": [],
   "server": []
