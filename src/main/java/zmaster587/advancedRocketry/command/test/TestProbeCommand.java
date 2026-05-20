@@ -184,6 +184,12 @@ public class TestProbeCommand extends CommandBase {
                 case "event":
                     handleEvent(server, sender, tail(args));
                     break;
+                case "chunk":
+                    handleChunk(server, sender, tail(args));
+                    break;
+                case "server":
+                    handleServer(server, sender, tail(args));
+                    break;
                 default:
                     send(sender, "{\"error\":\"unknown subcommand\",\"sub\":\"" + args[0] + "\"}");
             }
@@ -455,6 +461,7 @@ public class TestProbeCommand extends CommandBase {
                     if (!first) builder.append(',');
                     first = false;
                     builder.append("{\"id\":").append(entity.getEntityId())
+                            .append(",\"uuid\":\"").append(entity.getPersistentID().toString()).append("\"")
                             .append(",\"dim\":").append(world.provider.getDimension())
                             .append(",\"pos\":[").append(entity.posX).append(',').append(entity.posY).append(',').append(entity.posZ).append("]}");
                 }
@@ -639,6 +646,7 @@ public class TestProbeCommand extends CommandBase {
             }
             Map<String, Object> info = new LinkedHashMap<>();
             info.put("entityId", rocket.getEntityId());
+            info.put("uuid", rocket.getPersistentID().toString());
             info.put("dim", rocket.world.provider.getDimension());
             info.put("posX", rocket.posX);
             info.put("posY", rocket.posY);
@@ -800,7 +808,226 @@ public class TestProbeCommand extends CommandBase {
             send(sender, builder.toString());
             return;
         }
-        send(sender, "{\"error\":\"unknown rocket subcommand — try list|info <id> | storage-inventory <id> | storage-fluid <id>\"}");
+        if ("find-by-uuid".equalsIgnoreCase(args[0]) && args.length >= 2) {
+            // TASK-07 Phase 3: find a rocket by its persistent UUID across all
+            // loaded dimensions. Needed after EntityRocket.changeDimension()
+            // because that respawns the entity in the destination world with
+            // a NEW entityId, but UUID is preserved (Forge Entity contract).
+            java.util.UUID uuid;
+            try {
+                uuid = java.util.UUID.fromString(args[1]);
+            } catch (IllegalArgumentException e) {
+                send(sender, "{\"error\":\"invalid uuid\",\"raw\":\"" + escapeJson(args[1]) + "\"}");
+                return;
+            }
+            // Prefer the LIVE copy. Forge's Entity.changeDimension leaves
+            // the source-dim entity in the old world's tracking map until
+            // the next collect-dead tick (isDead=true). A naive iteration
+            // could return that stale copy and report the old entityId
+            // even though the rocket has already transitioned. Two-pass:
+            // first look for a non-dead match, then fall back to ANY match.
+            Entity liveMatch = null;
+            Entity anyMatch = null;
+            int liveDim = 0;
+            int anyDim = 0;
+            for (WorldServer world : server.worlds) {
+                Entity ent = world.getEntityFromUuid(uuid);
+                if (ent instanceof EntityRocket) {
+                    if (!ent.isDead && liveMatch == null) {
+                        liveMatch = ent;
+                        liveDim = world.provider.getDimension();
+                    } else if (anyMatch == null) {
+                        anyMatch = ent;
+                        anyDim = world.provider.getDimension();
+                    }
+                }
+            }
+            Entity ent = liveMatch != null ? liveMatch : anyMatch;
+            int dimResult = liveMatch != null ? liveDim : anyDim;
+            if (ent instanceof EntityRocket) {
+                EntityRocket r = (EntityRocket) ent;
+                    int sx = r.storage == null ? -1 : r.storage.getSizeX();
+                    int sy = r.storage == null ? -1 : r.storage.getSizeY();
+                    int sz = r.storage == null ? -1 : r.storage.getSizeZ();
+                int engineCount = r.storage == null ? -1
+                        : r.stats.getEngineLocations().size();
+                send(sender, "{\"ok\":true,\"entityId\":" + ent.getEntityId()
+                        + ",\"uuid\":\"" + r.getPersistentID().toString() + "\""
+                        + ",\"dim\":" + dimResult
+                        + ",\"posX\":" + ent.posX
+                        + ",\"posY\":" + ent.posY
+                        + ",\"posZ\":" + ent.posZ
+                        + ",\"isDead\":" + ent.isDead
+                        + ",\"isInFlight\":" + r.isInFlight()
+                        + ",\"isInOrbit\":" + r.isInOrbit()
+                        + ",\"storageSizeX\":" + sx
+                        + ",\"storageSizeY\":" + sy
+                        + ",\"storageSizeZ\":" + sz
+                        + ",\"engineCount\":" + engineCount + "}");
+                return;
+            }
+            send(sender, "{\"error\":\"rocket not found by uuid\",\"uuid\":\""
+                    + uuid + "\"}");
+            return;
+        }
+        if ("force-dest-dim".equalsIgnoreCase(args[0]) && args.length >= 3) {
+            // TASK-07 Phase 3: directly mutate EntityRocket.destinationDimId
+            // via reflection, bypassing launch()'s canTravelTo validation.
+            // Required for the invalid-dim test — we need a rocket with a
+            // bogus destination so onOrbitReached -> reachSpaceManned ->
+            // changeDimension hits the !canTravelTo guard at line 1943.
+            int entityId = parseIntOr(args[1], Integer.MIN_VALUE);
+            int dimId = parseIntOr(args[2], Integer.MIN_VALUE);
+            EntityRocket rocket = findRocket(server, entityId);
+            if (rocket == null) {
+                send(sender, "{\"error\":\"rocket not found\",\"entityId\":" + entityId + "}");
+                return;
+            }
+            try {
+                java.lang.reflect.Field f = EntityRocket.class.getDeclaredField("destinationDimId");
+                f.setAccessible(true);
+                f.setInt(rocket, dimId);
+            } catch (ReflectiveOperationException e) {
+                send(sender, "{\"error\":\"reflection failed: " + escapeJson(e.getMessage()) + "\"}");
+                return;
+            }
+            send(sender, "{\"ok\":true,\"entityId\":" + entityId
+                    + ",\"destinationDim\":" + reflectInt(rocket, "destinationDimId") + "}");
+            return;
+        }
+        if ("tick".equalsIgnoreCase(args[0]) && args.length >= 2) {
+            // TASK-07 Phase 4: directly call EntityRocket.onUpdate() N times.
+            // The headless test server only ticks chunks that hold a player;
+            // without a chunk anchor the rocket entity sits frozen. Calling
+            // onUpdate() explicitly drives the descent-timer gate, motion
+            // integration, and the landed-on-ground / orbit-reached checks.
+            // Optional 2nd arg = N (default 1).
+            int entityId = parseIntOr(args[1], Integer.MIN_VALUE);
+            int times = args.length >= 3 ? Math.max(1, parseIntOr(args[2], 1)) : 1;
+            EntityRocket rocket = findRocket(server, entityId);
+            if (rocket == null) {
+                send(sender, "{\"error\":\"rocket not found\",\"entityId\":" + entityId + "}");
+                return;
+            }
+            try {
+                for (int i = 0; i < times; i++) {
+                    if (rocket.isDead) break;
+                    rocket.onUpdate();
+                }
+            } catch (RuntimeException e) {
+                send(sender, "{\"error\":\"onUpdate threw: "
+                        + escapeJson(e.getClass().getSimpleName() + ": " + e.getMessage()) + "\"}");
+                return;
+            }
+            send(sender, "{\"ok\":true,\"entityId\":" + entityId + ",\"ticks\":" + times
+                    + ",\"isDead\":" + rocket.isDead
+                    + ",\"isInFlight\":" + (rocket.isDead ? false : rocket.isInFlight())
+                    + ",\"isInOrbit\":" + (rocket.isDead ? false : rocket.isInOrbit())
+                    + ",\"ticksExisted\":" + (rocket.isDead ? -1 : rocket.ticksExisted)
+                    + ",\"posY\":" + (rocket.isDead ? Double.NaN : rocket.posY) + "}");
+            return;
+        }
+        if ("set-state".equalsIgnoreCase(args[0]) && args.length >= 2) {
+            // TASK-07 Phase 4: direct state mutation. Accepts key=value pairs:
+            //   orbit=true|false   -> setInOrbit
+            //   flight=true|false  -> setInFlight
+            //   ticksExisted=<n>   -> set rocket.ticksExisted directly
+            //   posY=<n>           -> setPosition(posX, posY, posZ)
+            //   motionY=<n>        -> rocket.motionY = n
+            int entityId = parseIntOr(args[1], Integer.MIN_VALUE);
+            EntityRocket rocket = findRocket(server, entityId);
+            if (rocket == null) {
+                send(sender, "{\"error\":\"rocket not found\",\"entityId\":" + entityId + "}");
+                return;
+            }
+            for (int i = 2; i < args.length; i++) {
+                String kv = args[i];
+                int eq = kv.indexOf('=');
+                if (eq <= 0) continue;
+                String k = kv.substring(0, eq);
+                String v = kv.substring(eq + 1);
+                try {
+                    switch (k) {
+                        case "orbit":    rocket.setInOrbit(Boolean.parseBoolean(v)); break;
+                        case "flight":   rocket.setInFlight(Boolean.parseBoolean(v)); break;
+                        case "ticksExisted":
+                            java.lang.reflect.Field tf = Entity.class.getDeclaredField("ticksExisted");
+                            tf.setAccessible(true);
+                            tf.setInt(rocket, Integer.parseInt(v));
+                            break;
+                        case "posY":
+                            rocket.setPosition(rocket.posX, Double.parseDouble(v), rocket.posZ);
+                            break;
+                        case "motionY":
+                            rocket.motionY = Double.parseDouble(v);
+                            break;
+                        default:
+                            send(sender, "{\"error\":\"unknown set-state key\",\"key\":\"" + k + "\"}");
+                            return;
+                    }
+                } catch (ReflectiveOperationException | NumberFormatException e) {
+                    send(sender, "{\"error\":\"set-state failed: " + escapeJson(e.getMessage()) + "\"}");
+                    return;
+                }
+            }
+            send(sender, "{\"ok\":true,\"entityId\":" + entityId
+                    + ",\"isInFlight\":" + rocket.isInFlight()
+                    + ",\"isInOrbit\":" + rocket.isInOrbit()
+                    + ",\"ticksExisted\":" + rocket.ticksExisted
+                    + ",\"posY\":" + rocket.posY
+                    + ",\"motionY\":" + rocket.motionY + "}");
+            return;
+        }
+        if ("explode".equalsIgnoreCase(args[0]) && args.length >= 2) {
+            // TASK-07 Phase 5: invoke production EntityRocket.explode().
+            // The current production code calls explode() from launch() iff
+            // partsWearSystem && storage.shouldBreak(). Tests pin: the
+            // method sets the entity dead.
+            int entityId = parseIntOr(args[1], Integer.MIN_VALUE);
+            EntityRocket rocket = findRocket(server, entityId);
+            if (rocket == null) {
+                send(sender, "{\"error\":\"rocket not found\",\"entityId\":" + entityId + "}");
+                return;
+            }
+            try {
+                rocket.explode();
+            } catch (RuntimeException e) {
+                send(sender, "{\"error\":\"explode threw: "
+                        + escapeJson(e.getClass().getSimpleName() + ": " + e.getMessage()) + "\"}");
+                return;
+            }
+            send(sender, "{\"ok\":true,\"entityId\":" + entityId + ",\"isDead\":" + rocket.isDead + "}");
+            return;
+        }
+        if ("drain-fuel".equalsIgnoreCase(args[0]) && args.length >= 2) {
+            // TASK-07 Phase 5: zero out every fuel type on the rocket.
+            // Companion to the (already existing) rocket fuel probe which
+            // reads amounts; this is the write side.
+            int entityId = parseIntOr(args[1], Integer.MIN_VALUE);
+            EntityRocket rocket = findRocket(server, entityId);
+            if (rocket == null) {
+                send(sender, "{\"error\":\"rocket not found\",\"entityId\":" + entityId + "}");
+                return;
+            }
+            for (zmaster587.advancedRocketry.api.fuel.FuelRegistry.FuelType ft :
+                    zmaster587.advancedRocketry.api.fuel.FuelRegistry.FuelType.values()) {
+                rocket.setFuelAmount(ft, 0);
+            }
+            send(sender, "{\"ok\":true,\"entityId\":" + entityId + "}");
+            return;
+        }
+        if ("event-counts-full".equalsIgnoreCase(args[0])) {
+            // TASK-07 Phase 4: extended counter dump including landed + deOrbiting.
+            RocketEventRecorder.ensureRegistered();
+            send(sender, "{\"launch\":" + RocketEventRecorder.launchCount
+                    + ",\"preLaunch\":" + RocketEventRecorder.preLaunchCount
+                    + ",\"orbitReached\":" + RocketEventRecorder.orbitReachedCount
+                    + ",\"dismantle\":" + RocketEventRecorder.dismantleCount
+                    + ",\"landed\":" + RocketEventRecorder.landedCount
+                    + ",\"deOrbiting\":" + RocketEventRecorder.deOrbitingCount + "}");
+            return;
+        }
+        send(sender, "{\"error\":\"unknown rocket subcommand — try list|info <id> | storage-inventory <id> | storage-fluid <id> | find-by-uuid <uuid> | force-dest-dim <id> <dim> | tick <id> [n] | set-state <id> k=v... | explode <id> | drain-fuel <id> | event-counts-full\"}");
     }
 
     /** {@code /artest rocket assemble <dim> <x> <y> <z>} — synchronously assembles
@@ -6289,6 +6516,158 @@ public class TestProbeCommand extends CommandBase {
         send(sender, "{\"error\":\"unknown event subcommand — try tick-counter | handlers | dim-side-effects <dim> | transitions\"}");
     }
 
+    // §5.20 Chunk-anchor probe -----------------------------------------------
+    //
+    // TASK-07 Phase 4: server-side tests of entity-tick paths (descent,
+    // landing) need the rocket's chunk to stay loaded so the natural
+    // server tick loop drives EntityRocket.onUpdate in its production
+    // context (real neighbour-chunk visibility, real collision data,
+    // real packet dispatch). The headless harness has no player, so by
+    // default the chunk unloads after a few seconds of idle. We hold
+    // an AR-namespaced ForgeChunkManager ticket per (dim, chunkX, chunkZ)
+    // to keep them hot. AdvancedRocketry already registers a
+    // LoadingCallback in WorldEvents (mod-side, persistent), so
+    // requesting tickets here piggy-backs on that registration.
+    private static final java.util.Map<String, net.minecraftforge.common.ForgeChunkManager.Ticket>
+            CHUNK_TICKETS = new java.util.concurrent.ConcurrentHashMap<>();
+
+    private static String ticketKey(int dim, int cx, int cz) {
+        return dim + ":" + cx + ":" + cz;
+    }
+
+    private void handleChunk(MinecraftServer server, ICommandSender sender, String[] args) {
+        if (args.length == 0) {
+            send(sender, "{\"error\":\"usage: /artest chunk forceload <dim> <cx> <cz> | release <dim> <cx> <cz> | release-all | list\"}");
+            return;
+        }
+        String sub = args[0].toLowerCase(java.util.Locale.ROOT);
+        if ("forceload".equals(sub) && args.length >= 4) {
+            int dim = parseIntOr(args[1], Integer.MIN_VALUE);
+            int cx = parseIntOr(args[2], Integer.MIN_VALUE);
+            int cz = parseIntOr(args[3], Integer.MIN_VALUE);
+            // Bring the dimension up if it isn't already — required for
+            // tests that force-load chunks in a non-overworld dim that
+            // would otherwise be unloaded between tests in the shared
+            // harness.
+            if (net.minecraftforge.common.DimensionManager.isDimensionRegistered(dim)) {
+                net.minecraftforge.common.DimensionManager.keepDimensionLoaded(dim, true);
+                if (net.minecraftforge.common.DimensionManager.getWorld(dim) == null) {
+                    net.minecraftforge.common.DimensionManager.initDimension(dim);
+                }
+            }
+            net.minecraft.world.WorldServer world = server.getWorld(dim);
+            if (world == null) {
+                send(sender, "{\"error\":\"world not loaded\",\"dim\":" + dim + "}");
+                return;
+            }
+            String key = ticketKey(dim, cx, cz);
+            net.minecraftforge.common.ForgeChunkManager.Ticket existing = CHUNK_TICKETS.get(key);
+            if (existing != null) {
+                send(sender, "{\"ok\":true,\"already\":true,\"dim\":" + dim
+                        + ",\"cx\":" + cx + ",\"cz\":" + cz + "}");
+                return;
+            }
+            net.minecraftforge.common.ForgeChunkManager.Ticket ticket =
+                    net.minecraftforge.common.ForgeChunkManager.requestTicket(
+                            zmaster587.advancedRocketry.AdvancedRocketry.instance, world,
+                            net.minecraftforge.common.ForgeChunkManager.Type.NORMAL);
+            if (ticket == null) {
+                send(sender, "{\"error\":\"could not allocate chunk ticket (mod quota exhausted?)\"}");
+                return;
+            }
+            net.minecraftforge.common.ForgeChunkManager.forceChunk(ticket,
+                    new net.minecraft.util.math.ChunkPos(cx, cz));
+            CHUNK_TICKETS.put(key, ticket);
+            send(sender, "{\"ok\":true,\"dim\":" + dim
+                    + ",\"cx\":" + cx + ",\"cz\":" + cz + "}");
+            return;
+        }
+        if ("release".equals(sub) && args.length >= 4) {
+            int dim = parseIntOr(args[1], Integer.MIN_VALUE);
+            int cx = parseIntOr(args[2], Integer.MIN_VALUE);
+            int cz = parseIntOr(args[3], Integer.MIN_VALUE);
+            String key = ticketKey(dim, cx, cz);
+            net.minecraftforge.common.ForgeChunkManager.Ticket t = CHUNK_TICKETS.remove(key);
+            if (t != null) {
+                net.minecraftforge.common.ForgeChunkManager.releaseTicket(t);
+                send(sender, "{\"ok\":true,\"released\":\"" + key + "\"}");
+            } else {
+                send(sender, "{\"ok\":true,\"released\":\"none\"}");
+            }
+            return;
+        }
+        if ("release-all".equals(sub)) {
+            int n = CHUNK_TICKETS.size();
+            for (net.minecraftforge.common.ForgeChunkManager.Ticket t : CHUNK_TICKETS.values()) {
+                try { net.minecraftforge.common.ForgeChunkManager.releaseTicket(t); }
+                catch (RuntimeException ignored) {}
+            }
+            CHUNK_TICKETS.clear();
+            send(sender, "{\"ok\":true,\"released\":" + n + "}");
+            return;
+        }
+        if ("list".equals(sub)) {
+            StringBuilder sb = new StringBuilder("{\"tickets\":[");
+            boolean first = true;
+            for (String k : CHUNK_TICKETS.keySet()) {
+                if (!first) sb.append(',');
+                first = false;
+                sb.append("\"").append(k).append("\"");
+            }
+            sb.append("]}");
+            send(sender, sb.toString());
+            return;
+        }
+        send(sender, "{\"error\":\"unknown chunk subcommand\"}");
+    }
+
+    // §5.21 Server tick-wait probe -------------------------------------------
+    //
+    // TASK-07 Phase 4: companion to the chunk-anchor probe. Once the
+    // rocket's chunk is force-loaded, we need to let the server's
+    // natural tick loop run N times so EntityRocket.onUpdate is invoked
+    // in its production context (rather than driving it synthetically
+    // via /artest rocket tick). This probe polls
+    // world.getTotalWorldTime() until the configured number of ticks
+    // has elapsed, sleeping 50ms between polls.
+    private void handleServer(MinecraftServer server, ICommandSender sender, String[] args) {
+        if (args.length >= 3 && "wait".equalsIgnoreCase(args[0])) {
+            int dim = parseIntOr(args[1], Integer.MIN_VALUE);
+            int ticksToWait = parseIntOr(args[2], 0);
+            if (ticksToWait <= 0 || ticksToWait > 6000) {
+                send(sender, "{\"error\":\"ticksToWait must be in (0, 6000]\"}");
+                return;
+            }
+            net.minecraft.world.WorldServer world = server.getWorld(dim);
+            if (world == null) {
+                send(sender, "{\"error\":\"world not loaded\",\"dim\":" + dim + "}");
+                return;
+            }
+            long start = world.getTotalWorldTime();
+            long deadline = start + ticksToWait;
+            // Wall-clock guard so a stuck/slow server can't hang the test
+            // harness: budget 200ms per requested tick, capped at 30 s.
+            // The harness's per-command marker timeout is ~60 s so we
+            // stay well clear.
+            long wallStart = System.currentTimeMillis();
+            long wallBudgetMs = Math.min(30_000L, Math.max(1000L, ticksToWait * 200L));
+            while (world.getTotalWorldTime() < deadline) {
+                if (System.currentTimeMillis() - wallStart > wallBudgetMs) break;
+                try { Thread.sleep(25L); }
+                catch (InterruptedException ie) { Thread.currentThread().interrupt(); break; }
+            }
+            long end = world.getTotalWorldTime();
+            send(sender, "{\"ok\":true,\"dim\":" + dim
+                    + ",\"startTick\":" + start
+                    + ",\"endTick\":" + end
+                    + ",\"elapsedTicks\":" + (end - start)
+                    + ",\"requested\":" + ticksToWait
+                    + ",\"wallMs\":" + (System.currentTimeMillis() - wallStart) + "}");
+            return;
+        }
+        send(sender, "{\"error\":\"usage: /artest server wait <dim> <ticks>\"}");
+    }
+
     /** True if the {@code <slashed>.class} resource is reachable via the
      *  current thread's context classloader. Used to verify the presence of
      *  client-only event handler classes on dedicated server without
@@ -6312,6 +6691,8 @@ public class TestProbeCommand extends CommandBase {
         public static volatile int preLaunchCount = 0;
         public static volatile int orbitReachedCount = 0;
         public static volatile int dismantleCount = 0;
+        public static volatile int landedCount = 0;
+        public static volatile int deOrbitingCount = 0;
 
         private static volatile boolean registered = false;
 
@@ -6340,6 +6721,16 @@ public class TestProbeCommand extends CommandBase {
         public void onDismantle(
                 zmaster587.advancedRocketry.api.RocketEvent.RocketDismantleEvent e) {
             dismantleCount++;
+        }
+        @net.minecraftforge.fml.common.eventhandler.SubscribeEvent
+        public void onLanded(
+                zmaster587.advancedRocketry.api.RocketEvent.RocketLandedEvent e) {
+            landedCount++;
+        }
+        @net.minecraftforge.fml.common.eventhandler.SubscribeEvent
+        public void onDeOrbiting(
+                zmaster587.advancedRocketry.api.RocketEvent.RocketDeOrbitingEvent e) {
+            deOrbitingCount++;
         }
     }
 }

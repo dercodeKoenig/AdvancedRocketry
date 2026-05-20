@@ -14,6 +14,8 @@ testServer wall time: **8m 27s** (50 % faster than pre-B2).
 | TASK-01 | SMART per-scenario depth coverage | ✅ |
 | TASK-02 | Functional coverage expansion (Phases 0–8, 11) | ✅ |
 | TASK-03 | Test depth deepening + harness consolidation (A1/A2/A4/A5/A6/A7 + B1/B2/B4/C) | ✅ partial — A2 tail + B3 deferred to TASK-10; A3 reframed as testClient e2e (TASK-10b) |
+| TASK-04 | Multiblock machine depth (Warp / Laser Drill / Elevator / Black Hole / 12 multiblocks) | ✅ |
+| TASK-07 | Rocket flight cycle beyond launch (orbit / dim-transition / descent / landing / dismantle / failure modes) | ✅ |
 
 ## Backlog — prioritised
 
@@ -22,16 +24,11 @@ ship silent gameplay breakage if untouched code regresses.
 
 ### 🔴 P0 — schedule next
 
-1. **TASK-04** — Multiblock machine depth (Warp / Laser Drill /
-   Elevator / Black Hole / Space Laser). ~18-22 h, 5-6 sessions.
-   These are late-game tiles, all currently smoke-only. Highest
-   gameplay impact per hour invested.
-2. **TASK-07** — Rocket flight cycle beyond launch (orbit / descent /
-   landing / dismantle). ~14-17 h. Closes the main gameplay loop;
-   TASK-03 A1 only got us to `isInFlight=true`.
-3. **TASK-08** — ASM coremod safety net. ~13-18 h. Hardest to write,
+1. **TASK-08** — ASM coremod safety net. ~13-18 h. Hardest to write,
    highest single-point-of-failure risk. Schedule when team has
    bandwidth for the bytecode work.
+
+*(TASK-04 multiblock depth and TASK-07 flight cycle: closed — see Done table.)*
 
 ### 🟡 P1 — broad surface, medium impact
 

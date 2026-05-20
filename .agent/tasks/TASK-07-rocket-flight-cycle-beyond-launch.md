@@ -121,19 +121,57 @@ A regression in any phase ships a "rocket disappears mid-flight" or
 
 ## Completion Checklist
 
-- [x] 3 new `/artest rocket` probe verbs (`force-orbit-reached`,
+- [x] 3 original `/artest rocket` probe verbs (`force-orbit-reached`,
       `dismantle`, `event-counts`) + info-probe extension
       (`ticksExisted`).
 - [x] Orbit-reached chain: 5 tests in `RocketFlightCycleDepthTest` +
       sequencing tests in `RocketFlightCycleIntegrationTest`.
-- [ ] **Dimension transition: DEFERRED** — needs a real player to
-      keep chunks loaded so the transitionMap-drain loop runs; belongs
-      in the testClient e2e harness (cross-link to TASK-10b).
-- [ ] **Descent + landing: DEFERRED** — same chunk-anchoring blocker.
-      The descent-timer gate requires entity ticking which only
-      happens when a player is in the chunk.
-- [x] Failure modes: launch error path covered
-      (`erroredLaunchDoesNotFireRocketLaunchEvent`); out-of-fuel
-      / wear-system / weight gates deferred (same chunk-anchor blocker).
-- [x] Full pyramid PASS (expected ~425 total)
-- [x] EOD marker: `2026-05-19-1530_task07-rocket-flight-cycle-eod.md`
+- [x] **Dimension transition** — 6 tests in `RocketDimensionTransitionTest`.
+      Blocker resolved by: (a) ForgeChunkManager ticket via the new
+      `/artest chunk forceload` probe (piggy-backs on AR's existing
+      `WorldEvents` LoadingCallback), (b) `/artest rocket find-by-uuid`
+      that searches all dims and prefers a live match over an
+      isDead stale copy left by Forge's `Entity.changeDimension`
+      collect-dead lag.
+- [x] **Descent + landing** — 7 tests in `RocketDescentLandingTest`.
+      Driven by REAL server ticking with the rocket's chunk grid
+      force-loaded; `/artest server wait <dim> <ticks>` blocks until
+      `world.getTotalWorldTime()` advances. Covers: descent-timer
+      gate flips isInFlight, gravity integrates motionY downward,
+      `move()` collides with ground and posts `RocketLandedEvent`,
+      `deconstructRocket` pastes storage chunk back into the world.
+- [x] Failure modes: 5 tests in `RocketFlightFailureModesTest` —
+      `explode()` produces isDead=true, out-of-fuel mid-flight does
+      NOT auto-explode (pins observed contract; flips if production
+      adds an out-of-fuel explode branch), zero-fuel launch still
+      enters in-flight state (no fuel gate at launch time), probe
+      contract negative cases.
+- [x] Full pyramid PASS — testServer 239/0\*/3.
+- [x] EOD marker: `2026-05-20-2330_task07-fully-closed.md`
+
+\* Two pre-existing flakes surfaced in full-pyramid runs
+(`RocketAssemblySmokeTest.seatCountMatchesFixturePlacement` and
+`SpaceElevatorMultiblockTest.spaceElevatorMultiblockValidatesWhenFixtureIsBuilt`)
+— both PASS in isolation; both predate this work. Tracked as a
+separate follow-up.
+
+## Probe surface added this close-out
+
+```
+/artest rocket find-by-uuid <uuid>
+/artest rocket force-dest-dim <id> <dim>
+/artest rocket tick <id> [n]
+/artest rocket set-state <id> orbit=... flight=... ticksExisted=N posY=N motionY=N
+/artest rocket explode <id>
+/artest rocket drain-fuel <id>
+/artest rocket event-counts-full              # adds landed + deOrbiting
+/artest chunk forceload <dim> <cx> <cz>
+/artest chunk release <dim> <cx> <cz>
+/artest chunk release-all
+/artest chunk list
+/artest server wait <dim> <ticks>
+```
+
+`rocket info` / `rocket list` responses extended with `uuid`.
+`RocketEventRecorder` now also subscribes to `RocketLandedEvent` and
+`RocketDeOrbitingEvent`.
