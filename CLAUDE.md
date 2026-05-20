@@ -18,6 +18,12 @@ to avoid breaking saves and dependent mods.
 
 ---
 
+## Language
+
+- **Always respond to the user in Russian** regardless of the conversation language. Code, identifiers, commit messages, and inline code comments stay in English. User-facing prose (chat replies, EOD markers, summaries) is in Russian.
+
+---
+
 ## Navigator Quick Start
 
 **Every session begins with**:

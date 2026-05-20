@@ -140,6 +140,67 @@ end-to-end (blocked by commented-out pipe blocks).
       recipe — ~1 h per small structure once libVulpes char-mapping
       is in hand.
 
+      **2026-05-20 session**: Observatory + Railgun shipped (+7 tests).
+      EOD marker: `2026-05-20-1430_task04-observatory-railgun.md`.
+      - `Observatory` — `/artest fixture multiblock observatory` + 4
+        tests (validates / lens-removed / motor-removed / air-chamber-
+        filled). 5×5×5 sparse with strict Blocks.AIR cells.
+      - `Railgun` — `/artest fixture multiblock railgun` + 3 tests
+        (validates / core-column-broken / transition-layer-broken).
+        11×9×9 with two distinct cell patterns (simple coilCopper
+        cross y=0..8 + special steel/titanium transition y=9 + dish
+        y=10).
+      New helper `firstOreDictBlockState(name)` resolves String
+      structure entries (`coilCopper`, `blockSteel`, `blockTitanium`,
+      `slab`) via OreDictionary — these blocks are dynamically
+      registered by libVulpes MaterialRegistry, not by static
+      registry name. Reusable for any future OreDict-keyed multiblock.
+
+      **2026-05-20 follow-on (autonomous)**: WarpCore + Gravity +
+      PlanetAnalyser + SpaceElevator shipped (+12 tests). EOD marker:
+      `2026-05-20-1730_task04-warp-gravity-planet-elevator.md`.
+      - `WarpCore` — 3×3×3 with `blockWarpCoreRim` / `blockWarpCoreCore`
+        OreDict entries + input hatch.
+      - `AreaGravityController` — 2×3×3, smallest AR multiblock (6 cells).
+      - `PlanetAnalyser` — 2×2×3, pins the AR-specific `'D'` data-hatch
+        char-mapping.
+      - `SpaceElevator` — 1×10×9 disc with motor + dual flanking 'P' plugs.
+      Recipe note: invalidation tests for multiblocks containing motors /
+      power plugs MUST use the no-baseline pattern (break BEFORE first
+      try-complete) — once `attemptCompleteStructure` succeeds, libVulpes
+      swaps footprint blocks to hidden-multiblock variants whose
+      `breakBlock` path NPEs through TE-aware deconstruct hooks.
+
+      Cumulative TASK-04 post-assembly: 7 multiblocks × ~3 tests = 21
+      behavioural tests. Remaining: TileMicrowaveReciever (1×5×5, only
+      smoke today); TileAtmosphereTerraformer + TileOrbitalLaserDrill
+      (massive, deferred to standalone sessions per original plan).
+
+      **Continued autonomous run**: MicrowaveReceiver + SolarArray
+      shipped (+6 tests). Final pyramid: **213 tests / 0 failures /
+      0 errors / 3 skipped**.
+      - `MicrowaveReceiver` — promoted from smoke to depth. 5×5 solar-
+        panel ring around controller centre.
+      - `SolarArray` — 22-row sparse structure. Pragmatic note: the
+        pure-AIR-wildcard approach (which Solar's
+        `getAllowableWildCardBlocks` claims to support) failed at
+        `attemptCompleteStructure`; explicit panels work. Worth a
+        follow-up investigation in a separate session.
+
+      **Cumulative TASK-04 post-assembly**: 9 multiblocks × ~3 tests
+      = 27 behavioural tests across BHG, Beacon, Observatory, Railgun,
+      WarpCore, GravityController, PlanetAnalyser, SpaceElevator,
+      MicrowaveReceiver, SolarArray. (Plus pre-assembly contract for
+      ALL 7 controllers in MultiblockControllerPreAssemblyTest, and
+      WarpControllerDepthTest's 7 server tests.)
+
+      The original task plan's small/medium multiblock surface area
+      is now covered. Remaining items are:
+      - **Massive** (own session each, per plan): TileAtmosphereTerraformer (17×17×??), TileOrbitalLaserDrill (~500 cells).
+      - **Phase 1 follow** (deferred): WarpController fuel-trigger-moves-station depth (needs full station-side fixture).
+      - **Phase 2** (deferred): TileOrbitalLaserDrill behavioural tests (energy-in → output-produced).
+      - **Phase 6 (cross-cutting validation)**: ✅ full pyramid PASS; EOD markers consolidated.
+
   Research note (2026-05-19, autonomous session): the libVulpes
   structure-block registry names ARE recoverable from the deobf JAR:
   - `libvulpes:structureMachine` (basic structure block)

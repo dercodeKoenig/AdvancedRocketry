@@ -3442,7 +3442,79 @@ public class TestProbeCommand extends CommandBase {
                     parseIntOr(args[5], 0));
             return;
         }
-        send(sender, "{\"error\":\"unknown fixture subcommand — try rocket <dim> <x> <y> <z> | machine cutting <dim> <x> <y> <z> | multiblock blackhole-gen|beacon <dim> <x> <y> <z>\"}");
+        if (args.length >= 6 && "multiblock".equalsIgnoreCase(args[0])
+                && "observatory".equalsIgnoreCase(args[1])) {
+            handleFixtureObservatory(server, sender,
+                    parseIntOr(args[2], Integer.MIN_VALUE),
+                    parseIntOr(args[3], 0),
+                    parseIntOr(args[4], 64),
+                    parseIntOr(args[5], 0));
+            return;
+        }
+        if (args.length >= 6 && "multiblock".equalsIgnoreCase(args[0])
+                && "railgun".equalsIgnoreCase(args[1])) {
+            handleFixtureRailgun(server, sender,
+                    parseIntOr(args[2], Integer.MIN_VALUE),
+                    parseIntOr(args[3], 0),
+                    parseIntOr(args[4], 64),
+                    parseIntOr(args[5], 0));
+            return;
+        }
+        if (args.length >= 6 && "multiblock".equalsIgnoreCase(args[0])
+                && "warp-core".equalsIgnoreCase(args[1])) {
+            handleFixtureWarpCore(server, sender,
+                    parseIntOr(args[2], Integer.MIN_VALUE),
+                    parseIntOr(args[3], 0),
+                    parseIntOr(args[4], 64),
+                    parseIntOr(args[5], 0));
+            return;
+        }
+        if (args.length >= 6 && "multiblock".equalsIgnoreCase(args[0])
+                && "gravity-controller".equalsIgnoreCase(args[1])) {
+            handleFixtureGravityController(server, sender,
+                    parseIntOr(args[2], Integer.MIN_VALUE),
+                    parseIntOr(args[3], 0),
+                    parseIntOr(args[4], 64),
+                    parseIntOr(args[5], 0));
+            return;
+        }
+        if (args.length >= 6 && "multiblock".equalsIgnoreCase(args[0])
+                && "planet-analyser".equalsIgnoreCase(args[1])) {
+            handleFixturePlanetAnalyser(server, sender,
+                    parseIntOr(args[2], Integer.MIN_VALUE),
+                    parseIntOr(args[3], 0),
+                    parseIntOr(args[4], 64),
+                    parseIntOr(args[5], 0));
+            return;
+        }
+        if (args.length >= 6 && "multiblock".equalsIgnoreCase(args[0])
+                && "space-elevator".equalsIgnoreCase(args[1])) {
+            handleFixtureSpaceElevator(server, sender,
+                    parseIntOr(args[2], Integer.MIN_VALUE),
+                    parseIntOr(args[3], 0),
+                    parseIntOr(args[4], 64),
+                    parseIntOr(args[5], 0));
+            return;
+        }
+        if (args.length >= 6 && "multiblock".equalsIgnoreCase(args[0])
+                && "microwave-receiver".equalsIgnoreCase(args[1])) {
+            handleFixtureMicrowaveReceiver(server, sender,
+                    parseIntOr(args[2], Integer.MIN_VALUE),
+                    parseIntOr(args[3], 0),
+                    parseIntOr(args[4], 64),
+                    parseIntOr(args[5], 0));
+            return;
+        }
+        if (args.length >= 6 && "multiblock".equalsIgnoreCase(args[0])
+                && "solar-array".equalsIgnoreCase(args[1])) {
+            handleFixtureSolarArray(server, sender,
+                    parseIntOr(args[2], Integer.MIN_VALUE),
+                    parseIntOr(args[3], 0),
+                    parseIntOr(args[4], 64),
+                    parseIntOr(args[5], 0));
+            return;
+        }
+        send(sender, "{\"error\":\"unknown fixture subcommand — try rocket <dim> <x> <y> <z> | machine cutting <dim> <x> <y> <z> | multiblock blackhole-gen|beacon|observatory|railgun|warp-core|gravity-controller|planet-analyser|space-elevator|microwave-receiver|solar-array <dim> <x> <y> <z>\"}");
     }
 
     /**
@@ -3532,6 +3604,974 @@ public class TestProbeCommand extends CommandBase {
         info.put("ok", true);
         info.put("controllerPos", new int[]{cx, cy, cz});
         info.put("tipPos",        new int[]{cx, cy + 4, cz + 1});
+        send(sender, jsonMap(info));
+    }
+
+    /**
+     * Builds a complete observatory multiblock with controller at (cx, cy, cz)
+     * NORTH-facing. Per {@code TileObservatory.structure} — a 5×5×5 array
+     * iterated [y][z][x] with controller 'c' at structure[3][0][2] (offset
+     * x=2, y=3, z=0). For a NORTH-facing controller (frontZ=-1, frontX=0)
+     * the libVulpes position formula simplifies to:
+     * <pre>
+     *   globalX = cx + 2 - x
+     *   globalY = cy - y + 3
+     *   globalZ = cz + z
+     * </pre>
+     *
+     * <p>Layout (top → bottom):</p>
+     * <ul>
+     *   <li>y=0 (globalY = cy+3): 3×3 cap of {@code blockStructureBlock}
+     *       at z=1..3, x=1..3, with a {@code Blocks.GLASS} lens cell at z=1, x=2.</li>
+     *   <li>y=1 (globalY = cy+2): same 3×3 ring, lens cell at z=2, x=2.</li>
+     *   <li>y=2 (globalY = cy+1): hollow chamber — {@code blockStructureBlock}
+     *       perimeter at z=0/z=4 (x=1..3) and x=0/x=4 (z=1..3), AIR inside,
+     *       lens cell at z=3, x=2.</li>
+     *   <li>y=3 (globalY = cy, controller layer): controller at z=0, x=2;
+     *       wildcards ({@code IRON_BLOCK}, accepted via Observatory's
+     *       {@code getAllowableWildCardBlocks}) at the outer ring; 3×3
+     *       {@code blockStructureBlock} grid at z=1..3, x=1..3.</li>
+     *   <li>y=4 (globalY = cy-1, base): outer ring of {@code IRON_BLOCK}
+     *       wildcards; {@code blockStructureTower} 3×3 at z=1..3, x=1..3;
+     *       {@code libvulpes:motor} at z=2, x=2 (motors slot).</li>
+     * </ul>
+     *
+     * <p>Every {@code Blocks.AIR} cell in y=2 must be air at validation time,
+     * so the full 5×5×5 footprint is pre-cleared to air before placement.</p>
+     */
+    private void handleFixtureObservatory(MinecraftServer server, ICommandSender sender,
+                                           int dim, int cx, int cy, int cz) {
+        net.minecraft.world.WorldServer world = server.getWorld(dim);
+        if (world == null) {
+            send(sender, "{\"error\":\"world not loaded\",\"dim\":" + dim + "}");
+            return;
+        }
+
+        net.minecraft.block.Block controller =
+                ForgeRegistries.BLOCKS.getValue(new ResourceLocation("advancedrocketry", "observatory"));
+        net.minecraft.block.Block structureBlock =
+                ForgeRegistries.BLOCKS.getValue(new ResourceLocation("libvulpes", "structuremachine"));
+        net.minecraft.block.Block structureTower =
+                ForgeRegistries.BLOCKS.getValue(new ResourceLocation("advancedrocketry", "structureTower"));
+        net.minecraft.block.Block motor =
+                ForgeRegistries.BLOCKS.getValue(new ResourceLocation("libvulpes", "motor"));
+
+        if (controller == null || structureBlock == null
+                || structureTower == null || motor == null) {
+            send(sender, "{\"error\":\"missing block(s)\",\"controller\":"
+                    + (controller != null) + ",\"structureBlock\":" + (structureBlock != null)
+                    + ",\"structureTower\":" + (structureTower != null)
+                    + ",\"motor\":" + (motor != null) + "}");
+            return;
+        }
+
+        net.minecraft.block.state.IBlockState controllerState = controller.getDefaultState();
+        try {
+            controllerState = controllerState.withProperty(
+                    zmaster587.libVulpes.block.RotatableBlock.FACING,
+                    net.minecraft.util.EnumFacing.NORTH);
+        } catch (IllegalArgumentException ignored) {
+            // Property absent — fall back to default.
+        }
+
+        net.minecraft.block.state.IBlockState struct = structureBlock.getDefaultState();
+        net.minecraft.block.state.IBlockState tower = structureTower.getDefaultState();
+        net.minecraft.block.state.IBlockState motorState = motor.getDefaultState();
+        net.minecraft.block.state.IBlockState iron = net.minecraft.init.Blocks.IRON_BLOCK.getDefaultState();
+        net.minecraft.block.state.IBlockState glass = net.minecraft.init.Blocks.GLASS.getDefaultState();
+
+        // Pre-clear the full 5×5×5 footprint to air.
+        for (int gx = cx - 2; gx <= cx + 2; gx++) {
+            for (int gy = cy - 1; gy <= cy + 3; gy++) {
+                for (int gz = cz; gz <= cz + 4; gz++) {
+                    world.setBlockToAir(new BlockPos(gx, gy, gz));
+                }
+            }
+        }
+
+        // y=0 cap, globalY = cy + 3. 3×3 of struct, lens at z=1 x=2.
+        for (int z = 1; z <= 3; z++) {
+            for (int x = 1; x <= 3; x++) {
+                BlockPos p = new BlockPos(cx + 2 - x, cy + 3, cz + z);
+                world.setBlockState(p, (z == 1 && x == 2) ? glass : struct);
+            }
+        }
+
+        // y=1, globalY = cy + 2. 3×3 of struct, lens at z=2 x=2.
+        for (int z = 1; z <= 3; z++) {
+            for (int x = 1; x <= 3; x++) {
+                BlockPos p = new BlockPos(cx + 2 - x, cy + 2, cz + z);
+                world.setBlockState(p, (z == 2 && x == 2) ? glass : struct);
+            }
+        }
+
+        // y=2, globalY = cy + 1. Hollow chamber + lens at z=3 x=2.
+        for (int x = 1; x <= 3; x++) {
+            world.setBlockState(new BlockPos(cx + 2 - x, cy + 1, cz), struct);
+            world.setBlockState(new BlockPos(cx + 2 - x, cy + 1, cz + 4), struct);
+        }
+        for (int z = 1; z <= 3; z++) {
+            world.setBlockState(new BlockPos(cx + 2,     cy + 1, cz + z), struct);
+            world.setBlockState(new BlockPos(cx + 2 - 4, cy + 1, cz + z), struct);
+        }
+        world.setBlockState(new BlockPos(cx, cy + 1, cz + 3), glass);  // central lens
+
+        // y=3 controller layer, globalY = cy.
+        BlockPos controllerPos = new BlockPos(cx, cy, cz);
+        world.setBlockState(controllerPos, controllerState);
+        world.setBlockState(new BlockPos(cx + 2 - 1, cy, cz), iron);
+        world.setBlockState(new BlockPos(cx + 2 - 3, cy, cz), iron);
+        for (int z = 1; z <= 3; z++) {
+            world.setBlockState(new BlockPos(cx + 2,     cy, cz + z), iron);
+            world.setBlockState(new BlockPos(cx + 2 - 4, cy, cz + z), iron);
+            for (int x = 1; x <= 3; x++) {
+                world.setBlockState(new BlockPos(cx + 2 - x, cy, cz + z), struct);
+            }
+        }
+        for (int x = 1; x <= 3; x++) {
+            world.setBlockState(new BlockPos(cx + 2 - x, cy, cz + 4), iron);
+        }
+
+        // y=4 base, globalY = cy - 1.
+        for (int x = 1; x <= 3; x++) {
+            world.setBlockState(new BlockPos(cx + 2 - x, cy - 1, cz), iron);
+            world.setBlockState(new BlockPos(cx + 2 - x, cy - 1, cz + 4), iron);
+        }
+        for (int z = 1; z <= 3; z++) {
+            world.setBlockState(new BlockPos(cx + 2,     cy - 1, cz + z), iron);
+            world.setBlockState(new BlockPos(cx + 2 - 4, cy - 1, cz + z), iron);
+            for (int x = 1; x <= 3; x++) {
+                BlockPos p = new BlockPos(cx + 2 - x, cy - 1, cz + z);
+                world.setBlockState(p, (z == 2 && x == 2) ? motorState : tower);
+            }
+        }
+
+        Map<String, Object> info = new LinkedHashMap<>();
+        info.put("ok", true);
+        info.put("controllerPos", new int[]{cx, cy, cz});
+        info.put("lensCentre",    new int[]{cx, cy + 1, cz + 3});
+        info.put("motorPos",      new int[]{cx, cy - 1, cz + 2});
+        send(sender, jsonMap(info));
+    }
+
+    /**
+     * Builds a complete railgun multiblock with controller at (cx, cy, cz)
+     * NORTH-facing. Per {@code TileRailgun.structure} — an 11×9×9 array
+     * iterated [y][z][x] with controller 'c' at structure[10][1][4] (offset
+     * x=4, y=10, z=1). For a NORTH-facing controller the position formula
+     * simplifies to:
+     * <pre>
+     *   globalX = cx + 4 - x
+     *   globalY = cy - y + 10
+     *   globalZ = cz - 1 + z
+     * </pre>
+     *
+     * <p>The structure is mostly empty (sparse). The non-null cells are:</p>
+     * <ul>
+     *   <li>y=0..9 (globalY = cy+10..cy+1): a {@code coilCopper} cross
+     *       around an {@code blockStructureBlock} core column at z=4±1, x=4±1
+     *       (5 cells per layer × 10 layers).</li>
+     *   <li>y=10 (globalY = cy, bottom slab): a full dish — blockSteel
+     *       corner ring + {@code slab} (vanilla stone slab) outer ring +
+     *       {@code blockAdvStructureBlock} middle ring + {@code blockTitanium}
+     *       inner ring + {@code blockSteel} caps + a single
+     *       {@code blockAdvancedMotor} (motors slot) at z=4, x=4 in inner ring;
+     *       the controller at z=1, x=4 with input/output hatches at z=1
+     *       x=3/x=5, power-input plugs at z=7, x=3/4/5.</li>
+     * </ul>
+     *
+     * <p>The bottom layer is the only one that requires the AR / libVulpes
+     * advStructure / blockSteel / blockTitanium / slab mix; the upper 10
+     * layers are pure coilCopper + structureBlock columns.</p>
+     */
+    private void handleFixtureRailgun(MinecraftServer server, ICommandSender sender,
+                                       int dim, int cx, int cy, int cz) {
+        net.minecraft.world.WorldServer world = server.getWorld(dim);
+        if (world == null) {
+            send(sender, "{\"error\":\"world not loaded\",\"dim\":" + dim + "}");
+            return;
+        }
+
+        net.minecraft.block.Block controller =
+                ForgeRegistries.BLOCKS.getValue(new ResourceLocation("advancedrocketry", "railgun"));
+        net.minecraft.block.Block structureBlock =
+                ForgeRegistries.BLOCKS.getValue(new ResourceLocation("libvulpes", "structuremachine"));
+        net.minecraft.block.Block advStructure =
+                ForgeRegistries.BLOCKS.getValue(new ResourceLocation("libvulpes", "advstructuremachine"));
+        net.minecraft.block.Block motorAdvanced =
+                ForgeRegistries.BLOCKS.getValue(new ResourceLocation("libvulpes", "advancedMotor"));
+        net.minecraft.block.Block hatch =
+                ForgeRegistries.BLOCKS.getValue(new ResourceLocation("libvulpes", "hatch"));
+        net.minecraft.block.Block powerInput =
+                ForgeRegistries.BLOCKS.getValue(new ResourceLocation("libvulpes", "forgepowerinput"));
+
+        // The Railgun structure references several blocks through the OreDictionary
+        // ("coilCopper", "blockSteel", "blockTitanium", "slab"). These are
+        // registered dynamically by MaterialRegistry + AR's setup, so look them
+        // up at runtime — the registry names of the underlying BlockOre tiles
+        // ("metal0", "coil0", etc.) and their meta values depend on the order
+        // materials are inserted into the registry.
+        net.minecraft.block.state.IBlockState coil = firstOreDictBlockState("coilCopper");
+        net.minecraft.block.state.IBlockState steel = firstOreDictBlockState("blockSteel");
+        net.minecraft.block.state.IBlockState titanium = firstOreDictBlockState("blockTitanium");
+        net.minecraft.block.state.IBlockState slab = firstOreDictBlockState("slab");
+
+        if (controller == null || structureBlock == null
+                || advStructure == null || motorAdvanced == null
+                || hatch == null || powerInput == null
+                || coil == null || steel == null || titanium == null || slab == null) {
+            send(sender, "{\"error\":\"missing block(s)\""
+                    + ",\"controller\":" + (controller != null)
+                    + ",\"coilCopper\":" + (coil != null)
+                    + ",\"structureBlock\":" + (structureBlock != null)
+                    + ",\"advStructure\":" + (advStructure != null)
+                    + ",\"blockSteel\":" + (steel != null)
+                    + ",\"blockTitanium\":" + (titanium != null)
+                    + ",\"slab\":" + (slab != null)
+                    + ",\"motorAdvanced\":" + (motorAdvanced != null)
+                    + ",\"hatch\":" + (hatch != null)
+                    + ",\"powerInput\":" + (powerInput != null) + "}");
+            return;
+        }
+
+        net.minecraft.block.state.IBlockState controllerState = controller.getDefaultState();
+        try {
+            controllerState = controllerState.withProperty(
+                    zmaster587.libVulpes.block.RotatableBlock.FACING,
+                    net.minecraft.util.EnumFacing.NORTH);
+        } catch (IllegalArgumentException ignored) {
+            // Property absent — fall back to default.
+        }
+
+        net.minecraft.block.state.IBlockState struct = structureBlock.getDefaultState();
+        net.minecraft.block.state.IBlockState advStruct = advStructure.getDefaultState();
+        net.minecraft.block.state.IBlockState advMotor = motorAdvanced.getDefaultState();
+        @SuppressWarnings("deprecation") net.minecraft.block.state.IBlockState inputState =
+                hatch.getStateFromMeta(0);   // meta 0 = input hatch
+        @SuppressWarnings("deprecation") net.minecraft.block.state.IBlockState outputState =
+                hatch.getStateFromMeta(1);   // meta 1 = output hatch
+        net.minecraft.block.state.IBlockState plug = powerInput.getDefaultState();
+
+        // Pre-clear the full footprint to air: x [cx-4 .. cx+4],
+        // y [cy .. cy+10], z [cz-1 .. cz+7].
+        for (int gx = cx - 4; gx <= cx + 4; gx++) {
+            for (int gy = cy; gy <= cy + 10; gy++) {
+                for (int gz = cz - 1; gz <= cz + 7; gz++) {
+                    world.setBlockToAir(new BlockPos(gx, gy, gz));
+                }
+            }
+        }
+
+        // y=0..8 — coil cross around structureBlock core (top 9 layers; y=9 is
+        // a special transition layer, see below). structure[y][z=3..5][x=3..5]:
+        //   z=3 → only x=4 is coilCopper
+        //   z=4 → x=3 coil, x=4 STRUCT (core), x=5 coil
+        //   z=5 → only x=4 is coilCopper
+        for (int y = 0; y <= 8; y++) {
+            int globalY = cy - y + 10;
+            // z=3 (globalZ = cz - 1 + 3 = cz + 2)
+            world.setBlockState(new BlockPos(cx, globalY, cz + 2), coil);
+            // z=4 (globalZ = cz + 3) — coil/struct/coil
+            world.setBlockState(new BlockPos(cx + 1, globalY, cz + 3), coil);
+            world.setBlockState(new BlockPos(cx,     globalY, cz + 3), struct);
+            world.setBlockState(new BlockPos(cx - 1, globalY, cz + 3), coil);
+            // z=5 (globalZ = cz + 4)
+            world.setBlockState(new BlockPos(cx, globalY, cz + 4), coil);
+        }
+
+        // y=9 transition layer (globalY = cy + 1): blockSteel caps + blockTitanium
+        // plus-sign with advStructure corners.
+        int gy9 = cy + 1;
+        // z=2 (globalZ = cz + 1): blockSteel at x=4 (centre)
+        world.setBlockState(new BlockPos(cx, gy9, cz + 1), steel);
+        // z=3 (globalZ = cz + 2): advStruct(x=3), titanium(x=4), advStruct(x=5)
+        world.setBlockState(new BlockPos(cx + 1, gy9, cz + 2), advStruct);
+        world.setBlockState(new BlockPos(cx,     gy9, cz + 2), titanium);
+        world.setBlockState(new BlockPos(cx - 1, gy9, cz + 2), advStruct);
+        // z=4 (globalZ = cz + 3): steel(x=2), titanium(x=3..5), steel(x=6)
+        world.setBlockState(new BlockPos(cx + 2, gy9, cz + 3), steel);
+        world.setBlockState(new BlockPos(cx + 1, gy9, cz + 3), titanium);
+        world.setBlockState(new BlockPos(cx,     gy9, cz + 3), titanium);
+        world.setBlockState(new BlockPos(cx - 1, gy9, cz + 3), titanium);
+        world.setBlockState(new BlockPos(cx - 2, gy9, cz + 3), steel);
+        // z=5 (globalZ = cz + 4): advStruct(x=3), titanium(x=4), advStruct(x=5)
+        world.setBlockState(new BlockPos(cx + 1, gy9, cz + 4), advStruct);
+        world.setBlockState(new BlockPos(cx,     gy9, cz + 4), titanium);
+        world.setBlockState(new BlockPos(cx - 1, gy9, cz + 4), advStruct);
+        // z=6 (globalZ = cz + 5): blockSteel at x=4 (centre)
+        world.setBlockState(new BlockPos(cx, gy9, cz + 5), steel);
+
+        // y=10 (globalY = cy) bottom dish.
+        // Row z=0 (globalZ = cz - 1): steel,null,null,slab,slab,slab,null,null,steel
+        world.setBlockState(new BlockPos(cx + 4 - 0, cy, cz - 1), steel);
+        world.setBlockState(new BlockPos(cx + 4 - 3, cy, cz - 1), slab);
+        world.setBlockState(new BlockPos(cx + 4 - 4, cy, cz - 1), slab);
+        world.setBlockState(new BlockPos(cx + 4 - 5, cy, cz - 1), slab);
+        world.setBlockState(new BlockPos(cx + 4 - 8, cy, cz - 1), steel);
+        // Row z=1 (globalZ = cz): null,advStruct,slab,'I','c','O',slab,advStruct,null
+        world.setBlockState(new BlockPos(cx + 4 - 1, cy, cz), advStruct);
+        world.setBlockState(new BlockPos(cx + 4 - 2, cy, cz), slab);
+        world.setBlockState(new BlockPos(cx + 4 - 3, cy, cz), inputState);
+        world.setBlockState(new BlockPos(cx,         cy, cz), controllerState);
+        world.setBlockState(new BlockPos(cx + 4 - 5, cy, cz), outputState);
+        world.setBlockState(new BlockPos(cx + 4 - 6, cy, cz), slab);
+        world.setBlockState(new BlockPos(cx + 4 - 7, cy, cz), advStruct);
+        // Row z=2 (globalZ = cz + 1): null,slab,advStruct×5,slab,null
+        world.setBlockState(new BlockPos(cx + 4 - 1, cy, cz + 1), slab);
+        for (int x = 2; x <= 6; x++) {
+            world.setBlockState(new BlockPos(cx + 4 - x, cy, cz + 1), advStruct);
+        }
+        world.setBlockState(new BlockPos(cx + 4 - 7, cy, cz + 1), slab);
+        // Row z=3 (globalZ = cz + 2): slab,slab,advStruct×5,slab,slab
+        for (int x = 0; x <= 1; x++) {
+            world.setBlockState(new BlockPos(cx + 4 - x, cy, cz + 2), slab);
+        }
+        for (int x = 2; x <= 6; x++) {
+            world.setBlockState(new BlockPos(cx + 4 - x, cy, cz + 2), advStruct);
+        }
+        for (int x = 7; x <= 8; x++) {
+            world.setBlockState(new BlockPos(cx + 4 - x, cy, cz + 2), slab);
+        }
+        // Row z=4 (globalZ = cz + 3): slab,slab,advStruct,advStruct,MOTOR,advStruct,advStruct,slab,slab
+        for (int x = 0; x <= 1; x++) {
+            world.setBlockState(new BlockPos(cx + 4 - x, cy, cz + 3), slab);
+        }
+        world.setBlockState(new BlockPos(cx + 4 - 2, cy, cz + 3), advStruct);
+        world.setBlockState(new BlockPos(cx + 4 - 3, cy, cz + 3), advStruct);
+        world.setBlockState(new BlockPos(cx,         cy, cz + 3), advMotor);
+        world.setBlockState(new BlockPos(cx + 4 - 5, cy, cz + 3), advStruct);
+        world.setBlockState(new BlockPos(cx + 4 - 6, cy, cz + 3), advStruct);
+        for (int x = 7; x <= 8; x++) {
+            world.setBlockState(new BlockPos(cx + 4 - x, cy, cz + 3), slab);
+        }
+        // Row z=5 (globalZ = cz + 4): slab,slab,advStruct×5,slab,slab
+        for (int x = 0; x <= 1; x++) {
+            world.setBlockState(new BlockPos(cx + 4 - x, cy, cz + 4), slab);
+        }
+        for (int x = 2; x <= 6; x++) {
+            world.setBlockState(new BlockPos(cx + 4 - x, cy, cz + 4), advStruct);
+        }
+        for (int x = 7; x <= 8; x++) {
+            world.setBlockState(new BlockPos(cx + 4 - x, cy, cz + 4), slab);
+        }
+        // Row z=6 (globalZ = cz + 5): null,slab,advStruct×5,slab,null
+        world.setBlockState(new BlockPos(cx + 4 - 1, cy, cz + 5), slab);
+        for (int x = 2; x <= 6; x++) {
+            world.setBlockState(new BlockPos(cx + 4 - x, cy, cz + 5), advStruct);
+        }
+        world.setBlockState(new BlockPos(cx + 4 - 7, cy, cz + 5), slab);
+        // Row z=7 (globalZ = cz + 6): null,advStruct,slab,'P','P','P',slab,advStruct,null
+        world.setBlockState(new BlockPos(cx + 4 - 1, cy, cz + 6), advStruct);
+        world.setBlockState(new BlockPos(cx + 4 - 2, cy, cz + 6), slab);
+        world.setBlockState(new BlockPos(cx + 4 - 3, cy, cz + 6), plug);
+        world.setBlockState(new BlockPos(cx,         cy, cz + 6), plug);
+        world.setBlockState(new BlockPos(cx + 4 - 5, cy, cz + 6), plug);
+        world.setBlockState(new BlockPos(cx + 4 - 6, cy, cz + 6), slab);
+        world.setBlockState(new BlockPos(cx + 4 - 7, cy, cz + 6), advStruct);
+        // Row z=8 (globalZ = cz + 7): steel,null,null,slab,slab,slab,null,null,steel
+        world.setBlockState(new BlockPos(cx + 4 - 0, cy, cz + 7), steel);
+        world.setBlockState(new BlockPos(cx + 4 - 3, cy, cz + 7), slab);
+        world.setBlockState(new BlockPos(cx + 4 - 4, cy, cz + 7), slab);
+        world.setBlockState(new BlockPos(cx + 4 - 5, cy, cz + 7), slab);
+        world.setBlockState(new BlockPos(cx + 4 - 8, cy, cz + 7), steel);
+
+        Map<String, Object> info = new LinkedHashMap<>();
+        info.put("ok", true);
+        info.put("controllerPos", new int[]{cx, cy, cz});
+        info.put("motorPos",      new int[]{cx, cy, cz + 3});
+        info.put("coreTopPos",    new int[]{cx, cy + 10, cz + 3});
+        send(sender, jsonMap(info));
+    }
+
+    /**
+     * Builds a complete warp-core multiblock with controller at (cx, cy, cz)
+     * NORTH-facing. Per {@code TileWarpCore.structure} — a 3×3×3 array
+     * iterated [y][z][x] with controller 'c' at structure[2][0][1] (offset
+     * x=1, y=2, z=0). For a NORTH-facing controller the position formula
+     * simplifies to:
+     * <pre>
+     *   globalX = cx + 1 - x
+     *   globalY = cy + 2 - y
+     *   globalZ = cz + z
+     * </pre>
+     *
+     * <p>Layout:</p>
+     * <ul>
+     *   <li>y=0 (globalY = cy+2): 3×3 of {@code blockWarpCoreRim} with
+     *       {@code 'I'} input hatch at z=1, x=1.</li>
+     *   <li>y=1 (globalY = cy+1): cross of {@code blockStructureBlock}
+     *       around {@code blockWarpCoreCore} centre at z=1, x=1, with
+     *       null cells in the corners.</li>
+     *   <li>y=2 (globalY = cy): {@code 'c'} controller at z=0, x=1;
+     *       {@code blockWarpCoreCore} at z=1, x=1; remainder
+     *       {@code blockWarpCoreRim}.</li>
+     * </ul>
+     *
+     * <p>{@code blockWarpCoreRim} and {@code blockWarpCoreCore} are
+     * OreDictionary entries (registered by AR's setup —
+     * {@code AdvancedRocketry.preInit} lines 603-604, pointing to
+     * Titanium block + Gold block respectively).</p>
+     */
+    private void handleFixtureWarpCore(MinecraftServer server, ICommandSender sender,
+                                        int dim, int cx, int cy, int cz) {
+        net.minecraft.world.WorldServer world = server.getWorld(dim);
+        if (world == null) {
+            send(sender, "{\"error\":\"world not loaded\",\"dim\":" + dim + "}");
+            return;
+        }
+
+        net.minecraft.block.Block controller =
+                ForgeRegistries.BLOCKS.getValue(new ResourceLocation("advancedrocketry", "warpCore"));
+        net.minecraft.block.Block structureBlock =
+                ForgeRegistries.BLOCKS.getValue(new ResourceLocation("libvulpes", "structuremachine"));
+        net.minecraft.block.Block hatch =
+                ForgeRegistries.BLOCKS.getValue(new ResourceLocation("libvulpes", "hatch"));
+
+        net.minecraft.block.state.IBlockState rim = firstOreDictBlockState("blockWarpCoreRim");
+        net.minecraft.block.state.IBlockState core = firstOreDictBlockState("blockWarpCoreCore");
+
+        if (controller == null || structureBlock == null || hatch == null
+                || rim == null || core == null) {
+            send(sender, "{\"error\":\"missing block(s)\""
+                    + ",\"controller\":" + (controller != null)
+                    + ",\"structureBlock\":" + (structureBlock != null)
+                    + ",\"hatch\":" + (hatch != null)
+                    + ",\"rim\":" + (rim != null)
+                    + ",\"core\":" + (core != null) + "}");
+            return;
+        }
+
+        net.minecraft.block.state.IBlockState controllerState = controller.getDefaultState();
+        try {
+            controllerState = controllerState.withProperty(
+                    zmaster587.libVulpes.block.RotatableBlock.FACING,
+                    net.minecraft.util.EnumFacing.NORTH);
+        } catch (IllegalArgumentException ignored) {
+            // Property absent — fall back to default.
+        }
+
+        net.minecraft.block.state.IBlockState struct = structureBlock.getDefaultState();
+        @SuppressWarnings("deprecation") net.minecraft.block.state.IBlockState inputHatchState =
+                hatch.getStateFromMeta(0);
+
+        // Pre-clear the 3×3×3 footprint to air.
+        for (int gx = cx - 1; gx <= cx + 1; gx++) {
+            for (int gy = cy; gy <= cy + 2; gy++) {
+                for (int gz = cz; gz <= cz + 2; gz++) {
+                    world.setBlockToAir(new BlockPos(gx, gy, gz));
+                }
+            }
+        }
+
+        // y=0 (top) globalY = cy + 2 — 3×3 rim with input hatch at z=1, x=1.
+        for (int z = 0; z <= 2; z++) {
+            for (int x = 0; x <= 2; x++) {
+                BlockPos p = new BlockPos(cx + 1 - x, cy + 2, cz + z);
+                world.setBlockState(p, (z == 1 && x == 1) ? inputHatchState : rim);
+            }
+        }
+
+        // y=1 (middle) globalY = cy + 1 — cross of structureBlock + core centre.
+        // Cells: (z=0,x=1), (z=1,x=0), (z=1,x=1 core), (z=1,x=2), (z=2,x=1)
+        world.setBlockState(new BlockPos(cx,     cy + 1, cz),     struct);
+        world.setBlockState(new BlockPos(cx + 1, cy + 1, cz + 1), struct);
+        world.setBlockState(new BlockPos(cx,     cy + 1, cz + 1), core);
+        world.setBlockState(new BlockPos(cx - 1, cy + 1, cz + 1), struct);
+        world.setBlockState(new BlockPos(cx,     cy + 1, cz + 2), struct);
+
+        // y=2 (bottom, controller layer) globalY = cy.
+        // Row z=0: rim, 'c', rim
+        world.setBlockState(new BlockPos(cx + 1, cy, cz),     rim);
+        world.setBlockState(new BlockPos(cx,     cy, cz),     controllerState);
+        world.setBlockState(new BlockPos(cx - 1, cy, cz),     rim);
+        // Row z=1: rim, core, rim
+        world.setBlockState(new BlockPos(cx + 1, cy, cz + 1), rim);
+        world.setBlockState(new BlockPos(cx,     cy, cz + 1), core);
+        world.setBlockState(new BlockPos(cx - 1, cy, cz + 1), rim);
+        // Row z=2: rim, rim, rim
+        for (int x = 0; x <= 2; x++) {
+            world.setBlockState(new BlockPos(cx + 1 - x, cy, cz + 2), rim);
+        }
+
+        Map<String, Object> info = new LinkedHashMap<>();
+        info.put("ok", true);
+        info.put("controllerPos", new int[]{cx, cy, cz});
+        info.put("coreCentre",    new int[]{cx, cy + 1, cz + 1});
+        info.put("inputHatchPos", new int[]{cx, cy + 2, cz + 1});
+        send(sender, jsonMap(info));
+    }
+
+    /**
+     * Builds a complete area-gravity-controller multiblock with controller at
+     * (cx, cy, cz) NORTH-facing. Per {@code TileAreaGravityController.structure}
+     * — a 2×3×3 array iterated [y][z][x] with controller 'c' at
+     * structure[0][1][1] (offset x=1, y=0, z=1). For a NORTH-facing
+     * controller the position formula simplifies to:
+     * <pre>
+     *   globalX = cx + 1 - x
+     *   globalY = cy - y
+     *   globalZ = cz + z - 1
+     * </pre>
+     *
+     * <p>Layout:</p>
+     * <ul>
+     *   <li>y=0 (globalY = cy, controller layer): just {@code 'c'}
+     *       at (cx, cy, cz). Everything else is null (no constraint).</li>
+     *   <li>y=1 (globalY = cy - 1): cross of {@code advStructureBlock}
+     *       around a {@code 'P'} power-input plug at (cx, cy-1, cz).</li>
+     * </ul>
+     */
+    private void handleFixtureGravityController(MinecraftServer server, ICommandSender sender,
+                                                 int dim, int cx, int cy, int cz) {
+        net.minecraft.world.WorldServer world = server.getWorld(dim);
+        if (world == null) {
+            send(sender, "{\"error\":\"world not loaded\",\"dim\":" + dim + "}");
+            return;
+        }
+
+        net.minecraft.block.Block controller =
+                ForgeRegistries.BLOCKS.getValue(new ResourceLocation("advancedrocketry", "gravityMachine"));
+        net.minecraft.block.Block advStructure =
+                ForgeRegistries.BLOCKS.getValue(new ResourceLocation("libvulpes", "advstructuremachine"));
+        net.minecraft.block.Block powerInput =
+                ForgeRegistries.BLOCKS.getValue(new ResourceLocation("libvulpes", "forgepowerinput"));
+
+        if (controller == null || advStructure == null || powerInput == null) {
+            send(sender, "{\"error\":\"missing block(s)\""
+                    + ",\"controller\":" + (controller != null)
+                    + ",\"advStructure\":" + (advStructure != null)
+                    + ",\"powerInput\":" + (powerInput != null) + "}");
+            return;
+        }
+
+        net.minecraft.block.state.IBlockState controllerState = controller.getDefaultState();
+        try {
+            controllerState = controllerState.withProperty(
+                    zmaster587.libVulpes.block.RotatableBlock.FACING,
+                    net.minecraft.util.EnumFacing.NORTH);
+        } catch (IllegalArgumentException ignored) {
+            // Property absent — fall back to default.
+        }
+
+        net.minecraft.block.state.IBlockState advStruct = advStructure.getDefaultState();
+        net.minecraft.block.state.IBlockState plug = powerInput.getDefaultState();
+
+        // Controller at top.
+        world.setBlockState(new BlockPos(cx, cy, cz), controllerState);
+        // Underside cross — advStruct N/E/S/W of plug + plug at centre below
+        // controller.
+        world.setBlockState(new BlockPos(cx,     cy - 1, cz - 1), advStruct);
+        world.setBlockState(new BlockPos(cx + 1, cy - 1, cz),     advStruct);
+        world.setBlockState(new BlockPos(cx,     cy - 1, cz),     plug);
+        world.setBlockState(new BlockPos(cx - 1, cy - 1, cz),     advStruct);
+        world.setBlockState(new BlockPos(cx,     cy - 1, cz + 1), advStruct);
+
+        Map<String, Object> info = new LinkedHashMap<>();
+        info.put("ok", true);
+        info.put("controllerPos", new int[]{cx, cy, cz});
+        info.put("plugPos",       new int[]{cx, cy - 1, cz});
+        send(sender, jsonMap(info));
+    }
+
+    /**
+     * Builds a complete planet-analyser (TileAstrobodyDataProcessor) multiblock
+     * with controller at (cx, cy, cz) NORTH-facing. Per
+     * {@code TileAstrobodyDataProcessor.structure} — a 2×2×3 array iterated
+     * [y][z][x] with controller 'c' at structure[0][0][1] (offset x=1, y=0, z=0).
+     * For a NORTH-facing controller the position formula simplifies to:
+     * <pre>
+     *   globalX = cx + 1 - x
+     *   globalY = cy - y
+     *   globalZ = cz + z
+     * </pre>
+     *
+     * <p>Layout:</p>
+     * <ul>
+     *   <li>y=0 z=0 (globalY = cy, globalZ = cz): slab, 'c', slab</li>
+     *   <li>y=0 z=1 (globalY = cy, globalZ = cz + 1): slab, slab, slab</li>
+     *   <li>y=1 z=0 (globalY = cy - 1, globalZ = cz):
+     *       'P' (power input), 'I' (item input), 'O' (item output)</li>
+     *   <li>y=1 z=1 (globalY = cy - 1, globalZ = cz + 1): 'D', 'D', 'D' —
+     *       three data hatches ({@code advancedrocketry:loader} meta 0).</li>
+     * </ul>
+     */
+    private void handleFixturePlanetAnalyser(MinecraftServer server, ICommandSender sender,
+                                              int dim, int cx, int cy, int cz) {
+        net.minecraft.world.WorldServer world = server.getWorld(dim);
+        if (world == null) {
+            send(sender, "{\"error\":\"world not loaded\",\"dim\":" + dim + "}");
+            return;
+        }
+
+        net.minecraft.block.Block controller =
+                ForgeRegistries.BLOCKS.getValue(new ResourceLocation("advancedrocketry", "planetAnalyser"));
+        net.minecraft.block.Block hatch =
+                ForgeRegistries.BLOCKS.getValue(new ResourceLocation("libvulpes", "hatch"));
+        net.minecraft.block.Block powerInput =
+                ForgeRegistries.BLOCKS.getValue(new ResourceLocation("libvulpes", "forgepowerinput"));
+        net.minecraft.block.Block dataLoader =
+                ForgeRegistries.BLOCKS.getValue(new ResourceLocation("advancedrocketry", "loader"));
+
+        net.minecraft.block.state.IBlockState slab = firstOreDictBlockState("slab");
+
+        if (controller == null || hatch == null || powerInput == null
+                || dataLoader == null || slab == null) {
+            send(sender, "{\"error\":\"missing block(s)\""
+                    + ",\"controller\":" + (controller != null)
+                    + ",\"hatch\":" + (hatch != null)
+                    + ",\"powerInput\":" + (powerInput != null)
+                    + ",\"dataLoader\":" + (dataLoader != null)
+                    + ",\"slab\":" + (slab != null) + "}");
+            return;
+        }
+
+        net.minecraft.block.state.IBlockState controllerState = controller.getDefaultState();
+        try {
+            controllerState = controllerState.withProperty(
+                    zmaster587.libVulpes.block.RotatableBlock.FACING,
+                    net.minecraft.util.EnumFacing.NORTH);
+        } catch (IllegalArgumentException ignored) {
+            // Property absent — fall back to default.
+        }
+
+        @SuppressWarnings("deprecation") net.minecraft.block.state.IBlockState input =
+                hatch.getStateFromMeta(0);
+        @SuppressWarnings("deprecation") net.minecraft.block.state.IBlockState output =
+                hatch.getStateFromMeta(1);
+        @SuppressWarnings("deprecation") net.minecraft.block.state.IBlockState dataIn =
+                dataLoader.getStateFromMeta(0);
+        net.minecraft.block.state.IBlockState plug = powerInput.getDefaultState();
+
+        // y=0 z=0 — slab, 'c', slab
+        world.setBlockState(new BlockPos(cx + 1, cy, cz),     slab);
+        world.setBlockState(new BlockPos(cx,     cy, cz),     controllerState);
+        world.setBlockState(new BlockPos(cx - 1, cy, cz),     slab);
+        // y=0 z=1 — slab×3
+        world.setBlockState(new BlockPos(cx + 1, cy, cz + 1), slab);
+        world.setBlockState(new BlockPos(cx,     cy, cz + 1), slab);
+        world.setBlockState(new BlockPos(cx - 1, cy, cz + 1), slab);
+        // y=1 z=0 — 'P', 'I', 'O'
+        world.setBlockState(new BlockPos(cx + 1, cy - 1, cz),     plug);
+        world.setBlockState(new BlockPos(cx,     cy - 1, cz),     input);
+        world.setBlockState(new BlockPos(cx - 1, cy - 1, cz),     output);
+        // y=1 z=1 — 'D'×3
+        world.setBlockState(new BlockPos(cx + 1, cy - 1, cz + 1), dataIn);
+        world.setBlockState(new BlockPos(cx,     cy - 1, cz + 1), dataIn);
+        world.setBlockState(new BlockPos(cx - 1, cy - 1, cz + 1), dataIn);
+
+        Map<String, Object> info = new LinkedHashMap<>();
+        info.put("ok", true);
+        info.put("controllerPos", new int[]{cx, cy, cz});
+        info.put("plugPos",       new int[]{cx + 1, cy - 1, cz});
+        info.put("dataHatchRow",  new int[]{cx, cy - 1, cz + 1});
+        send(sender, jsonMap(info));
+    }
+
+    /**
+     * Builds a complete space-elevator multiblock with controller at
+     * (cx, cy, cz) NORTH-facing. Per {@code TileSpaceElevator.structure} — a
+     * 1-layer 10×9 disc iterated [y=0][z][x] with controller 'c' at
+     * structure[0][0][4] (offset x=4, y=0, z=0). For a NORTH-facing
+     * controller the position formula simplifies to:
+     * <pre>
+     *   globalX = cx + 4 - x
+     *   globalY = cy
+     *   globalZ = cz + z
+     * </pre>
+     *
+     * <p>Layout (single layer, z=0..9):</p>
+     * <ul>
+     *   <li>z=0 (controller row): AIR×3, 'P', 'c', 'P', AIR×3.</li>
+     *   <li>z=1: blockSteel, AIR, AIR, slab, slab, slab, AIR, AIR, blockSteel.</li>
+     *   <li>z=2: AIR, advStruct, slab, slab, slab, slab, slab, advStruct, AIR.</li>
+     *   <li>z=3: AIR, slab, advStruct, slab, slab, slab, advStruct, slab, AIR.</li>
+     *   <li>z=4: slab×3, advStruct×3, slab×3.</li>
+     *   <li>z=5: slab×3, advStruct, motor, advStruct, slab×3. (centre motor)</li>
+     *   <li>z=6: slab×3, advStruct×3, slab×3.</li>
+     *   <li>z=7: AIR, slab, advStruct, slab×3, advStruct, slab, AIR.</li>
+     *   <li>z=8: AIR, advStruct, slab×5, advStruct, AIR.</li>
+     *   <li>z=9: blockSteel, AIR×2, slab×3, AIR×2, blockSteel.</li>
+     * </ul>
+     *
+     * <p>Footprint pre-cleared to air before placement so that
+     * {@code Blocks.AIR} cells satisfy the strict validator check.</p>
+     */
+    private void handleFixtureSpaceElevator(MinecraftServer server, ICommandSender sender,
+                                             int dim, int cx, int cy, int cz) {
+        net.minecraft.world.WorldServer world = server.getWorld(dim);
+        if (world == null) {
+            send(sender, "{\"error\":\"world not loaded\",\"dim\":" + dim + "}");
+            return;
+        }
+
+        net.minecraft.block.Block controller =
+                ForgeRegistries.BLOCKS.getValue(new ResourceLocation("advancedrocketry", "spaceElevatorController"));
+        net.minecraft.block.Block advStructure =
+                ForgeRegistries.BLOCKS.getValue(new ResourceLocation("libvulpes", "advstructuremachine"));
+        net.minecraft.block.Block motor =
+                ForgeRegistries.BLOCKS.getValue(new ResourceLocation("libvulpes", "motor"));
+        net.minecraft.block.Block powerInput =
+                ForgeRegistries.BLOCKS.getValue(new ResourceLocation("libvulpes", "forgepowerinput"));
+
+        net.minecraft.block.state.IBlockState slab = firstOreDictBlockState("slab");
+        net.minecraft.block.state.IBlockState steel = firstOreDictBlockState("blockSteel");
+
+        if (controller == null || advStructure == null || motor == null
+                || powerInput == null || slab == null || steel == null) {
+            send(sender, "{\"error\":\"missing block(s)\""
+                    + ",\"controller\":" + (controller != null)
+                    + ",\"advStructure\":" + (advStructure != null)
+                    + ",\"motor\":" + (motor != null)
+                    + ",\"powerInput\":" + (powerInput != null)
+                    + ",\"slab\":" + (slab != null)
+                    + ",\"blockSteel\":" + (steel != null) + "}");
+            return;
+        }
+
+        net.minecraft.block.state.IBlockState controllerState = controller.getDefaultState();
+        try {
+            controllerState = controllerState.withProperty(
+                    zmaster587.libVulpes.block.RotatableBlock.FACING,
+                    net.minecraft.util.EnumFacing.NORTH);
+        } catch (IllegalArgumentException ignored) {
+            // Property absent — fall back to default.
+        }
+
+        net.minecraft.block.state.IBlockState advStruct = advStructure.getDefaultState();
+        net.minecraft.block.state.IBlockState motorState = motor.getDefaultState();
+        net.minecraft.block.state.IBlockState plug = powerInput.getDefaultState();
+
+        // Pre-clear the 9-wide × 10-deep footprint to air (single y layer).
+        for (int gx = cx - 4; gx <= cx + 4; gx++) {
+            for (int gz = cz; gz <= cz + 9; gz++) {
+                world.setBlockToAir(new BlockPos(gx, cy, gz));
+            }
+        }
+
+        // z=0 controller row: AIR(x=0..2), 'P'(x=3), 'c'(x=4), 'P'(x=5), AIR(x=6..8)
+        world.setBlockState(new BlockPos(cx + 1, cy, cz), plug);
+        world.setBlockState(new BlockPos(cx,     cy, cz), controllerState);
+        world.setBlockState(new BlockPos(cx - 1, cy, cz), plug);
+
+        // z=1: steel(x=0), AIR(x=1,2), slab(x=3,4,5), AIR(x=6,7), steel(x=8)
+        world.setBlockState(new BlockPos(cx + 4 - 0, cy, cz + 1), steel);
+        world.setBlockState(new BlockPos(cx + 4 - 3, cy, cz + 1), slab);
+        world.setBlockState(new BlockPos(cx + 4 - 4, cy, cz + 1), slab);
+        world.setBlockState(new BlockPos(cx + 4 - 5, cy, cz + 1), slab);
+        world.setBlockState(new BlockPos(cx + 4 - 8, cy, cz + 1), steel);
+
+        // z=2: AIR(x=0), advStruct(x=1), slab(x=2..6), advStruct(x=7), AIR(x=8)
+        world.setBlockState(new BlockPos(cx + 4 - 1, cy, cz + 2), advStruct);
+        for (int x = 2; x <= 6; x++) {
+            world.setBlockState(new BlockPos(cx + 4 - x, cy, cz + 2), slab);
+        }
+        world.setBlockState(new BlockPos(cx + 4 - 7, cy, cz + 2), advStruct);
+
+        // z=3: AIR(x=0), slab(x=1), advStruct(x=2), slab(x=3..5), advStruct(x=6), slab(x=7), AIR(x=8)
+        world.setBlockState(new BlockPos(cx + 4 - 1, cy, cz + 3), slab);
+        world.setBlockState(new BlockPos(cx + 4 - 2, cy, cz + 3), advStruct);
+        for (int x = 3; x <= 5; x++) {
+            world.setBlockState(new BlockPos(cx + 4 - x, cy, cz + 3), slab);
+        }
+        world.setBlockState(new BlockPos(cx + 4 - 6, cy, cz + 3), advStruct);
+        world.setBlockState(new BlockPos(cx + 4 - 7, cy, cz + 3), slab);
+
+        // z=4: slab(x=0..2), advStruct(x=3..5), slab(x=6..8)
+        for (int x = 0; x <= 2; x++) world.setBlockState(new BlockPos(cx + 4 - x, cy, cz + 4), slab);
+        for (int x = 3; x <= 5; x++) world.setBlockState(new BlockPos(cx + 4 - x, cy, cz + 4), advStruct);
+        for (int x = 6; x <= 8; x++) world.setBlockState(new BlockPos(cx + 4 - x, cy, cz + 4), slab);
+
+        // z=5: slab(x=0..2), advStruct(x=3), MOTOR(x=4), advStruct(x=5), slab(x=6..8)
+        for (int x = 0; x <= 2; x++) world.setBlockState(new BlockPos(cx + 4 - x, cy, cz + 5), slab);
+        world.setBlockState(new BlockPos(cx + 4 - 3, cy, cz + 5), advStruct);
+        world.setBlockState(new BlockPos(cx,         cy, cz + 5), motorState);
+        world.setBlockState(new BlockPos(cx + 4 - 5, cy, cz + 5), advStruct);
+        for (int x = 6; x <= 8; x++) world.setBlockState(new BlockPos(cx + 4 - x, cy, cz + 5), slab);
+
+        // z=6: slab(x=0..2), advStruct(x=3..5), slab(x=6..8)
+        for (int x = 0; x <= 2; x++) world.setBlockState(new BlockPos(cx + 4 - x, cy, cz + 6), slab);
+        for (int x = 3; x <= 5; x++) world.setBlockState(new BlockPos(cx + 4 - x, cy, cz + 6), advStruct);
+        for (int x = 6; x <= 8; x++) world.setBlockState(new BlockPos(cx + 4 - x, cy, cz + 6), slab);
+
+        // z=7: AIR(x=0), slab(x=1), advStruct(x=2), slab(x=3..5), advStruct(x=6), slab(x=7), AIR(x=8)
+        world.setBlockState(new BlockPos(cx + 4 - 1, cy, cz + 7), slab);
+        world.setBlockState(new BlockPos(cx + 4 - 2, cy, cz + 7), advStruct);
+        for (int x = 3; x <= 5; x++) {
+            world.setBlockState(new BlockPos(cx + 4 - x, cy, cz + 7), slab);
+        }
+        world.setBlockState(new BlockPos(cx + 4 - 6, cy, cz + 7), advStruct);
+        world.setBlockState(new BlockPos(cx + 4 - 7, cy, cz + 7), slab);
+
+        // z=8: AIR(x=0), advStruct(x=1), slab(x=2..6), advStruct(x=7), AIR(x=8)
+        world.setBlockState(new BlockPos(cx + 4 - 1, cy, cz + 8), advStruct);
+        for (int x = 2; x <= 6; x++) {
+            world.setBlockState(new BlockPos(cx + 4 - x, cy, cz + 8), slab);
+        }
+        world.setBlockState(new BlockPos(cx + 4 - 7, cy, cz + 8), advStruct);
+
+        // z=9: steel(x=0), AIR(x=1,2), slab(x=3..5), AIR(x=6,7), steel(x=8)
+        world.setBlockState(new BlockPos(cx + 4 - 0, cy, cz + 9), steel);
+        world.setBlockState(new BlockPos(cx + 4 - 3, cy, cz + 9), slab);
+        world.setBlockState(new BlockPos(cx + 4 - 4, cy, cz + 9), slab);
+        world.setBlockState(new BlockPos(cx + 4 - 5, cy, cz + 9), slab);
+        world.setBlockState(new BlockPos(cx + 4 - 8, cy, cz + 9), steel);
+
+        Map<String, Object> info = new LinkedHashMap<>();
+        info.put("ok", true);
+        info.put("controllerPos", new int[]{cx, cy, cz});
+        info.put("motorPos",      new int[]{cx, cy, cz + 5});
+        send(sender, jsonMap(info));
+    }
+
+    /**
+     * Builds a complete microwave-receiver multiblock with controller at
+     * (cx, cy, cz) NORTH-facing. Per {@code TileMicrowaveReciever.structure}
+     * — a single layer 5×5 with controller 'c' at structure[0][2][2]
+     * (offset x=2, y=0, z=2). For a NORTH-facing controller the position
+     * formula simplifies to:
+     * <pre>
+     *   globalX = cx + 2 - x
+     *   globalY = cy
+     *   globalZ = cz + z - 2
+     * </pre>
+     *
+     * <p>The structure references {@code BlockMeta(blockSolarPanel)} at most
+     * cells, with {@code '*'} wildcards on a few cells (Microwave's
+     * {@code getAllowableWildCardBlocks} permits item-input hatches,
+     * power-output plugs, and the solar-panel block itself at wildcards).
+     * The fixture places {@code blockSolarPanel} at all non-controller cells
+     * — this satisfies both the literal-block cells and the wildcard
+     * (since solarPanel is in the wildcard list).</p>
+     */
+    private void handleFixtureMicrowaveReceiver(MinecraftServer server, ICommandSender sender,
+                                                 int dim, int cx, int cy, int cz) {
+        net.minecraft.world.WorldServer world = server.getWorld(dim);
+        if (world == null) {
+            send(sender, "{\"error\":\"world not loaded\",\"dim\":" + dim + "}");
+            return;
+        }
+
+        net.minecraft.block.Block controller =
+                ForgeRegistries.BLOCKS.getValue(new ResourceLocation("advancedrocketry", "microwaveReciever"));
+        net.minecraft.block.Block solarPanel =
+                ForgeRegistries.BLOCKS.getValue(new ResourceLocation("advancedrocketry", "solarPanel"));
+
+        if (controller == null || solarPanel == null) {
+            send(sender, "{\"error\":\"missing block(s)\""
+                    + ",\"controller\":" + (controller != null)
+                    + ",\"solarPanel\":" + (solarPanel != null) + "}");
+            return;
+        }
+
+        net.minecraft.block.state.IBlockState controllerState = controller.getDefaultState();
+        try {
+            controllerState = controllerState.withProperty(
+                    zmaster587.libVulpes.block.RotatableBlock.FACING,
+                    net.minecraft.util.EnumFacing.NORTH);
+        } catch (IllegalArgumentException ignored) {
+            // Property absent — fall back to default.
+        }
+
+        net.minecraft.block.state.IBlockState panel = solarPanel.getDefaultState();
+
+        // Fill 5×5 with solar panels, controller at the centre.
+        for (int z = 0; z <= 4; z++) {
+            for (int x = 0; x <= 4; x++) {
+                BlockPos p = new BlockPos(cx + 2 - x, cy, cz + z - 2);
+                world.setBlockState(p, (z == 2 && x == 2) ? controllerState : panel);
+            }
+        }
+
+        Map<String, Object> info = new LinkedHashMap<>();
+        info.put("ok", true);
+        info.put("controllerPos", new int[]{cx, cy, cz});
+        info.put("nwCornerPos",   new int[]{cx + 2, cy, cz - 2});
+        send(sender, jsonMap(info));
+    }
+
+    /**
+     * Builds a complete solar-array multiblock with controller at
+     * (cx, cy, cz) NORTH-facing. Per {@code TileSolarArray.structure} — a
+     * 22-row × 3-wide single-layer array with controller 'c' at
+     * structure[0][0][1] (offset x=1, y=0, z=0). The wildcard '*' accepts
+     * {@code blockSolarArrayPanel} OR {@code Blocks.AIR} (per Solar's
+     * {@code getAllowableWildCardBlocks}), so pre-clearing the footprint
+     * to air and placing only the controller + 2 power-output plugs
+     * satisfies the validator.
+     *
+     * <p>For a NORTH-facing controller the position formula simplifies to:</p>
+     * <pre>
+     *   globalX = cx + 1 - x
+     *   globalY = cy
+     *   globalZ = cz + z
+     * </pre>
+     *
+     * <p>Concrete placements (3 cells total):</p>
+     * <ul>
+     *   <li>z=0, x=0: 'p' (forge power output) at globalX = cx + 1</li>
+     *   <li>z=0, x=1: 'c' controller at globalX = cx</li>
+     *   <li>z=0, x=2: 'p' at globalX = cx - 1</li>
+     *   <li>z=1..21: cleared to AIR (satisfies the '*' wildcard).</li>
+     * </ul>
+     */
+    private void handleFixtureSolarArray(MinecraftServer server, ICommandSender sender,
+                                          int dim, int cx, int cy, int cz) {
+        net.minecraft.world.WorldServer world = server.getWorld(dim);
+        if (world == null) {
+            send(sender, "{\"error\":\"world not loaded\",\"dim\":" + dim + "}");
+            return;
+        }
+
+        net.minecraft.block.Block controller =
+                ForgeRegistries.BLOCKS.getValue(new ResourceLocation("advancedrocketry", "solararray"));
+        net.minecraft.block.Block powerOutput =
+                ForgeRegistries.BLOCKS.getValue(new ResourceLocation("libvulpes", "forgepoweroutput"));
+        net.minecraft.block.Block solarArrayPanel =
+                ForgeRegistries.BLOCKS.getValue(new ResourceLocation("advancedrocketry", "solararraypanel"));
+
+        if (controller == null || powerOutput == null || solarArrayPanel == null) {
+            send(sender, "{\"error\":\"missing block(s)\""
+                    + ",\"controller\":" + (controller != null)
+                    + ",\"powerOutput\":" + (powerOutput != null)
+                    + ",\"solarArrayPanel\":" + (solarArrayPanel != null) + "}");
+            return;
+        }
+
+        net.minecraft.block.state.IBlockState controllerState = controller.getDefaultState();
+        try {
+            controllerState = controllerState.withProperty(
+                    zmaster587.libVulpes.block.RotatableBlock.FACING,
+                    net.minecraft.util.EnumFacing.NORTH);
+        } catch (IllegalArgumentException ignored) {
+            // Property absent — fall back to default.
+        }
+
+        net.minecraft.block.state.IBlockState plug = powerOutput.getDefaultState();
+        net.minecraft.block.state.IBlockState panel = solarArrayPanel.getDefaultState();
+
+        // Pre-clear the 3-wide × 22-deep footprint to air, then place panels
+        // in rows z=1..21 (the wildcard accepts panel OR air, but explicit
+        // panels are immune to terrain interaction at sea level).
+        for (int gx = cx - 1; gx <= cx + 1; gx++) {
+            for (int gz = cz; gz <= cz + 21; gz++) {
+                world.setBlockToAir(new BlockPos(gx, cy, gz));
+            }
+        }
+        for (int gx = cx - 1; gx <= cx + 1; gx++) {
+            for (int gz = cz + 1; gz <= cz + 21; gz++) {
+                world.setBlockState(new BlockPos(gx, cy, gz), panel);
+            }
+        }
+
+        // Row z=0: 'p', 'c', 'p'.
+        world.setBlockState(new BlockPos(cx + 1, cy, cz), plug);
+        world.setBlockState(new BlockPos(cx,     cy, cz), controllerState);
+        world.setBlockState(new BlockPos(cx - 1, cy, cz), plug);
+
+        Map<String, Object> info = new LinkedHashMap<>();
+        info.put("ok", true);
+        info.put("controllerPos", new int[]{cx, cy, cz});
+        info.put("controllerBlock", controller.getRegistryName().toString());
         send(sender, jsonMap(info));
     }
 
@@ -3741,6 +4781,29 @@ public class TestProbeCommand extends CommandBase {
 
     private static long parseLongOr(String s, long fallback) {
         try { return Long.parseLong(s); } catch (NumberFormatException e) { return fallback; }
+    }
+
+    /**
+     * Looks up the first non-empty OreDictionary entry registered under
+     * {@code oreName} and returns the matching {@code IBlockState} (block +
+     * meta). Used to resolve {@code "coilCopper"}, {@code "blockSteel"},
+     * {@code "blockTitanium"}, {@code "slab"} etc. — names backing the
+     * libVulpes structure validator's String entries that resolve via
+     * {@link net.minecraftforge.oredict.OreDictionary}. Returns {@code null}
+     * if no entry is registered (e.g. mod-compat dependency missing).
+     */
+    private static net.minecraft.block.state.IBlockState firstOreDictBlockState(String oreName) {
+        java.util.List<net.minecraft.item.ItemStack> stacks =
+                net.minecraftforge.oredict.OreDictionary.getOres(oreName);
+        if (stacks == null || stacks.isEmpty()) return null;
+        net.minecraft.item.ItemStack stack = stacks.get(0);
+        if (stack.isEmpty()) return null;
+        net.minecraft.block.Block block = net.minecraft.block.Block.getBlockFromItem(stack.getItem());
+        if (block == null || block == net.minecraft.init.Blocks.AIR) return null;
+        int meta = stack.getItem().getMetadata(stack.getItemDamage());
+        @SuppressWarnings("deprecation")
+        net.minecraft.block.state.IBlockState state = block.getStateFromMeta(meta);
+        return state;
     }
 
     /**
