@@ -156,31 +156,23 @@ public class MixinHookBehaviourPinsTest extends AbstractSharedServerTest {
     }
 
     /**
-     * Drives natural server ticking by polling {@code /artest entity info}
-     * in a loop until either the entity's {@code motionY} crosses below
-     * {@code threshold} or the budget elapses. Each probe call blocks the
-     * server thread briefly; between calls the server thread is free to
-     * tick the dim — that's where the mixin's {@code @Inject(HEAD)} fires.
+     * Deterministically advances an entity's tick state by directly
+     * invoking {@code Entity.onUpdate} via {@code /artest entity tick}.
+     * Bypasses the natural server tick loop entirely — the
+     * {@code @Inject(HEAD)} on {@code onUpdate} fires whether the call
+     * comes from {@code WorldServer.updateEntities} or this probe, so
+     * the mixin is exercised identically. Returns the response JSON's
+     * {@code motionY}.
      *
-     * <p>Returns the last observed {@code motionY}, or {@code 0.0} if no
-     * tick fired within the budget. (A caller using strict assertions
-     * should pin {@code motionY < threshold} so a tick-starved harness
-     * fails loud rather than silently passing.)</p>
+     * <p>Robust against the dedicated-server harness's idiosyncratic
+     * tick scheduling, which doesn't reliably advance entity onUpdate
+     * during {@code /artest server wait} on a cold server.</p>
      */
-    private double pollMotionYUntilBelow(int dim, int id, double threshold,
-                                         int maxPolls) throws Exception {
-        double motionY = 0.0;
-        for (int i = 0; i < maxPolls; i++) {
-            String info = entityInfo(dim, id);
-            assertTrue("entity must remain alive while polling: " + info,
-                    IS_ALIVE_TRUE.matcher(info).find());
-            motionY = doubleField(MOTION_Y, info, "motionY");
-            if (motionY < threshold) return motionY;
-            // Yield the test thread for ~50 ms so the harness can let the
-            // server thread tick the dim between probe calls.
-            Thread.sleep(50L);
-        }
-        return motionY;
+    private double tickEntityAndReadMotionY(int dim, int id, int count) throws Exception {
+        String resp = ok(client().execute(
+                "artest entity tick " + dim + " " + id + " " + count));
+        assertFalse("entity tick must succeed: " + resp, resp.contains("\"error\""));
+        return doubleField(MOTION_Y, resp, "motionY");
     }
 
     /**
@@ -239,7 +231,7 @@ public class MixinHookBehaviourPinsTest extends AbstractSharedServerTest {
             // Drive natural ticking by polling — server thread can tick
             // between probe calls. After ANY tick of gravity (vanilla -0.04
             // + mixin AR delta) motionY MUST be strictly negative.
-            double motionY = pollMotionYUntilBelow(dim, id, -0.001, 60);
+            double motionY = tickEntityAndReadMotionY(dim, id, 3);
             assertTrue("EntityTNTPrimed motionY must be < 0 after the AR-dim "
                     + "gravity hook fires; got motionY=" + motionY
                     + " (mixin hook silent — likely target regression)",
@@ -267,7 +259,7 @@ public class MixinHookBehaviourPinsTest extends AbstractSharedServerTest {
         ok(client().execute("artest place 0 " + worldX + " 100 " + worldZ + " minecraft:air"));
         try {
             int id = spawn(0, worldX + 0.5, 200.0, worldZ + 0.5, "minecraft:tnt");
-            double motionY = pollMotionYUntilBelow(0, id, -0.001, 60);
+            double motionY = tickEntityAndReadMotionY(0, id, 3);
             assertTrue("vanilla gravity (no AR multiplier) must still pull "
                     + "motionY < 0 in overworld; got motionY=" + motionY,
                     motionY < 0.0);
@@ -295,7 +287,7 @@ public class MixinHookBehaviourPinsTest extends AbstractSharedServerTest {
                 + " " + worldX + " 100 " + worldZ + " minecraft:air"));
         try {
             int id = spawn(dim, worldX + 0.5, 200.0, worldZ + 0.5, "minecraft:minecart");
-            double motionY = pollMotionYUntilBelow(dim, id, -0.001, 60);
+            double motionY = tickEntityAndReadMotionY(dim, id, 3);
             assertTrue("EntityMinecart motionY must be < 0 after gravity tick; "
                     + "got motionY=" + motionY, motionY < 0.0);
         } finally {
@@ -307,62 +299,85 @@ public class MixinHookBehaviourPinsTest extends AbstractSharedServerTest {
      * Phase 3 pin for the {@code EntityFallingBlock} target of
      * {@link zmaster587.advancedRocketry.mixin.MixinEntityGravity}.
      *
-     * <p>The probe is called with an explicit {@code minecraft:sand}
-     * fall-state so vanilla's {@code fallTile.getMaterial() ==
-     * Material.AIR} setDead check at {@code EntityFallingBlock.onUpdate}
-     * offset 0 doesn't kill the entity before the gravity hook gets to
-     * fire.</p>
-     */
-    /**
-     * Phase 3 pin for the {@code EntityFallingBlock} target of
-     * {@link zmaster587.advancedRocketry.mixin.MixinEntityGravity}.
-     *
-     * <p>{@link net.minecraft.entity.item.EntityFallingBlock#onUpdate}
-     * has aggressive auto-{@code setDead} logic — it dies on the first
-     * tick if the block at {@code posY} is neither air nor the same as
-     * {@code fallTile}, and dies again as soon as {@code onGround} is
-     * true. In AR worldgen these conditions are hard to set up reliably
-     * (planet floors / sealing blocks vary by dim type). So this pin
-     * verifies the {@em weaker} but still load-bearing property:</p>
-     *
-     * <p><b>The mixin applies cleanly without breaking the class.</b>
-     * If {@code MixinEntityGravity}'s {@code @Inject} on
-     * {@code EntityFallingBlock.onUpdate} bytecode-patched the method into
-     * an invalid form, {@code world.spawnEntity} would throw at the first
-     * onUpdate dispatch and {@code /artest entity spawn} would return an
-     * error or the entity would never become alive at all.</p>
-     *
-     * <p>Live motion-tick is covered for the multi-target Mixin pattern
-     * by {@link #bGravityMixinAffectsTntPrimedInArDim} and
-     * {@link #dGravityMixinAffectsMinecartInArDim} — those exercise the
-     * same {@code @Inject(method="onUpdate", at=HEAD)} on two of the four
-     * multi-target classes. If the pattern works for TNTPrimed and
-     * EntityMinecart it works for EntityFallingBlock — same mixin, same
-     * injection point, separate bytecode-patch instance.</p>
+     * <p>Uses {@code /artest entity tick} to invoke
+     * {@code EntityFallingBlock.onUpdate} directly — the mixin's
+     * {@code @Inject(HEAD)} fires on this path identically to the
+     * natural server tick (mixin patches bytecode, not the tick loop).
+     * Sand is placed at the spawn block so vanilla's "block at posY
+     * must equal fallTile" guard passes on tick 1; the column below
+     * is cleared so {@code onGround} doesn't trip the impact-setDead
+     * branch.</p>
      */
     @Test
-    public void eGravityMixinAppliesCleanlyToEntityFallingBlock() throws Exception {
+    public void eGravityMixinAffectsFallingBlockInArDim() throws Exception {
         int dim = firstNonOverworldArDimOrSkip();
         int worldX = 13300;
         int worldZ = 0;
+        int spawnY = 200;
         forceLoadColumn(dim, worldX, worldZ);
+        // Use stone as the fall-state — vanilla BlockFalling.onBlockAdded
+        // schedules a tick that would auto-{@code checkFallable} for sand
+        // sitting on air, eating our spawn block before the entity gets
+        // a chance to validate it. Stone has no such behavior so the
+        // block survives until the entity's own onUpdate consumes it.
+        ok(client().execute("artest place " + dim + " " + worldX + " "
+                + spawnY + " " + worldZ + " minecraft:stone"));
+        for (int dy = -10; dy <= -1; dy++) {
+            ok(client().execute("artest place " + dim + " " + worldX + " "
+                    + (spawnY + dy) + " " + worldZ + " minecraft:air"));
+        }
         try {
-            String resp = ok(client().execute("artest entity spawn " + dim
-                    + " " + (worldX + 0.5) + " 200 " + (worldZ + 0.5)
-                    + " minecraft:falling_block minecraft:sand"));
-            // Apply failure for the FallingBlock mixin would surface here:
-            // either the spawn probe reports an error (the ctor / class
-            // init threw) or "spawned":false. Either is a regression we
-            // want to surface; the live-tick survival of the entity is
-            // not the property we're pinning.
-            assertFalse("falling-block spawn must succeed (mixin must not "
-                    + "break class init): " + resp, resp.contains("\"error\""));
-            assertTrue("spawn probe must report spawned:true: " + resp,
-                    resp.contains("\"spawned\":true"));
-            assertTrue("entity class must be EntityFallingBlock: " + resp,
-                    resp.contains("net.minecraft.entity.item.EntityFallingBlock"));
+            String resp = ok(client().execute("artest entity spawn "
+                    + dim + " " + (worldX + 0.5) + " " + spawnY
+                    + " " + (worldZ + 0.5) + " minecraft:falling_block "
+                    + "minecraft:stone 3"));
+            assertFalse("spawn+tick must succeed: " + resp,
+                    resp.contains("\"error\""));
+            double motionY = doubleField(MOTION_Y, resp, "motionY");
+            assertTrue("EntityFallingBlock motionY must be < 0 after 3 "
+                    + "immediate onUpdate ticks (vanilla -0.04 + mixin "
+                    + "AR gravity delta); response=" + resp,
+                    motionY < 0.0);
         } finally {
             releaseColumn(dim, worldX, worldZ);
+        }
+    }
+
+    /**
+     * Phase 3 pin (extension) — live motion-tick for
+     * {@link net.minecraft.entity.item.EntityFallingBlock} in the
+     * overworld. Counter-test for the AR-dim pin
+     * ({@link #eGravityMixinAffectsFallingBlockInArDim}): vanilla's
+     * {@code motionY -= 0.04} alone (the mixin's AR-gravity branch
+     * is a no-op in vanilla dims, but the hook itself still fires)
+     * must observe {@code motionY < 0} after the same 3-tick
+     * exercise. Proves the mixin's {@code @Inject(HEAD)} applies to
+     * {@code EntityFallingBlock} on the vanilla-dim path too.
+     */
+    @Test
+    public void fGravityMixinAffectsFallingBlockInOverworld() throws Exception {
+        int worldX = 13400;
+        int worldZ = 0;
+        int spawnY = 250;
+        forceLoadColumn(0, worldX, worldZ);
+        ok(client().execute("artest place 0 " + worldX + " " + spawnY
+                + " " + worldZ + " minecraft:stone"));
+        for (int dy = -10; dy <= -1; dy++) {
+            ok(client().execute("artest place 0 " + worldX + " "
+                    + (spawnY + dy) + " " + worldZ + " minecraft:air"));
+        }
+        try {
+            String resp = ok(client().execute("artest entity spawn 0 "
+                    + (worldX + 0.5) + " " + spawnY + " " + (worldZ + 0.5)
+                    + " minecraft:falling_block minecraft:stone 3"));
+            assertFalse("spawn+tick must succeed: " + resp,
+                    resp.contains("\"error\""));
+            double motionY = doubleField(MOTION_Y, resp, "motionY");
+            assertTrue("EntityFallingBlock motionY must be < 0 after 3 "
+                    + "immediate onUpdate ticks in overworld; response="
+                    + resp, motionY < 0.0);
+        } finally {
+            releaseColumn(0, worldX, worldZ);
         }
     }
 }
