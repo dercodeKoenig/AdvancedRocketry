@@ -32,3 +32,5 @@ logs
 
 # Navigator temporary files
 .agent/.nav-temp/
+.agent/.nav-read-counter.json
+.agent/.nav-workflow-state.json

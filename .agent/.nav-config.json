@@ -10,5 +10,8 @@
   "auto_update": {
     "enabled": true,
     "check_interval_hours": 1
+  },
+  "read_guard_hook": {
+    "escalate_threshold": 20
   }
 }
