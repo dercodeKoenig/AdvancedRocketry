@@ -24,9 +24,11 @@ ship silent gameplay breakage if untouched code regresses.
 
 ### 🔴 P0 — schedule next
 
-1. **TASK-08** — ASM coremod safety net. ~13-18 h. Hardest to write,
-   highest single-point-of-failure risk. Schedule when team has
-   bandwidth for the bytecode work.
+1. **TASK-08-mixin** — Rewrite the ASM coremod (`ClassTransformer.java`,
+   835 LoC + 24-file vendored HookLib) to Mixin and replace the
+   "ASM safety net" test goal with behavioural pins on the 4 surviving
+   hook points. ~14 h, 4-5 sessions. Replaces the original TASK-08
+   which proposed testing the ASM transformer in place.
 
 *(TASK-04 multiblock depth and TASK-07 flight cycle: closed — see Done table.)*
 
