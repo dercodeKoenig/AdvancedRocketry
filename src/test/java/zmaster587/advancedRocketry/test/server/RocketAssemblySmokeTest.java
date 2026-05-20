@@ -215,6 +215,18 @@ public class RocketAssemblySmokeTest extends AbstractSharedServerTest {
      * dependent on the chosen baseX coordinate's biome.</p>
      */
     private int buildAndAssemble(int baseX, int baseY, int baseZ, String variant) throws Exception {
+        // Warmup chunks under (and around) the fill area BEFORE clearing,
+        // so cross-chunk populate() (trees / leaves) has already landed
+        // and gets cleared by fill — instead of populating AFTER fill and
+        // silently re-placing blocks above the seat. Without this step
+        // the "passable above seat" scan in scanRocket flakes ~1/10 runs
+        // under the shared harness. (See chunk-anchor probe in TestProbeCommand.)
+        int cx1 = (baseX - 2) >> 4, cz1 = (baseZ - 2) >> 4;
+        int cx2 = (baseX + 7) >> 4, cz2 = (baseZ + 7) >> 4;
+        String warmup = String.join("\n", client().execute(
+                "artest chunk warmup 0 " + cx1 + " " + cz1 + " " + cx2 + " " + cz2));
+        assertTrue("chunk warmup failed: " + warmup, warmup.contains("\"ok\":true"));
+
         // bbCache from getRocketPadBounds spans (baseX..baseX+5, baseY+1..
         // baseY+maxTowerSize-1, baseZ..baseZ+5). Clear that volume + a small
         // halo so any pre-existing terrain (or detritus from a prior fixture

@@ -6618,6 +6618,85 @@ public class TestProbeCommand extends CommandBase {
             send(sender, sb.toString());
             return;
         }
+        if ("warmup".equals(sub) && args.length >= 6) {
+            // /artest chunk warmup <dim> <cx1> <cz1> <cx2> <cz2>
+            //
+            // Synchronously provideChunk(cx, cz) for every (cx,cz) in the
+            // rectangle, then ALSO touch a 1-chunk halo on each side so
+            // populate(...) fires for the inner rectangle. Vanilla
+            // ChunkProviderServer triggers populate when all 4 neighbours
+            // are loaded; without the halo, populate fires lazily after
+            // a test has already cleared blocks at the rectangle's edge,
+            // and worldgen decorations (trees, leaves) silently land
+            // back into the cleared region.
+            //
+            // Returns:
+            //   ok          - true iff every chunk in the inner rectangle
+            //                 is World.isAreaLoaded after warmup
+            //   inner       - number of chunks in the inner rectangle
+            //   provided    - total provideChunk calls (inner + halo)
+            //   allLoaded   - World.isAreaLoaded over the inner rectangle
+            int dim = parseIntOr(args[1], Integer.MIN_VALUE);
+            int cx1 = parseIntOr(args[2], Integer.MIN_VALUE);
+            int cz1 = parseIntOr(args[3], Integer.MIN_VALUE);
+            int cx2 = parseIntOr(args[4], Integer.MIN_VALUE);
+            int cz2 = parseIntOr(args[5], Integer.MIN_VALUE);
+            if (cx1 == Integer.MIN_VALUE || cz1 == Integer.MIN_VALUE
+                    || cx2 == Integer.MIN_VALUE || cz2 == Integer.MIN_VALUE) {
+                send(sender, "{\"error\":\"invalid chunk coords\"}");
+                return;
+            }
+            int xMin = Math.min(cx1, cx2), xMax = Math.max(cx1, cx2);
+            int zMin = Math.min(cz1, cz2), zMax = Math.max(cz1, cz2);
+            // Soft cap — populate() per chunk is expensive (trees, ores,
+            // structures); refuse pathological warmups that would block
+            // the harness for minutes.
+            int innerCount = (xMax - xMin + 1) * (zMax - zMin + 1);
+            if (innerCount > 256) {
+                send(sender, "{\"error\":\"warmup area too large\",\"innerChunks\":"
+                        + innerCount + ",\"cap\":256}");
+                return;
+            }
+            // Init dim if needed (same as forceload).
+            if (net.minecraftforge.common.DimensionManager.isDimensionRegistered(dim)) {
+                net.minecraftforge.common.DimensionManager.keepDimensionLoaded(dim, true);
+                if (net.minecraftforge.common.DimensionManager.getWorld(dim) == null) {
+                    net.minecraftforge.common.DimensionManager.initDimension(dim);
+                }
+            }
+            net.minecraft.world.WorldServer world = server.getWorld(dim);
+            if (world == null) {
+                send(sender, "{\"error\":\"world not loaded\",\"dim\":" + dim + "}");
+                return;
+            }
+            int provided = 0;
+            // Halo: extend 1 chunk on each side so populate fires for the
+            // entire inner rectangle (populate(X) needs +1/+1, +1/0, 0/+1
+            // neighbours loaded — covered by the halo).
+            for (int cx = xMin - 1; cx <= xMax + 1; cx++) {
+                for (int cz = zMin - 1; cz <= zMax + 1; cz++) {
+                    try {
+                        net.minecraft.world.chunk.Chunk c =
+                                world.getChunkProvider().provideChunk(cx, cz);
+                        if (c != null) provided++;
+                    } catch (RuntimeException ignored) {
+                        // Worldgen of one bad chunk shouldn't break the whole
+                        // warmup; let the caller decide if allLoaded=false is
+                        // a fatal error for them.
+                    }
+                }
+            }
+            boolean allLoaded = world.isAreaLoaded(
+                    new net.minecraft.util.math.BlockPos(xMin << 4, 0, zMin << 4),
+                    new net.minecraft.util.math.BlockPos((xMax << 4) + 15, 255, (zMax << 4) + 15),
+                    false);
+            send(sender, "{\"ok\":" + allLoaded
+                    + ",\"dim\":" + dim
+                    + ",\"inner\":" + innerCount
+                    + ",\"provided\":" + provided
+                    + ",\"allLoaded\":" + allLoaded + "}");
+            return;
+        }
         send(sender, "{\"error\":\"unknown chunk subcommand\"}");
     }
 
