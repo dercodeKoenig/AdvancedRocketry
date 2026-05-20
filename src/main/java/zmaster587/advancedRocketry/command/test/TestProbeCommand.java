@@ -190,6 +190,9 @@ public class TestProbeCommand extends CommandBase {
                 case "server":
                     handleServer(server, sender, tail(args));
                     break;
+                case "player":
+                    handlePlayer(server, sender, tail(args));
+                    break;
                 default:
                     send(sender, "{\"error\":\"unknown subcommand\",\"sub\":\"" + args[0] + "\"}");
             }
@@ -6181,9 +6184,30 @@ public class TestProbeCommand extends CommandBase {
             // mixin-injected gravity hook fires. We don't force-load here —
             // tests are expected to do so via the `chunk forceload` probe.
             boolean spawned = world.spawnEntity(entity);
+            // Optional: drive N onUpdate ticks atomically in the same
+            // probe call — used by mixin gravity pins that need to
+            // observe motionY/posY accumulation BEFORE the natural
+            // server tick gets a chance to setDead the entity (vanilla
+            // EntityFallingBlock + co. have aggressive auto-setDead
+            // logic on the very next worldTick). The 7th arg (after the
+            // entity name) names the IBlockState for FallingBlock-style
+            // ctors; an 8th arg requests that many immediate ticks.
+            int extraTicks = args.length >= 8 ? Math.max(0, parseIntOr(args[7], 0)) : 0;
+            int ticked = 0;
+            if (spawned && extraTicks > 0) {
+                for (int i = 0; i < extraTicks; i++) {
+                    if (entity.isDead) break;
+                    entity.onUpdate();
+                    ticked++;
+                }
+            }
             send(sender, "{\"ok\":true,\"spawned\":" + spawned
                     + ",\"entityId\":" + entity.getEntityId()
-                    + ",\"entityClass\":\"" + escapeJson(entity.getClass().getName()) + "\"}");
+                    + ",\"entityClass\":\"" + escapeJson(entity.getClass().getName()) + "\""
+                    + ",\"ticked\":" + ticked
+                    + ",\"isDead\":" + entity.isDead
+                    + ",\"motionY\":" + entity.motionY
+                    + ",\"posY\":" + entity.posY + "}");
             return;
         }
         if (args.length >= 3 && "info".equalsIgnoreCase(args[0])) {
@@ -6211,7 +6235,35 @@ public class TestProbeCommand extends CommandBase {
                     + ",\"isDead\":" + entity.isDead + "}");
             return;
         }
-        send(sender, "{\"error\":\"unknown entity subcommand — try spawn <dim> <x> <y> <z> <name> [block-id] | info <dim> <entityId>\"}");
+        if (args.length >= 3 && "tick".equalsIgnoreCase(args[0])) {
+            int dim = parseIntOr(args[1], Integer.MIN_VALUE);
+            int id = parseIntOr(args[2], -1);
+            int count = args.length >= 4 ? Math.max(1, parseIntOr(args[3], 1)) : 1;
+            net.minecraft.world.WorldServer world = server.getWorld(dim);
+            if (world == null) {
+                send(sender, "{\"error\":\"world not loaded\",\"dim\":" + dim + "}");
+                return;
+            }
+            net.minecraft.entity.Entity entity = world.getEntityByID(id);
+            if (entity == null) {
+                send(sender, "{\"error\":\"entity not found\",\"entityId\":" + id + "}");
+                return;
+            }
+            int ticked = 0;
+            for (int i = 0; i < count; i++) {
+                if (entity.isDead) break;
+                entity.onUpdate();
+                ticked++;
+            }
+            send(sender, "{\"ok\":true,\"entityId\":" + id
+                    + ",\"requested\":" + count
+                    + ",\"ticked\":" + ticked
+                    + ",\"isDead\":" + entity.isDead
+                    + ",\"motionY\":" + entity.motionY
+                    + ",\"posY\":" + entity.posY + "}");
+            return;
+        }
+        send(sender, "{\"error\":\"unknown entity subcommand — try spawn <dim> <x> <y> <z> <name> [block-id] | info <dim> <entityId> | tick <dim> <entityId> [count]\"}");
     }
 
     /**
@@ -6270,6 +6322,82 @@ public class TestProbeCommand extends CommandBase {
 
     private static double parseDoubleOr(String s, double dflt) {
         try { return Double.parseDouble(s); } catch (NumberFormatException nfe) { return dflt; }
+    }
+
+    /**
+     * Player-state probe. Used by TASK-08-mixin's testClient e2e pin for
+     * the {@code MixinEntityPlayer(MP)InventoryAccess} {@code @Redirect}:
+     * a real-player GUI session can only exercise the rocket-inventory
+     * bypass when {@link zmaster587.advancedRocketry.util.RocketInventoryHelper}
+     * has the player in its bypass set — but the helper's public mutators
+     * are normally driven by AR's own rocket-mount lifecycle. This probe
+     * exposes them directly so the e2e test can toggle the bypass and
+     * assert the open container GUI survives a distance-driven close
+     * cycle that would otherwise fire from {@code EntityPlayerMP.onUpdate}.
+     *
+     * <p>Subcommands:</p>
+     * <ul>
+     *   <li>{@code /artest player inv-bypass add} — add the first
+     *       connected player to the bypass set.</li>
+     *   <li>{@code /artest player inv-bypass remove} — remove them.</li>
+     *   <li>{@code /artest player inv-bypass status} — report whether
+     *       the first connected player is in the bypass set.</li>
+     *   <li>{@code /artest player open-container} — report whether the
+     *       first connected player currently has an open container
+     *       (i.e. {@code openContainer != inventoryContainer}).</li>
+     * </ul>
+     */
+    private void handlePlayer(MinecraftServer server, ICommandSender sender, String[] args) {
+        if (args.length < 1) {
+            send(sender, "{\"error\":\"usage: /artest player inv-bypass <add|remove|status> | open-container\"}");
+            return;
+        }
+        String sub = args[0].toLowerCase(java.util.Locale.ROOT);
+        java.util.List<net.minecraft.entity.player.EntityPlayerMP> players =
+                server.getPlayerList().getPlayers();
+        if (players.isEmpty()) {
+            send(sender, "{\"error\":\"no players connected\"}");
+            return;
+        }
+        net.minecraft.entity.player.EntityPlayerMP player = players.get(0);
+        if ("inv-bypass".equals(sub) && args.length >= 2) {
+            String action = args[1].toLowerCase(java.util.Locale.ROOT);
+            switch (action) {
+                case "add":
+                    zmaster587.advancedRocketry.util.RocketInventoryHelper
+                            .addPlayerToInventoryBypass(player);
+                    send(sender, "{\"ok\":true,\"action\":\"add\",\"player\":\""
+                            + escapeJson(player.getName()) + "\""
+                            + ",\"inBypass\":true}");
+                    return;
+                case "remove":
+                    zmaster587.advancedRocketry.util.RocketInventoryHelper
+                            .removePlayerFromInventoryBypass(player);
+                    send(sender, "{\"ok\":true,\"action\":\"remove\",\"player\":\""
+                            + escapeJson(player.getName()) + "\""
+                            + ",\"inBypass\":"
+                            + zmaster587.advancedRocketry.util.RocketInventoryHelper
+                                    .canPlayerBypassInvChecks(player) + "}");
+                    return;
+                case "status":
+                    send(sender, "{\"ok\":true,\"player\":\""
+                            + escapeJson(player.getName()) + "\""
+                            + ",\"inBypass\":"
+                            + zmaster587.advancedRocketry.util.RocketInventoryHelper
+                                    .canPlayerBypassInvChecks(player) + "}");
+                    return;
+            }
+        }
+        if ("open-container".equals(sub)) {
+            boolean isInventoryContainer = player.openContainer == player.inventoryContainer;
+            send(sender, "{\"ok\":true,\"player\":\""
+                    + escapeJson(player.getName()) + "\""
+                    + ",\"openContainerClass\":\""
+                    + escapeJson(player.openContainer.getClass().getName()) + "\""
+                    + ",\"isInventoryContainer\":" + isInventoryContainer + "}");
+            return;
+        }
+        send(sender, "{\"error\":\"unknown player subcommand — try inv-bypass <add|remove|status> | open-container\"}");
     }
 
     // §7.18 — generic block-state probe ---------------------------------------
