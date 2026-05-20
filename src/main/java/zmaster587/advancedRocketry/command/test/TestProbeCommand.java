@@ -3514,7 +3514,31 @@ public class TestProbeCommand extends CommandBase {
                     parseIntOr(args[5], 0));
             return;
         }
-        send(sender, "{\"error\":\"unknown fixture subcommand — try rocket <dim> <x> <y> <z> | machine cutting <dim> <x> <y> <z> | multiblock blackhole-gen|beacon|observatory|railgun|warp-core|gravity-controller|planet-analyser|space-elevator|microwave-receiver|solar-array <dim> <x> <y> <z>\"}");
+        if (args.length >= 6 && "multiblock".equalsIgnoreCase(args[0])
+                && "terraformer".equalsIgnoreCase(args[1])) {
+            handleFixtureGenericFromStructure(server, sender,
+                    parseIntOr(args[2], Integer.MIN_VALUE),
+                    parseIntOr(args[3], 0),
+                    parseIntOr(args[4], 64),
+                    parseIntOr(args[5], 0),
+                    "advancedrocketry", "terraformer",
+                    "zmaster587.advancedRocketry.tile.multiblock.TileAtmosphereTerraformer",
+                    "structure");
+            return;
+        }
+        if (args.length >= 6 && "multiblock".equalsIgnoreCase(args[0])
+                && "orbital-laser-drill".equalsIgnoreCase(args[1])) {
+            handleFixtureGenericFromStructure(server, sender,
+                    parseIntOr(args[2], Integer.MIN_VALUE),
+                    parseIntOr(args[3], 0),
+                    parseIntOr(args[4], 64),
+                    parseIntOr(args[5], 0),
+                    "advancedrocketry", "spaceLaser",
+                    "zmaster587.advancedRocketry.tile.multiblock.orbitallaserdrill.TileOrbitalLaserDrill",
+                    "structure");
+            return;
+        }
+        send(sender, "{\"error\":\"unknown fixture subcommand — try rocket <dim> <x> <y> <z> | machine cutting <dim> <x> <y> <z> | multiblock blackhole-gen|beacon|observatory|railgun|warp-core|gravity-controller|planet-analyser|space-elevator|microwave-receiver|solar-array|terraformer|orbital-laser-drill <dim> <x> <y> <z>\"}");
     }
 
     /**
@@ -4804,6 +4828,226 @@ public class TestProbeCommand extends CommandBase {
         @SuppressWarnings("deprecation")
         net.minecraft.block.state.IBlockState state = block.getStateFromMeta(meta);
         return state;
+    }
+
+    /**
+     * Resolves a single structure-array cell to an {@code IBlockState} for
+     * placement, mirroring libVulpes' {@code TileMultiBlock.getAllowableBlocks}
+     * but choosing a concrete representative from each accepted set. Returns
+     * {@code null} for an unresolved cell (e.g. unknown char mapping or an
+     * empty OreDictionary lookup). Handles:
+     * <ul>
+     *   <li>{@code null} → {@code null} (caller skips).</li>
+     *   <li>{@code Blocks.AIR} → AIR state (caller may pre-clear instead).</li>
+     *   <li>{@code Block} instance → {@code getDefaultState}.</li>
+     *   <li>{@code BlockMeta(block, meta)} → {@code block.getStateFromMeta(meta)}.</li>
+     *   <li>{@code Block[]} → first element's default state.</li>
+     *   <li>{@code String} → {@link #firstOreDictBlockState}.</li>
+     *   <li>{@code Character 'c'} → caller-supplied {@code controllerState}.</li>
+     *   <li>{@code Character} in libVulpes/AR charMapping
+     *       ({@code 'I','O','P','p','L','l','D'}) → first {@code BlockMeta}
+     *       from the mapping (which is the canonical Forge variant).</li>
+     * </ul>
+     */
+    @SuppressWarnings("deprecation")
+    private static net.minecraft.block.state.IBlockState resolveStructureCell(Object cell,
+            net.minecraft.block.state.IBlockState controllerState) {
+        if (cell == null) return null;
+
+        if (cell instanceof Character) {
+            char c = (Character) cell;
+            if (c == 'c') return controllerState;
+            if (c == '*') return null;  // wildcard — caller's responsibility
+            java.util.List<zmaster587.libVulpes.block.BlockMeta> mapping =
+                    zmaster587.libVulpes.tile.multiblock.TileMultiBlock.getMapping(c);
+            if (mapping == null || mapping.isEmpty()) return null;
+            zmaster587.libVulpes.block.BlockMeta bm = mapping.get(0);
+            net.minecraft.block.Block block = bm.getBlock();
+            int meta = bm.getMeta();
+            return block.getStateFromMeta(meta);
+        }
+        if (cell instanceof net.minecraft.block.Block) {
+            net.minecraft.block.Block block = (net.minecraft.block.Block) cell;
+            return block.getDefaultState();
+        }
+        if (cell instanceof zmaster587.libVulpes.block.BlockMeta) {
+            zmaster587.libVulpes.block.BlockMeta bm = (zmaster587.libVulpes.block.BlockMeta) cell;
+            int meta = bm.getMeta();
+            return bm.getBlock().getStateFromMeta(meta);
+        }
+        if (cell instanceof net.minecraft.block.Block[]) {
+            net.minecraft.block.Block[] arr = (net.minecraft.block.Block[]) cell;
+            if (arr.length == 0 || arr[0] == null) return null;
+            return arr[0].getDefaultState();
+        }
+        if (cell instanceof String) {
+            return firstOreDictBlockState((String) cell);
+        }
+        return null;
+    }
+
+    /**
+     * Generic fixture-builder backed by reflection into a tile class's
+     * {@code structure} array. Use for multiblocks whose structure array is
+     * large enough that hand-translating every cell is impractical (e.g.
+     * {@code TileAtmosphereTerraformer} 17×17, {@code TileOrbitalLaserDrill}
+     * sparse 11×9×3).
+     *
+     * <p>Algorithm:</p>
+     * <ol>
+     *   <li>Look up the controller block by registry name; assemble its
+     *       NORTH-facing state.</li>
+     *   <li>Reflectively read the structure array — static field or, if the
+     *       field is non-static, construct a new instance via the tile
+     *       class's no-arg constructor.</li>
+     *   <li>Locate the {@code 'c'} character to derive the controller
+     *       offset.</li>
+     *   <li>Pre-clear the full bounding box to air, then iterate every cell
+     *       and place a concrete representative via
+     *       {@link #resolveStructureCell}. Wildcards ({@code '*'}) are left
+     *       at air — fixtures using this helper must either have empty
+     *       wildcards or accept AIR.</li>
+     * </ol>
+     */
+    private void handleFixtureGenericFromStructure(MinecraftServer server, ICommandSender sender,
+            int dim, int cx, int cy, int cz,
+            String controllerNamespace, String controllerPath,
+            String tileClassName, String structureFieldName) {
+        net.minecraft.world.WorldServer world = server.getWorld(dim);
+        if (world == null) {
+            send(sender, "{\"error\":\"world not loaded\",\"dim\":" + dim + "}");
+            return;
+        }
+
+        net.minecraft.block.Block controller =
+                ForgeRegistries.BLOCKS.getValue(new ResourceLocation(controllerNamespace, controllerPath));
+        if (controller == null) {
+            send(sender, "{\"error\":\"missing controller block\",\"id\":\""
+                    + controllerNamespace + ":" + controllerPath + "\"}");
+            return;
+        }
+
+        net.minecraft.block.state.IBlockState controllerState = controller.getDefaultState();
+        try {
+            controllerState = controllerState.withProperty(
+                    zmaster587.libVulpes.block.RotatableBlock.FACING,
+                    net.minecraft.util.EnumFacing.NORTH);
+        } catch (IllegalArgumentException ignored) {
+            // FACING absent (e.g. fully-rotatable variants) — keep default.
+        }
+
+        Object[][][] structure;
+        try {
+            Class<?> tileClass = Class.forName(tileClassName);
+            java.lang.reflect.Field field = tileClass.getDeclaredField(structureFieldName);
+            field.setAccessible(true);
+            if (java.lang.reflect.Modifier.isStatic(field.getModifiers())) {
+                structure = (Object[][][]) field.get(null);
+            } else {
+                Object instance = tileClass.getConstructor().newInstance();
+                structure = (Object[][][]) field.get(instance);
+            }
+        } catch (ReflectiveOperationException e) {
+            send(sender, "{\"error\":\"reflection failed loading structure\",\"msg\":\""
+                    + escapeJson(e.getClass().getSimpleName() + ": " + e.getMessage()) + "\"}");
+            return;
+        }
+        if (structure == null || structure.length == 0
+                || structure[0].length == 0 || structure[0][0].length == 0) {
+            send(sender, "{\"error\":\"empty structure array\"}");
+            return;
+        }
+
+        // Locate controller offset.
+        int ox = -1, oy = -1, oz = -1;
+        for (int y = 0; y < structure.length && ox == -1; y++) {
+            for (int z = 0; z < structure[0].length && ox == -1; z++) {
+                for (int x = 0; x < structure[0][0].length; x++) {
+                    Object cell = structure[y][z][x];
+                    if (cell instanceof Character && (Character) cell == 'c') {
+                        ox = x; oy = y; oz = z;
+                        break;
+                    }
+                }
+            }
+        }
+        if (ox == -1) {
+            send(sender, "{\"error\":\"structure has no 'c' controller cell\"}");
+            return;
+        }
+
+        int dimY = structure.length;
+        int dimZ = structure[0].length;
+        int dimX = structure[0][0].length;
+
+        // NORTH-facing position formula (frontZ=-1, frontX=0):
+        //   globalX = cx + (ox - x)
+        //   globalY = cy - y + oy
+        //   globalZ = cz + (z - oz)
+        int minX = cx + ox - (dimX - 1), maxX = cx + ox;
+        int minY = cy - (dimY - 1) + oy, maxY = cy + oy;
+        int minZ = cz - oz,              maxZ = cz + (dimZ - 1) - oz;
+
+        // Pre-clear the bounding box to air. Soft cap to keep tests cheap.
+        int volume = (maxX - minX + 1) * (maxY - minY + 1) * (maxZ - minZ + 1);
+        if (volume > 16_384) {
+            send(sender, "{\"error\":\"footprint volume too large\",\"volume\":" + volume + ",\"cap\":16384}");
+            return;
+        }
+        for (int gx = minX; gx <= maxX; gx++) {
+            for (int gy = minY; gy <= maxY; gy++) {
+                for (int gz = minZ; gz <= maxZ; gz++) {
+                    world.setBlockToAir(new BlockPos(gx, gy, gz));
+                }
+            }
+        }
+
+        // Place each non-null cell.
+        int placed = 0, skipped = 0, unresolved = 0;
+        for (int y = 0; y < dimY; y++) {
+            for (int z = 0; z < dimZ; z++) {
+                for (int x = 0; x < dimX; x++) {
+                    Object cell = structure[y][z][x];
+                    if (cell == null) continue;
+                    int gx = cx + (ox - x);
+                    int gy = cy - y + oy;
+                    int gz = cz + (z - oz);
+                    BlockPos p = new BlockPos(gx, gy, gz);
+
+                    if (cell instanceof net.minecraft.block.Block
+                            && cell == net.minecraft.init.Blocks.AIR) {
+                        // Already cleared.
+                        skipped++;
+                        continue;
+                    }
+                    if (cell instanceof Character && (Character) cell == '*') {
+                        // Wildcard left as AIR — callers using this helper
+                        // must ensure '*' accepts AIR for the multiblock.
+                        skipped++;
+                        continue;
+                    }
+
+                    net.minecraft.block.state.IBlockState state = resolveStructureCell(cell, controllerState);
+                    if (state == null) {
+                        unresolved++;
+                        continue;
+                    }
+                    world.setBlockState(p, state);
+                    placed++;
+                }
+            }
+        }
+
+        Map<String, Object> info = new LinkedHashMap<>();
+        info.put("ok", true);
+        info.put("controllerPos", new int[]{cx, cy, cz});
+        info.put("dimensions",    new int[]{dimX, dimY, dimZ});
+        info.put("offset",        new int[]{ox, oy, oz});
+        info.put("boundingBox",   new int[]{minX, minY, minZ, maxX, maxY, maxZ});
+        info.put("placed",        placed);
+        info.put("skipped",       skipped);
+        info.put("unresolved",    unresolved);
+        send(sender, jsonMap(info));
     }
 
     /**

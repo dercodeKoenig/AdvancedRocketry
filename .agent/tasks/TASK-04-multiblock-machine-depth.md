@@ -201,6 +201,33 @@ end-to-end (blocked by commented-out pipe blocks).
       - **Phase 2** (deferred): TileOrbitalLaserDrill behavioural tests (energy-in → output-produced).
       - **Phase 6 (cross-cutting validation)**: ✅ full pyramid PASS; EOD markers consolidated.
 
+      **2026-05-20 final autonomous run**: Terraformer + OrbitalLaserDrill
+      shipped (+4 tests) via new reflection-based generic placer.
+      EOD marker: `2026-05-20-2030_task04-terraformer-orbitallaser.md`.
+      - `Terraformer` — 17×17 sphere-like over ~10 layers. Hand-translation
+        would have been ~2-3 hours of error-prone literal cell mapping;
+        the reflection placer reads the production `structure` array and
+        emits everything verbatim.
+      - `OrbitalLaserDrill` — 3×9×11 sparse with `blockVacuumLaser`,
+        `blockLens`, `blockAdvStructureBlock`, `blockStructureBlock`,
+        `'O'` output hatches, `'P'` plugs.
+      New infrastructure: `handleFixtureGenericFromStructure` +
+      `resolveStructureCell` handle every libVulpes/AR cell type
+      (Block / BlockMeta / Block[] / String OreDict / chars with
+      mapping). Reusable for any future massive multiblock — needs
+      only a dispatcher line + class name. Soft cap 16k bounding-box
+      volume.
+
+      **Cumulative TASK-04 post-assembly**: 11 multiblocks × ~2-4 tests
+      = 31 behavioural tests. With pre-assembly contract (8) +
+      WarpControllerDepth (7) = 46 multiblock-related testServer tests
+      in total. Full pyramid: **217 / 0 failures / 0 errors / 3 skipped**.
+
+      [x] **TASK-04 essential surface CLOSED.** Remaining items
+      (WarpController fuel-trigger-moves-station, OrbitalLaserDrill
+      behavioural energy-in→output-produced) require additional
+      probes outside TASK-04's scope and are tracked as follow-ups.
+
   Research note (2026-05-19, autonomous session): the libVulpes
   structure-block registry names ARE recoverable from the deobf JAR:
   - `libvulpes:structureMachine` (basic structure block)
