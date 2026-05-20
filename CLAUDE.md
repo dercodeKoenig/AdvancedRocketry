@@ -7,7 +7,9 @@ planets, and space exploration mechanics. Reworked/maintained for the modern
 "Towards Rocket Science" modpack.
 
 **Tech Stack**: Java 8, Minecraft Forge 1.12.2, Kotlin DSL Gradle (FancyGradle), libVulpes,
-JEI integration, ASM coremod (`AdvancedRocketryPlugin`)
+JEI integration, MixinBooter (`AdvancedRocketryPlugin` registers
+`mixins.advancedrocketry.json`; legacy ASM `IClassTransformer` coremod removed
+in TASK-08-mixin)
 
 **Core Principle**: Maintain compatibility with vanilla 1.12.2 Forge ecosystem; favor
 small targeted bugfixes over large refactors; preserve existing public API/registry IDs
@@ -63,7 +65,10 @@ This loads `.agent/DEVELOPMENT-README.md` (your project navigator) which provide
 ### Forge Patterns
 - Register blocks/items/entities via Forge `@Mod.EventBusSubscriber` registry events
 - Tile entities: keep NBT save/load symmetric, version legacy NBT carefully (saves matter)
-- ASM transformers live in `zmaster587.advancedRocketry.asm` (coremod entry point: `AdvancedRocketryPlugin`)
+- Bytecode patching uses Mixin (MixinBooter); mixins live in
+  `zmaster587.advancedRocketry.mixin` and are registered via
+  `mixins.advancedrocketry.json`. The `AdvancedRocketryPlugin` coremod entry
+  point only bootstraps Mixin — no `IClassTransformer` left.
 - Network packets: use `IMessage`/`IMessageHandler` SimpleImpl pattern
 - Side checks: `@SideOnly(Side.CLIENT)` for rendering / GUI / sound code only
 - Don't break public APIs in `zmaster587.advancedRocketry.api.*` without strong reason

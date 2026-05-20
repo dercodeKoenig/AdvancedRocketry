@@ -16,6 +16,7 @@ testServer wall time: **8m 27s** (50 % faster than pre-B2).
 | TASK-03 | Test depth deepening + harness consolidation (A1/A2/A4/A5/A6/A7 + B1/B2/B4/C) | ✅ partial — A2 tail + B3 deferred to TASK-10; A3 reframed as testClient e2e (TASK-10b) |
 | TASK-04 | Multiblock machine depth (Warp / Laser Drill / Elevator / Black Hole / 12 multiblocks) | ✅ |
 | TASK-07 | Rocket flight cycle beyond launch (orbit / dim-transition / descent / landing / dismantle / failure modes) | ✅ |
+| TASK-08-mixin | Rewrite ASM coremod (`ClassTransformer.java` + vendored HookLib) to Mixin; behavioural pin for `setBlockState` hook; existing 239-test suite implicitly pins gravity + atmosphere hooks | ✅ |
 
 ## Backlog — prioritised
 
@@ -24,13 +25,8 @@ ship silent gameplay breakage if untouched code regresses.
 
 ### 🔴 P0 — schedule next
 
-1. **TASK-08-mixin** — Rewrite the ASM coremod (`ClassTransformer.java`,
-   835 LoC + 24-file vendored HookLib) to Mixin and replace the
-   "ASM safety net" test goal with behavioural pins on the 4 surviving
-   hook points. ~14 h, 4-5 sessions. Replaces the original TASK-08
-   which proposed testing the ASM transformer in place.
-
-*(TASK-04 multiblock depth and TASK-07 flight cycle: closed — see Done table.)*
+*(TASK-04 multiblock depth, TASK-07 flight cycle, TASK-08-mixin coremod
+rewrite: closed — see Done table.)*
 
 ### 🟡 P1 — broad surface, medium impact
 
@@ -92,12 +88,11 @@ FakePlayer injection.
 If picking the next session:
 
 1. **If team wants the biggest player-visible coverage win**:
-   start TASK-04 Phase 1 (Warp Controller depth).
-2. **If team wants the biggest risk-reduction win**: start TASK-08
-   Phase 1 (ASM golden-snapshot infrastructure).
-3. **If team wants quick wall-time win**: start TASK-10 Phase 2 (B3
+   start TASK-10b (testClient e2e player-event coverage — also unlocks
+   the deferred inventory-distance-bypass pin from TASK-08-mixin).
+2. **If team wants quick wall-time win**: start TASK-10 Phase 2 (B3
    suite-grouping — mechanical, ~3 h).
-4. **If team wants the most "items checked off"**: start TASK-09
+3. **If team wants the most "items checked off"**: start TASK-09
    (smallest task; ~3-4 sessions).
 
 ## Conventions
