@@ -47,6 +47,58 @@ public class OrbitalLaserDrillMultiblockTest extends AbstractSharedServerTest {
     }
 
     @Test
+    public void orbitalLaserDrillExposesEnergyCapAndTicksSafely() throws Exception {
+        // Behavioural depth: after assembly, the multiblock must (a) expose
+        // Forge's IEnergyStorage capability on one of its 'P' power-input
+        // plugs (energy injection goes through the plug, not the controller),
+        // and (b) survive several ITickable ticks without throwing. The full
+        // energy-in → output-produced cycle requires a configured drill
+        // target and chunk-survey scaffolding — out of scope for this test.
+        // The capability + tick path is the necessary precondition for any
+        // future end-to-end laser-drill behavioural test.
+        int cx = CX + 80, cy = CY, cz = CZ;
+        String fixture = join(client().execute(
+                "artest fixture multiblock orbital-laser-drill 0 " + cx + " " + cy + " " + cz));
+        assertTrue("fixture failed: " + fixture, fixture.contains("\"ok\":true"));
+
+        String tryComplete = join(client().execute(
+                "artest machine try-complete 0 " + cx + " " + cy + " " + cz));
+        assertTrue("baseline must validate: " + tryComplete,
+                tryComplete.contains("\"isComplete\":true"));
+
+        // (a) Energy flows through a 'P' power-input plug. structure[1][2][10]
+        // → for NORTH-facing controller (offset x=1, y=2, z=2) global
+        // (cx-9, cy+1, cz). The plug exposes IEnergyStorage; once assembled
+        // and bound to controller batteries, its `getMaxEnergyStored` reports
+        // the controller's pooled max (134_217_727 RF by default).
+        int plugX = cx - 9, plugY = cy + 1, plugZ = cz;
+        String storedAtPlug = join(client().execute(
+                "artest energy stored 0 " + plugX + " " + plugY + " " + plugZ));
+        assertTrue("plug must expose Forge energy capability: " + storedAtPlug,
+                storedAtPlug.contains("\"hasEnergy\":true"));
+        long capMax = parseLongField(storedAtPlug, "energyMax");
+        assertTrue("plug must report a non-trivial max storage (got " + capMax + "): "
+                + storedAtPlug, capMax > 0);
+
+        // (b) Force-tick the controller 20x — must not throw. Production
+        // update() pulls drill state, checks completeStructure, batteries,
+        // mode, target — many code paths exercised.
+        String tick = join(client().execute(
+                "artest tile force-tick 0 " + cx + " " + cy + " " + cz + " 20"));
+        assertTrue("force-tick must not error: " + tick,
+                tick.contains("\"ok\":true"));
+        assertTrue("force-tick must report 20 ticks completed: " + tick,
+                tick.contains("\"ticked\":20"));
+
+        // (c) Plug's energy capability still exposed after 20 ticks (no
+        // capability loss from idle ticking).
+        String storedAfter = join(client().execute(
+                "artest energy stored 0 " + plugX + " " + plugY + " " + plugZ));
+        assertTrue("plug capability must persist after ticking: " + storedAfter,
+                storedAfter.contains("\"hasEnergy\":true"));
+    }
+
+    @Test
     public void orbitalLaserDrillMultiblockInvalidatesWhenLensCellRemoved() throws Exception {
         int cx = CX + 40, cy = CY, cz = CZ;
         String fixture = join(client().execute(
@@ -72,5 +124,12 @@ public class OrbitalLaserDrillMultiblockTest extends AbstractSharedServerTest {
 
     private static String join(java.util.List<String> resp) {
         return String.join("\n", resp);
+    }
+
+    private static long parseLongField(String json, String field) {
+        java.util.regex.Matcher m = java.util.regex.Pattern
+                .compile("\"" + field + "\":(-?\\d+)").matcher(json);
+        if (!m.find()) throw new AssertionError("missing field " + field + " in: " + json);
+        return Long.parseLong(m.group(1));
     }
 }

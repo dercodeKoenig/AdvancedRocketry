@@ -206,6 +206,125 @@ public class WarpControllerDepthTest extends AbstractSharedServerTest {
     }
 
     @Test
+    public void warpTriggerWithFuelAndWarpCoreMovesStationToTransit() throws Exception {
+        // Full warp gate satisfied: fuel > travelCost, dest != current,
+        // warp core present, not anchored, dest planet has no required
+        // artifacts (overworldProperties is the fallback for non-AR dims).
+        // Production calls SpaceObjectManager.moveStationToBody(station,
+        // dest, transitionTicks) which sets orbitingBody to WARPDIMID
+        // (Integer.MIN_VALUE) and starts the transit timer.
+        int stationId = createStationOrbiting(0);
+        int[] xz = stationSpawnCoords(stationId);
+
+        ok(client().execute("artest station fuel " + stationId + " set 999999"));
+        ok(client().execute("artest station set-dest " + stationId + " 1"));
+        // Wire the station's properties.parentPlanet to overworld. Without
+        // this, station.properties.getParentProperties() is null and
+        // TileWarpController.getTravelCost returns Integer.MAX_VALUE →
+        // useFuel(MAX_VALUE) returns 0 (capped at fuelAmount) → warp refused.
+        ok(client().execute("artest station set-parent " + stationId + " 0"));
+        // Register a warp core. Position is arbitrary — it just needs to be
+        // in the station's tracked warp-core list. The hasUsableWarpCore
+        // gate only checks the list is non-empty + dest != current +
+        // parentPlanet != WARPDIMID; no actual world tile is required for
+        // the move call.
+        ok(client().execute("artest station add-warp-core " + stationId
+                + " " + xz[0] + " 128 " + xz[1]));
+
+        // Place the controller inside the station chunks.
+        placeAndReadWarpState(SPACE_DIM, xz[0], 128, xz[1]);
+
+        String preInfo = ok(client().execute("artest station info " + stationId));
+        int orbBefore = parseGroup(Pattern.compile("\"orbitingPlanetId\":(-?\\d+)"),
+                preInfo, "orb before");
+        assertEquals("station starts orbiting dim 0", 0, orbBefore);
+        assertTrue("station must report hasUsableWarpCore=true pre-trigger: " + preInfo,
+                preInfo.contains("\"hasUsableWarpCore\":true"));
+
+        // Sanity: warp-trigger-debug reports all gates green. Pins the gate
+        // expectations independently of the trigger itself — a regression
+        // that breaks ANY gate (anchored, fuel, dest, artifact, etc.) shows
+        // up here with a clear diagnostic.
+        String debug = ok(client().execute(
+                "artest tile warp-trigger-debug " + SPACE_DIM + " " + xz[0] + " 128 " + xz[1]));
+        assertTrue("warp-trigger-debug must report allGatesGreen=true: " + debug,
+                debug.contains("\"allGatesGreen\":true"));
+
+        String trigger = ok(client().execute(
+                "artest tile warp-trigger " + SPACE_DIM + " " + xz[0] + " 128 " + xz[1]));
+        assertTrue("warp-trigger probe must respond ok: " + trigger,
+                trigger.contains("\"ok\":true"));
+
+        String after = ok(client().execute("artest station info " + stationId));
+        int orbAfter = parseGroup(Pattern.compile("\"orbitingPlanetId\":(-?\\d+)"),
+                after, "orb after");
+        assertNotEquals("orbitingPlanetId must change after a fueled warp",
+                orbBefore, orbAfter);
+        assertEquals("during transit, station's orbit equals WARPDIMID",
+                Integer.MIN_VALUE, orbAfter);
+        assertTrue("transitionTime must be > 0 immediately after warp-trigger: " + after,
+                after.matches("(?s).*\"transitionTime\":[1-9][0-9]*.*"));
+    }
+
+    @Test
+    public void warpTriggerOnExplicitlyAnchoredStationIsRefused() throws Exception {
+        // Explicit anchored=true case (the sibling test only documented the
+        // default false). With everything else green (fuel, dest, warp core),
+        // anchored=true MUST still refuse the warp.
+        int stationId = createStationOrbiting(0);
+        int[] xz = stationSpawnCoords(stationId);
+
+        ok(client().execute("artest station fuel " + stationId + " set 999999"));
+        ok(client().execute("artest station set-dest " + stationId + " 1"));
+        ok(client().execute("artest station add-warp-core " + stationId
+                + " " + xz[0] + " 128 " + xz[1]));
+        // Anchor the station — this is the gate under test.
+        String anchorResp = ok(client().execute(
+                "artest station set-anchor " + stationId + " true"));
+        assertTrue("anchor probe must succeed: " + anchorResp,
+                anchorResp.contains("\"after\":true"));
+
+        placeAndReadWarpState(SPACE_DIM, xz[0], 128, xz[1]);
+
+        int orbBefore = parseGroup(Pattern.compile("\"orbitingPlanetId\":(-?\\d+)"),
+                ok(client().execute("artest station info " + stationId)),
+                "orb before");
+        ok(client().execute(
+                "artest tile warp-trigger " + SPACE_DIM + " " + xz[0] + " 128 " + xz[1]));
+        int orbAfter = parseGroup(Pattern.compile("\"orbitingPlanetId\":(-?\\d+)"),
+                ok(client().execute("artest station info " + stationId)),
+                "orb after");
+        assertEquals("anchored station's orbit must NOT change despite fuel/dest/core",
+                orbBefore, orbAfter);
+    }
+
+    @Test
+    public void warpTriggerWithoutWarpCoreDoesNotMoveStation() throws Exception {
+        // Production gate: hasUsableWarpCore() requires hasWarpCores=true.
+        // Everything else green (fuel + dest != current, not anchored) but
+        // no warp core registered → warp refused.
+        int stationId = createStationOrbiting(0);
+        int[] xz = stationSpawnCoords(stationId);
+
+        ok(client().execute("artest station fuel " + stationId + " set 999999"));
+        ok(client().execute("artest station set-dest " + stationId + " 1"));
+        // INTENTIONALLY skipping add-warp-core.
+
+        placeAndReadWarpState(SPACE_DIM, xz[0], 128, xz[1]);
+
+        int orbBefore = parseGroup(Pattern.compile("\"orbitingPlanetId\":(-?\\d+)"),
+                ok(client().execute("artest station info " + stationId)),
+                "orb before");
+        ok(client().execute(
+                "artest tile warp-trigger " + SPACE_DIM + " " + xz[0] + " 128 " + xz[1]));
+        int orbAfter = parseGroup(Pattern.compile("\"orbitingPlanetId\":(-?\\d+)"),
+                ok(client().execute("artest station info " + stationId)),
+                "orb after");
+        assertEquals("warp without a warp core must NOT move the station",
+                orbBefore, orbAfter);
+    }
+
+    @Test
     public void multipleStationsHaveDistinctWarpControllerContexts() throws Exception {
         // Two stations created in succession must produce two controllers
         // (placed at each station's spawn coords) that resolve to two

@@ -228,6 +228,39 @@ end-to-end (blocked by commented-out pipe blocks).
       behavioural energy-in→output-produced) require additional
       probes outside TASK-04's scope and are tracked as follow-ups.
 
+      **2026-05-20 final session (deferred-followups close-out)**:
+      Both deferred items LANDED. EOD marker:
+      `2026-05-20-2300_task04-deferred-followups-closed.md`.
+
+      - **WarpController fuel-trigger-moves-station** (+3 tests):
+        `warpTriggerWithFuelAndWarpCoreMovesStationToTransit`,
+        `warpTriggerOnExplicitlyAnchoredStationIsRefused`,
+        `warpTriggerWithoutWarpCoreDoesNotMoveStation`.
+        Critical fix in the `warp-trigger` probe: it was calling
+        `controller.onInventoryButtonPressed(2)` (client-side
+        dispatcher, no warp logic) instead of `useNetworkData(
+        null, Side.SERVER, (byte)2, ...)` (server-side warp
+        gate code). Prior negative tests were passing trivially;
+        now they pass for the right reason.
+        New probes: `station set-dest`, `station set-anchor`,
+        `station set-parent`, `station add-warp-core`,
+        `tile warp-trigger-debug` (diagnostic for per-gate state).
+
+      - **OrbitalLaserDrill energy capability + tick** (+1 test):
+        `orbitalLaserDrillExposesEnergyCapAndTicksSafely`.
+        Verifies 'P' plug exposes IEnergyStorage, controller
+        survives 20× force-tick without throwing, capability
+        persists post-tick. Full energy-in→output-produced
+        cycle still requires drill-target scaffolding (out of
+        scope for TASK-04; tracked as a future task).
+
+      **Final cumulative: 12 multiblocks × ~3 tests = ~37 post-
+      assembly tests + 10 WarpControllerDepth + 8 pre-assembly
+      = 55 multiblock-related testServer tests. Pyramid: 221 / 0 /
+      0 / 3.
+
+      [x] **TASK-04 COMPLETE.**
+
   Research note (2026-05-19, autonomous session): the libVulpes
   structure-block registry names ARE recoverable from the deobf JAR:
   - `libvulpes:structureMachine` (basic structure block)

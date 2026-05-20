@@ -1050,8 +1050,87 @@ public class TestProbeCommand extends CommandBase {
                 info.put("fuelMax", sso.getMaxFuelAmount());
                 info.put("padCount", sso.getLandingPads().size());
                 info.put("hasFreePad", sso.hasFreeLandingPad());
+                info.put("hasWarpCores", sso.hasWarpCores);
+                info.put("hasUsableWarpCore", sso.hasUsableWarpCore());
             }
             send(sender, jsonMap(info));
+            return;
+        }
+        if ("set-dest".equalsIgnoreCase(args[0]) && args.length >= 3) {
+            // /artest station set-dest <id> <destDimId>
+            int id = parseIntOr(args[1], Integer.MIN_VALUE);
+            int destDim = parseIntOr(args[2], Integer.MIN_VALUE);
+            ISpaceObject station = SpaceObjectManager.getSpaceManager().getSpaceStation(id);
+            if (station == null) {
+                send(sender, "{\"error\":\"station not found\",\"id\":" + id + "}");
+                return;
+            }
+            int before = station.getDestOrbitingBody();
+            station.setDestOrbitingBody(destDim);
+            send(sender, "{\"ok\":true,\"id\":" + id + ",\"before\":" + before
+                    + ",\"after\":" + station.getDestOrbitingBody() + "}");
+            return;
+        }
+        if ("set-anchor".equalsIgnoreCase(args[0]) && args.length >= 3) {
+            // /artest station set-anchor <id> <true|false>
+            int id = parseIntOr(args[1], Integer.MIN_VALUE);
+            boolean anchored = Boolean.parseBoolean(args[2]);
+            ISpaceObject station = SpaceObjectManager.getSpaceManager().getSpaceStation(id);
+            if (station == null) {
+                send(sender, "{\"error\":\"station not found\",\"id\":" + id + "}");
+                return;
+            }
+            boolean before = station.isAnchored();
+            station.setIsAnchored(anchored);
+            send(sender, "{\"ok\":true,\"id\":" + id + ",\"before\":" + before
+                    + ",\"after\":" + station.isAnchored() + "}");
+            return;
+        }
+        if ("set-parent".equalsIgnoreCase(args[0]) && args.length >= 3) {
+            // /artest station set-parent <id> <parentDimId>
+            // Wires the station's DimensionProperties parent so that
+            // travel-cost calculations have a non-null reference frame.
+            // Fresh stations from /artest station create start with
+            // parentPlanet = INVALID_PLANET (clone of
+            // defaultSpaceDimensionProperties), which makes
+            // TileWarpController.getTravelCost return Integer.MAX_VALUE
+            // and useFuel(...) return 0 → warp refused.
+            int id = parseIntOr(args[1], Integer.MIN_VALUE);
+            int parentDim = parseIntOr(args[2], 0);
+            ISpaceObject station = SpaceObjectManager.getSpaceManager().getSpaceStation(id);
+            if (station == null) {
+                send(sender, "{\"error\":\"station not found\",\"id\":" + id + "}");
+                return;
+            }
+            zmaster587.advancedRocketry.dimension.DimensionProperties parentProps =
+                    zmaster587.advancedRocketry.dimension.DimensionManager.getInstance()
+                            .getDimensionProperties(parentDim);
+            if (parentProps == null) {
+                send(sender, "{\"error\":\"unknown parent dim\",\"dim\":" + parentDim + "}");
+                return;
+            }
+            zmaster587.advancedRocketry.dimension.DimensionProperties stationProps =
+                    (zmaster587.advancedRocketry.dimension.DimensionProperties) station.getProperties();
+            stationProps.setParentPlanet(parentProps, false);
+            send(sender, "{\"ok\":true,\"id\":" + id + ",\"parentDim\":" + parentDim + "}");
+            return;
+        }
+        if ("add-warp-core".equalsIgnoreCase(args[0]) && args.length >= 5) {
+            // /artest station add-warp-core <id> <x> <y> <z>
+            int id = parseIntOr(args[1], Integer.MIN_VALUE);
+            int x = parseIntOr(args[2], 0);
+            int y = parseIntOr(args[3], 0);
+            int z = parseIntOr(args[4], 0);
+            ISpaceObject station = SpaceObjectManager.getSpaceManager().getSpaceStation(id);
+            if (!(station instanceof SpaceStationObject)) {
+                send(sender, "{\"error\":\"station not found or wrong type\",\"id\":" + id + "}");
+                return;
+            }
+            SpaceStationObject sso = (SpaceStationObject) station;
+            sso.addWarpCore(new zmaster587.libVulpes.util.HashedBlockPosition(x, y, z));
+            send(sender, "{\"ok\":true,\"id\":" + id + ",\"pos\":[" + x + "," + y + "," + z
+                    + "],\"hasWarpCores\":" + sso.hasWarpCores
+                    + ",\"hasUsableWarpCore\":" + sso.hasUsableWarpCore() + "}");
             return;
         }
         if ("add-pad".equalsIgnoreCase(args[0]) && args.length >= 4) {
@@ -2900,7 +2979,13 @@ public class TestProbeCommand extends CommandBase {
             zmaster587.advancedRocketry.tile.station.TileWarpController controller =
                     (zmaster587.advancedRocketry.tile.station.TileWarpController) tile;
             try {
-                controller.onInventoryButtonPressed(2);
+                // Production GUI flow: GUI button → PacketMachine(controller, (byte)2)
+                // → server's useNetworkData(player=null on dedicated-test path,
+                // Side.SERVER, packetId=2, empty nbt). onInventoryButtonPressed
+                // is the CLIENT-side dispatcher and does NOT contain the warp
+                // gate code — useNetworkData on the server does.
+                controller.useNetworkData(null, net.minecraftforge.fml.relauncher.Side.SERVER,
+                        (byte) 2, new net.minecraft.nbt.NBTTagCompound());
             } catch (RuntimeException e) {
                 send(sender, "{\"error\":\"warp trigger threw: "
                         + escapeJson(e.getClass().getSimpleName() + ": " + e.getMessage())
@@ -2910,7 +2995,71 @@ public class TestProbeCommand extends CommandBase {
             send(sender, "{\"ok\":true}");
             return;
         }
-        send(sender, "{\"error\":\"unknown tile subcommand — try force-tick | warp-state | warp-trigger | multiblock-state\"}");
+        if (args.length >= 5 && "warp-trigger-debug".equalsIgnoreCase(args[0])) {
+            // /artest tile warp-trigger-debug <dim> <x> <y> <z>
+            // Reports per-gate state for the warp-trigger production
+            // condition. Doesn't actually invoke the trigger — purely
+            // diagnostic.
+            int dim = parseIntOr(args[1], Integer.MIN_VALUE);
+            int x = parseIntOr(args[2], 0);
+            int y = parseIntOr(args[3], 0);
+            int z = parseIntOr(args[4], 0);
+            net.minecraft.world.WorldServer world = server.getWorld(dim);
+            if (world == null) {
+                send(sender, "{\"error\":\"world not loaded\",\"dim\":" + dim + "}");
+                return;
+            }
+            TileEntity tile = world.getTileEntity(new BlockPos(x, y, z));
+            if (!(tile instanceof zmaster587.advancedRocketry.tile.station.TileWarpController)) {
+                send(sender, "{\"error\":\"tile not TileWarpController\"}");
+                return;
+            }
+            try {
+                java.lang.reflect.Method gso = tile.getClass().getDeclaredMethod("getSpaceObject");
+                gso.setAccessible(true);
+                Object spaceObj = gso.invoke(tile);
+                if (!(spaceObj instanceof SpaceStationObject)) {
+                    send(sender, "{\"hasStation\":false,\"reason\":\""
+                            + (spaceObj == null ? "null" : spaceObj.getClass().getName())
+                            + "\"}");
+                    return;
+                }
+                SpaceStationObject sso = (SpaceStationObject) spaceObj;
+                java.lang.reflect.Method getCost = tile.getClass().getDeclaredMethod("getTravelCost");
+                getCost.setAccessible(true);
+                int cost = (Integer) getCost.invoke(tile);
+                java.lang.reflect.Method meets = tile.getClass().getDeclaredMethod(
+                        "meetsArtifactReq",
+                        zmaster587.advancedRocketry.dimension.DimensionProperties.class);
+                meets.setAccessible(true);
+                zmaster587.advancedRocketry.dimension.DimensionProperties destProps =
+                        zmaster587.advancedRocketry.dimension.DimensionManager.getInstance()
+                                .getDimensionProperties(sso.getDestOrbitingBody());
+                boolean meetsArtifact = (Boolean) meets.invoke(tile, destProps);
+                Map<String, Object> debug = new LinkedHashMap<>();
+                debug.put("hasStation", true);
+                debug.put("isAnchored", sso.isAnchored());
+                debug.put("hasUsableWarpCore", sso.hasUsableWarpCore());
+                debug.put("hasWarpCores", sso.hasWarpCores);
+                debug.put("orbitingPlanetId", sso.getOrbitingPlanetId());
+                debug.put("destOrbitingBody", sso.getDestOrbitingBody());
+                debug.put("fuelAmount", sso.getFuelAmount());
+                debug.put("travelCost", cost);
+                debug.put("meetsArtifactReq", meetsArtifact);
+                debug.put("destPropsNull", destProps == null);
+                debug.put("destRequiredArtifactsEmpty", destProps != null && destProps.getRequiredArtifacts().isEmpty());
+                debug.put("wouldUseFuelReturn", cost > sso.getFuelAmount() ? 0 : cost);
+                debug.put("allGatesGreen",
+                        !sso.isAnchored() && sso.hasUsableWarpCore() && meetsArtifact
+                        && (cost <= sso.getFuelAmount()) && cost > 0);
+                send(sender, jsonMap(debug));
+            } catch (ReflectiveOperationException e) {
+                send(sender, "{\"error\":\"reflection: "
+                        + escapeJson(e.getClass().getSimpleName() + ": " + e.getMessage()) + "\"}");
+            }
+            return;
+        }
+        send(sender, "{\"error\":\"unknown tile subcommand — try force-tick | warp-state | warp-trigger | warp-trigger-debug | multiblock-state\"}");
     }
 
     // §5 Commands probe -------------------------------------------------------
