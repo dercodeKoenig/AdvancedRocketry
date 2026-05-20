@@ -44,12 +44,13 @@ rewrite: closed — see Done table.)*
 7. **TASK-06** — Mission system depth. ~10-12 h. Reward-grant tests
    that need a real EntityPlayer go into **testClient** e2e.
 
-### 📝 Proposed (no doc yet)
+### 📝 Filed (doc ready, ready to start)
 
 - **TASK-10b** — player-event behaviour in `testClient` e2e
-  (atmosphere apply on AR-dim join, space-dim teleport guard,
-  advancements). Replaces the rejected FakePlayer direction from the
-  original TASK-10 draft. ~10-14 h.
+  (atmosphere apply on AR-dim join, space-dim Y<0 guard,
+  advancements, sleep/fire vacuum guards, low-gravity fall damage).
+  See [`TASK-10b-testclient-player-events.md`](./TASK-10b-testclient-player-events.md).
+  ~13 h, 5-6 sessions.
 
 ### Already-known deferred (no task doc yet — surface in a future plan)
 
