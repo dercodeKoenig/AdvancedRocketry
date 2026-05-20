@@ -6168,23 +6168,18 @@ public class TestProbeCommand extends CommandBase {
             }
             net.minecraft.entity.Entity entity;
             try {
-                // Prefer (World, x, y, z) ctor.
-                java.lang.reflect.Constructor<? extends net.minecraft.entity.Entity> ctor;
-                try {
-                    ctor = clazz.getConstructor(net.minecraft.world.World.class,
-                            double.class, double.class, double.class);
-                    entity = ctor.newInstance(world, x, y, z);
-                } catch (NoSuchMethodException nsm) {
-                    ctor = clazz.getConstructor(net.minecraft.world.World.class);
-                    entity = ctor.newInstance(world);
-                    entity.setPosition(x, y, z);
-                }
+                entity = spawnEntityReflectively(clazz, world, x, y, z, args);
             } catch (ReflectiveOperationException e) {
                 send(sender, "{\"error\":\"spawn failed: "
                         + escapeJson(e.getClass().getSimpleName() + ": " + e.getMessage())
                         + "\"}");
                 return;
             }
+            // TASK-08-mixin Phase 3 pin tests: a freshly-spawned falling
+            // block / TNT / minecart needs a force-loaded chunk under it,
+            // otherwise the first onUpdate tick can early-out before any
+            // mixin-injected gravity hook fires. We don't force-load here —
+            // tests are expected to do so via the `chunk forceload` probe.
             boolean spawned = world.spawnEntity(entity);
             send(sender, "{\"ok\":true,\"spawned\":" + spawned
                     + ",\"entityId\":" + entity.getEntityId()
@@ -6209,10 +6204,68 @@ public class TestProbeCommand extends CommandBase {
                     + ",\"posX\":" + entity.posX
                     + ",\"posY\":" + entity.posY
                     + ",\"posZ\":" + entity.posZ
+                    + ",\"motionX\":" + entity.motionX
+                    + ",\"motionY\":" + entity.motionY
+                    + ",\"motionZ\":" + entity.motionZ
+                    + ",\"hasNoGravity\":" + entity.hasNoGravity()
                     + ",\"isDead\":" + entity.isDead + "}");
             return;
         }
-        send(sender, "{\"error\":\"unknown entity subcommand — try spawn <dim> <x> <y> <z> <name> | info <dim> <entityId>\"}");
+        send(sender, "{\"error\":\"unknown entity subcommand — try spawn <dim> <x> <y> <z> <name> [block-id] | info <dim> <entityId>\"}");
+    }
+
+    /**
+     * Reflective entity spawn helper that knows about three constructor
+     * shapes seen on vanilla 1.12.2 entities used by TASK-08-mixin pin
+     * tests:
+     *
+     * <ol>
+     *   <li>{@code (World, double, double, double, IBlockState)} —
+     *       {@link net.minecraft.entity.item.EntityFallingBlock}. The
+     *       block-state is taken from a 6th probe arg ({@code block-id});
+     *       defaults to {@code minecraft:sand} when omitted.</li>
+     *   <li>{@code (World, double, double, double)} — most ticking
+     *       entities ({@code EntityTNTPrimed},
+     *       {@code EntityMinecartEmpty}, ...).</li>
+     *   <li>{@code (World)} — fall-through; setPosition is applied
+     *       manually.</li>
+     * </ol>
+     */
+    private static net.minecraft.entity.Entity spawnEntityReflectively(
+            Class<? extends net.minecraft.entity.Entity> clazz,
+            net.minecraft.world.WorldServer world,
+            double x, double y, double z,
+            String[] args) throws ReflectiveOperationException {
+        // 1) FallingBlock-style ctor — needs an IBlockState.
+        try {
+            java.lang.reflect.Constructor<? extends net.minecraft.entity.Entity> ctor =
+                    clazz.getConstructor(net.minecraft.world.World.class,
+                            double.class, double.class, double.class,
+                            net.minecraft.block.state.IBlockState.class);
+            String blockId = args.length >= 7 ? args[6] : "minecraft:sand";
+            net.minecraft.block.Block block = ForgeRegistries.BLOCKS.getValue(
+                    new ResourceLocation(blockId));
+            if (block == null) {
+                throw new IllegalArgumentException("unknown block-id for "
+                        + clazz.getSimpleName() + " fall-state: " + blockId);
+            }
+            return ctor.newInstance(world, x, y, z, block.getDefaultState());
+        } catch (NoSuchMethodException ignored) { /* fall through */ }
+
+        // 2) Most ticking entities: (World, x, y, z).
+        try {
+            java.lang.reflect.Constructor<? extends net.minecraft.entity.Entity> ctor =
+                    clazz.getConstructor(net.minecraft.world.World.class,
+                            double.class, double.class, double.class);
+            return ctor.newInstance(world, x, y, z);
+        } catch (NoSuchMethodException ignored) { /* fall through */ }
+
+        // 3) Bare (World) ctor; setPosition manually.
+        java.lang.reflect.Constructor<? extends net.minecraft.entity.Entity> ctor =
+                clazz.getConstructor(net.minecraft.world.World.class);
+        net.minecraft.entity.Entity entity = ctor.newInstance(world);
+        entity.setPosition(x, y, z);
+        return entity;
     }
 
     private static double parseDoubleOr(String s, double dflt) {
