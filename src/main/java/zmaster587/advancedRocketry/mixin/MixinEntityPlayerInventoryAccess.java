@@ -34,7 +34,7 @@ import zmaster587.advancedRocketry.util.RocketInventoryHelper;
 public abstract class MixinEntityPlayerInventoryAccess {
 
     @Redirect(method = "onUpdate",
-            at = @At(value = "INVOKEVIRTUAL",
+            at = @At(value = "INVOKE",
                     target = "Lnet/minecraft/inventory/Container;"
                             + "canInteractWith(Lnet/minecraft/entity/player/EntityPlayer;)Z"))
     private boolean ar$bypassForRocketGui(Container container, EntityPlayer player) {
