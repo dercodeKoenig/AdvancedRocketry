@@ -2061,6 +2061,43 @@ public class TestProbeCommand extends CommandBase {
             send(sender, jsonMap(info));
             return;
         }
+        if ("cached-for-player".equalsIgnoreCase(args[0])) {
+            // TASK-10b — read AtmosphereHandler.prevAtmosphere via reflection
+            // so tests can assert dim-change cache invalidation. The map
+            // is private static HashMap<EntityPlayer, IAtmosphere>, keyed
+            // by reference; we report the current cached IAtmosphere
+            // (or null) for the first connected player.
+            java.util.List<net.minecraft.entity.player.EntityPlayerMP> ps =
+                    server.getPlayerList().getPlayers();
+            if (ps.isEmpty()) {
+                send(sender, "{\"error\":\"no players connected\"}");
+                return;
+            }
+            net.minecraft.entity.player.EntityPlayerMP player = ps.get(0);
+            try {
+                java.lang.reflect.Field f =
+                        zmaster587.advancedRocketry.atmosphere.AtmosphereHandler
+                                .class.getDeclaredField("prevAtmosphere");
+                f.setAccessible(true);
+                @SuppressWarnings("unchecked")
+                java.util.HashMap<net.minecraft.entity.player.EntityPlayer,
+                        zmaster587.advancedRocketry.api.IAtmosphere> map =
+                        (java.util.HashMap<net.minecraft.entity.player.EntityPlayer,
+                                zmaster587.advancedRocketry.api.IAtmosphere>) f.get(null);
+                zmaster587.advancedRocketry.api.IAtmosphere cached = map.get(player);
+                send(sender, "{\"ok\":true,\"player\":\""
+                        + escapeJson(player.getName()) + "\""
+                        + ",\"hasCachedAtmosphere\":" + (cached != null)
+                        + ",\"cachedAtmosphere\":\""
+                        + escapeJson(cached == null ? "" : cached.getUnlocalizedName())
+                        + "\"}");
+            } catch (ReflectiveOperationException e) {
+                send(sender, "{\"error\":\"could not read prevAtmosphere: "
+                        + escapeJson(e.getClass().getSimpleName() + ": " + e.getMessage())
+                        + "\"}");
+            }
+            return;
+        }
         if (args.length >= 5 && "detector-force-sample".equalsIgnoreCase(args[0])) {
             // Bypasses TileAtmosphereDetector.update()'s
             // world.getWorldTime() % 10 == 0 gate so headless tests don't
@@ -6397,7 +6434,76 @@ public class TestProbeCommand extends CommandBase {
                     + ",\"isInventoryContainer\":" + isInventoryContainer + "}");
             return;
         }
-        send(sender, "{\"error\":\"unknown player subcommand — try inv-bypass <add|remove|status> | open-container\"}");
+        if ("health".equals(sub)) {
+            send(sender, "{\"ok\":true,\"player\":\""
+                    + escapeJson(player.getName()) + "\""
+                    + ",\"health\":" + player.getHealth()
+                    + ",\"maxHealth\":" + player.getMaxHealth()
+                    + ",\"dim\":" + player.world.provider.getDimension()
+                    + ",\"posX\":" + player.posX
+                    + ",\"posY\":" + player.posY
+                    + ",\"posZ\":" + player.posZ + "}");
+            return;
+        }
+        if ("held-air".equals(sub)) {
+            // Probe the air-buffer NBT on the player's chest-armor slot
+            // (the canonical AR space-suit slot — ItemSpaceChest wraps
+            // ItemAirUtils). Falls back to the main-hand stack for tests
+            // that hand the suit raw to the player without equipping.
+            net.minecraft.item.ItemStack chest = player.getItemStackFromSlot(
+                    net.minecraft.inventory.EntityEquipmentSlot.CHEST);
+            net.minecraft.item.ItemStack mainHand = player.getHeldItemMainhand();
+            int chestAir = chest.isEmpty() ? -1
+                    : zmaster587.advancedRocketry.util.ItemAirUtils.INSTANCE.getAirRemaining(chest);
+            int mainHandAir = mainHand.isEmpty() ? -1
+                    : zmaster587.advancedRocketry.util.ItemAirUtils.INSTANCE.getAirRemaining(mainHand);
+            send(sender, "{\"ok\":true,\"player\":\""
+                    + escapeJson(player.getName()) + "\""
+                    + ",\"chestSlot\":\""
+                    + escapeJson(chest.isEmpty() ? "" : chest.getItem().getRegistryName().toString())
+                    + "\""
+                    + ",\"chestAir\":" + chestAir
+                    + ",\"mainHand\":\""
+                    + escapeJson(mainHand.isEmpty() ? "" : mainHand.getItem().getRegistryName().toString())
+                    + "\""
+                    + ",\"mainHandAir\":" + mainHandAir + "}");
+            return;
+        }
+        if ("set-health".equals(sub) && args.length >= 2) {
+            float newHealth = (float) parseDoubleOr(args[1], 20.0);
+            player.setHealth(newHealth);
+            send(sender, "{\"ok\":true,\"player\":\""
+                    + escapeJson(player.getName()) + "\""
+                    + ",\"health\":" + player.getHealth() + "}");
+            return;
+        }
+        if ("give-suit-chest".equals(sub)) {
+            // Equip a fresh full-air space-suit chestplate into the
+            // player's CHEST armor slot. The 6th-arg `air` (optional)
+            // sets a specific air buffer for drain tests; defaults to
+            // the configured max.
+            net.minecraft.item.ItemStack stack = new net.minecraft.item.ItemStack(
+                    zmaster587.advancedRocketry.api.AdvancedRocketryItems.itemSpaceSuit_Chest);
+            int air = args.length >= 2 ? parseIntOr(args[1], -1) : -1;
+            if (air >= 0) {
+                zmaster587.advancedRocketry.util.ItemAirUtils.INSTANCE
+                        .setAirRemaining(stack, air);
+            } else {
+                // Trigger getAirRemaining once to initialise the NBT to max.
+                zmaster587.advancedRocketry.util.ItemAirUtils.INSTANCE
+                        .getAirRemaining(stack);
+            }
+            player.setItemStackToSlot(net.minecraft.inventory.EntityEquipmentSlot.CHEST, stack);
+            send(sender, "{\"ok\":true,\"player\":\""
+                    + escapeJson(player.getName()) + "\""
+                    + ",\"chestSlot\":\""
+                    + escapeJson(stack.getItem().getRegistryName().toString()) + "\""
+                    + ",\"chestAir\":"
+                    + zmaster587.advancedRocketry.util.ItemAirUtils.INSTANCE.getAirRemaining(stack)
+                    + "}");
+            return;
+        }
+        send(sender, "{\"error\":\"unknown player subcommand — try inv-bypass <add|remove|status> | open-container | health | set-health <hp> | held-air | give-suit-chest [air]\"}");
     }
 
     // §7.18 — generic block-state probe ---------------------------------------
