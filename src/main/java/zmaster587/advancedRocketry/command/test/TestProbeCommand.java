@@ -2033,9 +2033,16 @@ public class TestProbeCommand extends CommandBase {
             return;
         }
         if ("weather-mode".equalsIgnoreCase(args[0]) && args.length >= 4) {
+            // /artest satellite weather-mode <dim> <satId> <mode> [update-last]
+            //
+            // update-last defaults to true → also bumps last_mode_id so the
+            // next tick does NOT enter the "mode changed, clear list"
+            // branch. Set to false when the test wants to pin exactly
+            // that branch.
             int dim = parseIntOr(args[1], Integer.MIN_VALUE);
             long satId = parseLongOr(args[2], Long.MIN_VALUE);
             int mode = parseIntOr(args[3], 0);
+            boolean updateLast = args.length < 5 || Boolean.parseBoolean(args[4]);
             DimensionProperties props = DimensionManager.getInstance().getDimensionProperties(dim);
             SatelliteBase sat = props == null ? null : props.getSatellite(satId);
             if (!(sat instanceof zmaster587.advancedRocketry.satellite.SatelliteWeatherController)) {
@@ -2045,8 +2052,217 @@ public class TestProbeCommand extends CommandBase {
             zmaster587.advancedRocketry.satellite.SatelliteWeatherController wc =
                     (zmaster587.advancedRocketry.satellite.SatelliteWeatherController) sat;
             wc.mode_id = mode;
-            wc.last_mode_id = mode; // suppress the clear-list-on-mode-change branch
-            send(sender, "{\"ok\":true,\"id\":" + satId + ",\"mode_id\":" + mode + "}");
+            if (updateLast) wc.last_mode_id = mode;
+            send(sender, "{\"ok\":true,\"id\":" + satId + ",\"mode_id\":" + mode
+                    + ",\"last_mode_id\":" + wc.last_mode_id + "}");
+            return;
+        }
+        if ("weather-list-size".equalsIgnoreCase(args[0]) && args.length >= 3) {
+            int dim = parseIntOr(args[1], Integer.MIN_VALUE);
+            long satId = parseLongOr(args[2], Long.MIN_VALUE);
+            DimensionProperties props = DimensionManager.getInstance().getDimensionProperties(dim);
+            SatelliteBase sat = props == null ? null : props.getSatellite(satId);
+            if (!(sat instanceof zmaster587.advancedRocketry.satellite.SatelliteWeatherController)) {
+                send(sender, "{\"error\":\"not a SatelliteWeatherController\"}");
+                return;
+            }
+            try {
+                java.lang.reflect.Field vf = zmaster587.advancedRocketry.satellite.SatelliteWeatherController
+                        .class.getDeclaredField("viable_positions");
+                vf.setAccessible(true);
+                java.util.List<?> list = (java.util.List<?>) vf.get(sat);
+                send(sender, "{\"ok\":true,\"id\":" + satId + ",\"listSize\":" + list.size() + "}");
+            } catch (ReflectiveOperationException e) {
+                send(sender, "{\"error\":\"reflection failed\",\"msg\":\""
+                        + escapeJson(e.getMessage()) + "\"}");
+            }
+            return;
+        }
+        if ("biome-batch-tick".equalsIgnoreCase(args[0]) && args.length >= 7) {
+            // /artest satellite biome-batch-tick <dim> <satId> <chargeAmount>
+            //                                    <baseX> <baseZ> <numPositions>
+            //
+            // Atomic compound probe — all five operations run on the
+            // server thread within ONE command dispatch, so no
+            // DimensionManager background tick can interleave:
+            //   1. clear toChangeList
+            //   2. set biomeId via reflection to plains (id 1)
+            //   3. force-charge battery to <chargeAmount>
+            //   4. addBlockToList for <numPositions> at (baseX+i, 70, baseZ)
+            //   5. invoke sat.tickEntity() exactly once
+            // Returns the queue size after the tick. Used to pin the
+            // "BiomeChanger processes up to 10 positions per tickEntity
+            // call" contract deterministically.
+            int dim = parseIntOr(args[1], Integer.MIN_VALUE);
+            long satId = parseLongOr(args[2], Long.MIN_VALUE);
+            int charge = parseIntOr(args[3], 0);
+            int baseX = parseIntOr(args[4], 0);
+            int baseZ = parseIntOr(args[5], 0);
+            int n = parseIntOr(args[6], 1);
+            DimensionProperties props = DimensionManager.getInstance().getDimensionProperties(dim);
+            SatelliteBase sat = props == null ? null : props.getSatellite(satId);
+            if (!(sat instanceof zmaster587.advancedRocketry.satellite.SatelliteBiomeChanger)) {
+                send(sender, "{\"error\":\"not a SatelliteBiomeChanger\"}");
+                return;
+            }
+            zmaster587.advancedRocketry.satellite.SatelliteBiomeChanger bc =
+                    (zmaster587.advancedRocketry.satellite.SatelliteBiomeChanger) sat;
+            try {
+                // (1) clear queue
+                java.lang.reflect.Field lf = zmaster587.advancedRocketry.satellite.SatelliteBiomeChanger
+                        .class.getDeclaredField("toChangeList");
+                lf.setAccessible(true);
+                ((java.util.List<?>) lf.get(bc)).clear();
+                // (2) set biomeId to plains
+                bc.setBiome(net.minecraft.world.biome.Biome.getBiome(1));
+                // (3) force-charge
+                java.lang.reflect.Field bf = zmaster587.advancedRocketry.api.satellite.SatelliteBase
+                        .class.getDeclaredField("battery");
+                bf.setAccessible(true);
+                zmaster587.libVulpes.util.UniversalBattery batt =
+                        (zmaster587.libVulpes.util.UniversalBattery) bf.get(bc);
+                batt.acceptEnergy(charge, false);
+                // (4) addBlockToList N times at unique positions
+                for (int i = 0; i < n; i++) {
+                    bc.addBlockToList(new zmaster587.libVulpes.util.HashedBlockPosition(baseX + i, 70, baseZ));
+                }
+                int preTickSize = ((java.util.List<?>) lf.get(bc)).size();
+                long preStored = batt.getUniversalEnergyStored();
+                // (5) one tickEntity call
+                bc.tickEntity();
+                int postTickSize = ((java.util.List<?>) lf.get(bc)).size();
+                long postStored = batt.getUniversalEnergyStored();
+                send(sender, "{\"ok\":true,\"id\":" + satId
+                        + ",\"preTickSize\":" + preTickSize
+                        + ",\"postTickSize\":" + postTickSize
+                        + ",\"processed\":" + (preTickSize - postTickSize)
+                        + ",\"preStored\":" + preStored
+                        + ",\"postStored\":" + postStored + "}");
+            } catch (ReflectiveOperationException e) {
+                send(sender, "{\"error\":\"reflection failed\",\"msg\":\""
+                        + escapeJson(e.getMessage()) + "\"}");
+            }
+            return;
+        }
+        if ("biome-null".equalsIgnoreCase(args[0]) && args.length >= 3) {
+            // /artest satellite biome-null <dim> <satId> — sets the
+            // BiomeChanger's biomeId to null via reflection. Pins the
+            // BiomeHandler.terraform null-guard ("if (biomeId == null) return;").
+            int dim = parseIntOr(args[1], Integer.MIN_VALUE);
+            long satId = parseLongOr(args[2], Long.MIN_VALUE);
+            DimensionProperties props = DimensionManager.getInstance().getDimensionProperties(dim);
+            SatelliteBase sat = props == null ? null : props.getSatellite(satId);
+            if (!(sat instanceof zmaster587.advancedRocketry.satellite.SatelliteBiomeChanger)) {
+                send(sender, "{\"error\":\"not a SatelliteBiomeChanger\"}");
+                return;
+            }
+            try {
+                java.lang.reflect.Field bf = zmaster587.advancedRocketry.satellite.SatelliteBiomeChanger
+                        .class.getDeclaredField("biomeId");
+                bf.setAccessible(true);
+                bf.set(sat, null);
+                send(sender, "{\"ok\":true,\"id\":" + satId + ",\"biomeId\":null}");
+            } catch (ReflectiveOperationException e) {
+                send(sender, "{\"error\":\"reflection failed\",\"msg\":\""
+                        + escapeJson(e.getMessage()) + "\"}");
+            }
+            return;
+        }
+        if ("ticking-list".equalsIgnoreCase(args[0]) && args.length >= 2) {
+            // /artest satellite ticking-list <dim> — exposes the
+            // DimensionProperties.tickingSatellites map (satellites that
+            // canTick=true at register-time). Anything in `satellites`
+            // map but NOT here pins the canTick-gates-registration
+            // contract.
+            int dim = parseIntOr(args[1], Integer.MIN_VALUE);
+            DimensionProperties props = DimensionManager.getInstance().getDimensionProperties(dim);
+            if (props == null) {
+                send(sender, "{\"error\":\"dim not registered\",\"dim\":" + dim + "}");
+                return;
+            }
+            try {
+                java.lang.reflect.Field f = DimensionProperties.class.getDeclaredField("tickingSatellites");
+                f.setAccessible(true);
+                @SuppressWarnings("unchecked")
+                Map<Long, SatelliteBase> map = (Map<Long, SatelliteBase>) f.get(props);
+                StringBuilder builder = new StringBuilder("{\"dim\":").append(dim)
+                        .append(",\"size\":").append(map.size())
+                        .append(",\"ids\":[");
+                boolean first = true;
+                for (Long id : map.keySet()) {
+                    if (!first) builder.append(',');
+                    first = false;
+                    builder.append(id);
+                }
+                builder.append("]}");
+                send(sender, builder.toString());
+            } catch (ReflectiveOperationException e) {
+                send(sender, "{\"error\":\"reflection failed\",\"msg\":\""
+                        + escapeJson(e.getMessage()) + "\"}");
+            }
+            return;
+        }
+        if ("set-dead".equalsIgnoreCase(args[0]) && args.length >= 3) {
+            int dim = parseIntOr(args[1], Integer.MIN_VALUE);
+            long satId = parseLongOr(args[2], Long.MIN_VALUE);
+            DimensionProperties props = DimensionManager.getInstance().getDimensionProperties(dim);
+            SatelliteBase sat = props == null ? null : props.getSatellite(satId);
+            if (sat == null) {
+                send(sender, "{\"error\":\"satellite not found\",\"dim\":" + dim + ",\"id\":" + satId + "}");
+                return;
+            }
+            sat.setDead();
+            send(sender, "{\"ok\":true,\"id\":" + satId + ",\"isDead\":" + sat.isDead() + "}");
+            return;
+        }
+        if ("force-tick-dim".equalsIgnoreCase(args[0]) && args.length >= 2) {
+            // /artest satellite force-tick-dim <dim> — invokes
+            // DimensionProperties.tick() directly. Used to drive the
+            // isDead-removal branch deterministically (instead of
+            // waiting for the natural DimensionManager.tickDimensions
+            // background tick).
+            int dim = parseIntOr(args[1], Integer.MIN_VALUE);
+            DimensionProperties props = DimensionManager.getInstance().getDimensionProperties(dim);
+            if (props == null) {
+                send(sender, "{\"error\":\"dim not registered\",\"dim\":" + dim + "}");
+                return;
+            }
+            props.tick();
+            send(sender, "{\"ok\":true,\"dim\":" + dim + "}");
+            return;
+        }
+        if ("create-spy-telescope".equalsIgnoreCase(args[0]) && args.length >= 2) {
+            // /artest satellite create-spy-telescope <dim> — registers a
+            // SatelliteSpyTelescope (an orphan class — not in the
+            // public SatelliteRegistry registry but instantiable).
+            // SpyTelescope.canTick() returns false; this probe is the
+            // only way to drop one into a dim for the
+            // "canTick=false-gates-registration" pin.
+            int dim = parseIntOr(args[1], Integer.MIN_VALUE);
+            DimensionProperties props = DimensionManager.getInstance().getDimensionProperties(dim);
+            if (props == null) {
+                send(sender, "{\"error\":\"dim not registered\",\"dim\":" + dim + "}");
+                return;
+            }
+            zmaster587.advancedRocketry.satellite.SatelliteSpyTelescope spy =
+                    new zmaster587.advancedRocketry.satellite.SatelliteSpyTelescope();
+            zmaster587.advancedRocketry.api.satellite.SatelliteProperties sp =
+                    new zmaster587.advancedRocketry.api.satellite.SatelliteProperties(
+                            100, 1000, "spyTelescope", 100, 1.0f);
+            long satId = System.nanoTime() & 0x7fffffffffffffffL;
+            sp.setId(satId);
+            try {
+                java.lang.reflect.Field f = SatelliteBase.class.getDeclaredField("satelliteProperties");
+                f.setAccessible(true);
+                f.set(spy, sp);
+            } catch (ReflectiveOperationException e) {
+                send(sender, "{\"error\":\"reflection failed\",\"msg\":\""
+                        + escapeJson(e.getMessage()) + "\"}");
+                return;
+            }
+            spy.setDimensionId(dim);
+            props.addSatellite(spy, dim, false);
+            send(sender, "{\"ok\":true,\"id\":" + satId + ",\"canTick\":" + spy.canTick() + "}");
             return;
         }
         if ("can-tick".equalsIgnoreCase(args[0]) && args.length >= 3) {

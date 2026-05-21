@@ -19,7 +19,7 @@ testServer wall time: **8m 27s** (50 % faster than pre-B2).
 | TASK-08-mixin | Rewrite ASM coremod (`ClassTransformer.java` + vendored HookLib) to Mixin; behavioural pin for `setBlockState` hook; existing 239-test suite implicitly pins gravity + atmosphere hooks | ✅ |
 | TASK-10 | TASK-03 deferred tail — A2 remainder (4 deep-tile tests: FluidTank NBT round-trip, UV-vs-Rocket assembler class identity, SuitWorkStation assembly, FuelingStation matched accounting) + B3 single-method-smoke suite-grouping (MachineDomainSmokeSuite, ServerBootSmokeSuite) | ✅ |
 | TASK-10b | testClient e2e player-event coverage (atmosphere bookkeeping, space-dim guard, advancements, sleep/flint vacuum guards, low-gravity fall) — 5 e2e suites, 15 pins, 9 new `/artest` verbs | ✅ |
-| TASK-09 | Per-satellite-type behavioural depth — `SatelliteTickBehaviourTest` (4 pins: base power accrual + cap + SatelliteData accumulation + maxData cap) + `SatelliteTypeBehaviourTest` (3 pins: IUniversalEnergyTransmitter marker + BiomeChanger terraforms + WeatherController setBlockState) + 9 new `/artest satellite` / `block biome-at` verbs | ✅ |
+| TASK-09 | Per-satellite-type behavioural depth — 3 suites / 14 pins (`SatelliteTickBehaviourTest` 4: base power + cap + SatelliteData accumulation/cap; `SatelliteTypeBehaviourTest` 3: IUniversalEnergyTransmitter marker + BiomeChanger terraform + WeatherController mode-0; `SatelliteCoverageGapsTest` 7: weather modes 1/2 + mode-change clear + biome batch-10 + biome null-guard + canTick gating + isDead removal) + 15 new `/artest` verbs | ✅ |
 
 ## Backlog — prioritised
 

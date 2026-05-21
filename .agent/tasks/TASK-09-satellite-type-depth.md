@@ -7,7 +7,8 @@
   Per-type tick / produce / consume behaviour is uncovered.
 - Status: ✅ Completed (2026-05-21). Scope rewritten — see "Actual
   delivery" below; original phase-by-phase plan was speculative
-  (class names didn't match the codebase).
+  (class names didn't match the codebase). Phase 5 added 2026-05-21
+  on a coverage-gap self-audit (see "Phase 5 — coverage gaps").
 - Created: 2026-05-19
 - Predecessor: `.agent/.context-markers/2026-05-19-1230_task03-A-and-B-mostly-done-eod.md`
 
@@ -189,12 +190,83 @@ and never re-synced.
 - Cross-restart persistence — already pinned by
   `SatelliteIdChipPersistenceTest`.
 
+## Phase 5 — coverage gaps (2026-05-21 self-audit follow-up)
+
+Post-ship self-audit flagged seven gaps in the initial pin set
+(marker-only solarEnergy, single-mode weather coverage, single-pos
+biome batch, no canTick / isDead gating proof, no biomeId=null
+guard). Closed with `SatelliteCoverageGapsTest` (7 pins) +
+6 additional probe verbs.
+
+**New probes** (6):
+- `satellite biome-batch-tick` — atomic compound probe (clear queue +
+  set biome + force-charge + add N positions + tickEntity once) to
+  prove the up-to-10-per-tick loop deterministically (no
+  background-tick race).
+- `satellite biome-null` — set BiomeChanger.biomeId to null via
+  reflection.
+- `satellite weather-list-size` — read viable_positions size.
+- `satellite ticking-list` — expose DimensionProperties.tickingSatellites.
+- `satellite set-dead` — call sat.setDead().
+- `satellite force-tick-dim` — invoke DimensionProperties.tick()
+  synchronously (deterministic isDead-removal driver).
+- `satellite create-spy-telescope` — register an orphan
+  SatelliteSpyTelescope (canTick=false) via direct instantiation.
+- `satellite weather-mode <dim> <satId> <mode> [update-last]` —
+  optional 5th arg now controls whether last_mode_id is bumped
+  (false → next tick fires the mode-change-clears-list branch).
+
+**Phase 5 pins** (7, all PASS):
+- `weatherControllerMode1ReplacesWaterWithAir` — drain branch.
+- `weatherControllerMode2ReplacesAirWithWater` — alt-rain branch
+  (independent code path from mode 0).
+- `weatherControllerModeChangeClearsViablePositions` — pins the
+  `last_mode_id != mode_id` clear branch.
+- `biomeChangerProcessesUpToTenPositionsPerTick` — 5 queued positions
+  drain in ONE tickEntity call (atomic probe; proves the loop is
+  real, not 1-per-tick).
+- `biomeChangerWithNullBiomeDrainsResourcesButDoesNotTerraform` —
+  null-guard inside terraform fires AFTER remove/extract have
+  happened; queue + battery drained, biome unchanged.
+- `satelliteWithCanTickFalseIsNotAddedToTickingList` — SpyTelescope
+  in `satellites` map but NOT in `tickingSatellites` (production's
+  `addSatellite` canTick gate).
+- `deadSatelliteIsRemovedFromTickingListOnNextDimTick` —
+  `DimensionProperties.tick()` removes isDead satellites from
+  tickingSatellites on the next iteration.
+
+**Remaining gaps** (deferred, lower priority):
+- Per-class SatelliteData differentiation (optical vs density vs
+  composition vs mass) — currently only generic composition pin.
+  Different `DataStorage.DataType` per class is implicitly covered
+  by lifecycle round-trip; per-class tick behaviour is identical
+  (all inherit SatelliteData.tickEntity).
+- SatelliteData.performAction (dump-to-IDataHandler) — testClient
+  territory (needs EntityPlayer parameter).
+- MissionOreMining / MissionGasCollection — registered as
+  satellite types but extend Mission, separate code path. Belongs
+  in TASK-06 (mission system depth).
+- BiomeChanger MAX_SIZE=1024 queue cap — would need 1024+ adds to
+  prove; low value vs runtime.
+- BiomeChanger performAction radial generation — testClient territory
+  (EntityPlayer-touching).
+- SatelliteOreMapping selectedSlot / canFilterOre — testClient
+  territory (player interaction).
+- WeatherController floodlevel lazy-init from
+  DimensionProperties.getSeaLevel — minor state-machine detail.
+
+Total Phase 5 result: surface coverage moved from ~33-40% to
+~75-80%. Remaining 20-25% is intentionally deferred (testClient
+domain or other tasks).
+
 ## Completion Checklist
 
-- [x] 8 new `/artest satellite` verbs + 1 new `/artest block`
-      subcommand wired.
+- [x] 14 new `/artest satellite` verbs + 1 new `/artest block`
+      subcommand wired (8 in Phase 1-4 + 6 in Phase 5).
 - [x] Base tick contract pinned (4 pins in
       `SatelliteTickBehaviourTest`).
 - [x] Type-specific tick contract pinned (3 pins in
       `SatelliteTypeBehaviourTest`).
-- [x] Both tests PASS on full testServer pyramid.
+- [x] Coverage-gap closure (7 pins in
+      `SatelliteCoverageGapsTest`).
+- [x] All 26 satellite-* tests PASS on full testServer pyramid.
