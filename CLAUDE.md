@@ -53,6 +53,34 @@ This loads `.agent/DEVELOPMENT-README.md` (your project navigator) which provide
 
 ---
 
+## Testing — REQUIRED reading before writing or auditing tests
+
+Before authoring or modifying ANY test in this repo, re-read
+[`.agent/sops/development/testing-principles.md`](./.agent/sops/development/testing-principles.md).
+Re-read every session — even if the file feels familiar — because
+the agent (and humans) drift back to over-tight impl-detail pins
+under the guise of "depth audits".
+
+**The core rule**: tests verify *contracts* (player-visible
+behaviour, public API surface, registry / NBT / wire formats),
+NOT implementation details (exact RF costs, exact loop bounds,
+internal field shapes, specific code branches).
+
+**Litmus before every assertion**: complete the sentence
+"this test fails if production breaks the contract that __."
+If the blank reads like an impl detail, redesign.
+
+**During depth audits**: count contract-coverage, not pin-count.
+Do NOT propose tightenings whose only purpose is to pin a magic
+number, a loop bound, an internal data-structure choice, or an
+internal helper — these are anti-patterns called out explicitly
+in the SOP.
+
+This rule overrides the agent's instinct to "make assertions
+tighter". Tighter is not always better.
+
+---
+
 ## Project-Specific Code Standards
 
 ### General Standards

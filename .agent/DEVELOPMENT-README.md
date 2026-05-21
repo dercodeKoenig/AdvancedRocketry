@@ -2,7 +2,27 @@
 
 **Project**: Fork of Advanced Rocketry — a Minecraft 1.12.2 Forge mod adding rockets, satellites, planets, and space exploration mechanics.
 **Tech Stack**: Java 8, Minecraft Forge 1.12.2, Kotlin DSL Gradle, FancyGradle, JEI integration, libVulpes
-**Updated**: 2026-05-11
+**Updated**: 2026-05-21
+
+---
+
+## ⚠️ Required reading before writing or auditing tests
+
+**[SOP: Testing Principles](./sops/development/testing-principles.md)** —
+must be re-read every time you touch the test suite.
+
+**TL;DR**: tests verify *contracts* (player-visible behaviour, public
+API, registry/NBT/wire formats), NOT implementation details (exact RF
+costs, exact loop bounds, exact internal field shapes). If a refactor
+that preserves user-visible behaviour breaks your test, the test is
+over-tight — fix the test, not the refactor.
+
+**Litmus for every assertion**: "this test fails if production breaks
+the contract that ____" — if the blank is an impl detail, redesign.
+
+When auditing test depth, count **contract-coverage**, not pin-count.
+Resist the temptation to "tighten" with magic-number assertions —
+that's the wrong shape of pin.
 
 ---
 
