@@ -193,6 +193,9 @@ public class TestProbeCommand extends CommandBase {
                 case "player":
                     handlePlayer(server, sender, tail(args));
                     break;
+                case "seal-detector":
+                    handleSealDetector(server, sender, tail(args));
+                    break;
                 default:
                     send(sender, "{\"error\":\"unknown subcommand\",\"sub\":\"" + args[0] + "\"}");
             }
@@ -7252,6 +7255,66 @@ public class TestProbeCommand extends CommandBase {
                 + ",\"meta\":" + meta
                 + ",\"isAir\":" + world.isAirBlock(pos)
                 + "}");
+    }
+
+    // §7.X — ItemSealDetector dispatch-matrix probe ---------------------------
+
+    /**
+     * {@code /artest seal-detector check <dim> <x> <y> <z>} — reports
+     * which of the six branches in {@link
+     * zmaster587.advancedRocketry.item.ItemSealDetector#onItemUse}
+     * (lines 34-50) would fire at the given position. Drives the same
+     * {@link zmaster587.advancedRocketry.util.SealableBlockHandler}
+     * predicates production uses, in the same order — so any change to
+     * SealableBlockHandler is reflected. Only the if/else ordering is
+     * replicated here; tests document the cross-reference back to
+     * ItemSealDetector so a reordering of production gates is caught
+     * during review even if the test still passes.
+     *
+     * <p>Returns {@code {"branch":"sealed"|"notsealmat"|"notsealblock"
+     * |"notfullblock"|"fluid"|"other"}}. The branch name is exactly the
+     * suffix of the corresponding {@code msg.sealdetector.&lt;branch&gt;}
+     * i18n key the production code emits to the player.</p>
+     */
+    private void handleSealDetector(net.minecraft.server.MinecraftServer server,
+                                    ICommandSender sender, String[] args) {
+        if (args.length < 5 || !"check".equalsIgnoreCase(args[0])) {
+            send(sender, "{\"error\":\"unknown seal-detector subcommand — "
+                    + "try check <dim> <x> <y> <z>\"}");
+            return;
+        }
+        int dim = parseIntOr(args[1], Integer.MIN_VALUE);
+        int x = parseIntOr(args[2], 0);
+        int y = parseIntOr(args[3], 0);
+        int z = parseIntOr(args[4], 0);
+        net.minecraft.world.WorldServer world = server.getWorld(dim);
+        if (world == null) {
+            send(sender, "{\"error\":\"world not loaded\",\"dim\":" + dim + "}");
+            return;
+        }
+        BlockPos pos = new BlockPos(x, y, z);
+        zmaster587.advancedRocketry.util.SealableBlockHandler h =
+                zmaster587.advancedRocketry.util.SealableBlockHandler.INSTANCE;
+        String branch;
+        if (h.isBlockSealed(world, pos)) {
+            branch = "sealed";
+        } else {
+            net.minecraft.block.state.IBlockState state = world.getBlockState(pos);
+            net.minecraft.block.material.Material mat = state.getMaterial();
+            if (h.isMaterialBanned(mat)) {
+                branch = "notsealmat";
+            } else if (h.isBlockBanned(state.getBlock())) {
+                branch = "notsealblock";
+            } else if (zmaster587.advancedRocketry.util.SealableBlockHandler.isFullBlock(world, pos)) {
+                branch = "notfullblock";
+            } else if (state.getBlock() instanceof net.minecraftforge.fluids.IFluidBlock) {
+                branch = "fluid";
+            } else {
+                branch = "other";
+            }
+        }
+        send(sender, "{\"pos\":[" + x + "," + y + "," + z + "]"
+                + ",\"branch\":\"" + branch + "\"}");
     }
 
     // §7.18 — force-field projector state probe -------------------------------
