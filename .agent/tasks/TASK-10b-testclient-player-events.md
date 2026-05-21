@@ -7,7 +7,8 @@
   `feedback_no_fakeplayer_for_player_tests` — EntityPlayer-touching
   behaviour lives in the testClient e2e layer, not in testServer with
   FakePlayer scaffolding.
-- Status: ✅ Completed (2026-05-20)
+- Status: Phases 1-6 ✅ Completed (2026-05-20). Phase 7 (TASK-05
+  player-tier remainder) reopened 2026-05-21.
 - Created: 2026-05-20
 
 ## Context
@@ -202,3 +203,92 @@ untouched (this is pure new test coverage).
       — overworld no-op + 0.17-grav AR dim scales distance by gravity;
       `/artest player try-fall <distance>` probe wired.
 - [x] Phase 6: docs flipped, EOD marker shipped.
+
+### Phase 7 — TASK-05 player-tier item behaviour (reopened 2026-05-21, ~10-14 h)
+
+Moved here from [[TASK-05]] per the no-FakePlayer rule. The unit-tier
+surface for these items is already shipped (12 of 21 item classes
+covered in `ChipNBTRoundTripTest`, `ItemDataCarrierNBTRoundTripTest`,
+`ScannerDetectorItemContractTest`, `SpecialPurposeItemContractTest`,
+`JackHammerContractTest`, `SealDetectorDispatchTest`,
+`SpaceArmorContractTest`, `SpaceArmorProtectionContractTest`). What
+remains needs a real EntityPlayerMP and lives in testClient e2e.
+
+**Behavioural pins (one suite per logical cluster):**
+
+- `ItemHovercraftSpawnE2ETest`
+  - `hovercraftItemRightClickOnGroundSpawnsRideableEntity` — give item,
+    right-click on grass, assert `EntityHovercraft` exists at cursor pos.
+  - `hovercraftRefusesToSpawnInVacuumOrLava` — counter-test per
+    production gate (if any; otherwise document the contract as
+    "spawns regardless of dim").
+
+- `ItemSpaceArmorUseFluidE2ETest`
+  - `suitFluidDrainsOnVacuumTickWhenWorn` — equip suit, teleport to
+    vacuum dim, wait N ticks, assert `ItemAirUtils.getAirRemaining`
+    decreased.
+  - `suitDamageAbsorptionReducesPlayerDamage` — equip suit, apply
+    fixed damage source, assert delta less than naked-player baseline.
+
+- `ItemSpaceChestDeathPersistE2ETest`
+  - `chestStaysEquippedAcrossDeathAndRespawn` — equip chest with NBT,
+    kill player, respawn, assert chest still in equipment slot with
+    same NBT.
+  - `chestComponentSlotsSurviveDeath` — install a component module
+    into chest, die/respawn, assert component still in slot.
+
+- `ItemBiomeChangerActionE2ETest`
+  - `biomeChangerRightClickOnGrassChangesTargetBiome` — program the
+    chip with a BiomeChanger satellite, right-click in same dim,
+    assert `world.getBiome(playerPos)` changed.
+  - `biomeChangerRightClickInWrongDimIsNoOp` — sat bound to dim A,
+    player in dim B → biome unchanged.
+
+- `ItemWeatherControllerActionE2ETest`
+  - `weatherControllerRightClickFiresPerformAction` — bind sat,
+    right-click, assert satellite-driven weather change occurred
+    (rain started / dry-flooded the area per mode_id).
+
+- `ItemSealDetectorPlayerMessagesE2ETest`
+  - For each of the 6 dispatch branches (sealed / notsealmat /
+    notsealblock / notfullblock / fluid / other), place the
+    appropriate fixture, right-click with detector, assert player
+    received the matching `msg.sealdetector.<branch>` chat message
+    (probe via `/artest player last-chat` if needed).
+  - Cross-pin against the existing `SealDetectorDispatchTest` server
+    dispatch — both must agree on which branch fires per fixture.
+
+- `ItemAtmosphereAnalzerPlayerReadoutE2ETest`
+  - `atmosphereAnalyzerRightClickInVacuumReportsCorrectAtmType` —
+    equip analyzer in head slot, right-click in vacuum dim, assert
+    player received "vacuum" atm-type chat message. Works around
+    the unit-tier static-`<clinit>` LibVulpes.proxy issue because the
+    testClient harness has a fully-booted proxy.
+
+- `ItemBlockCrystal` / `ItemBlockFluidTank` / `ItemPackedStructure`
+  — research scope first; may move to a separate ticket if surface
+  is large.
+
+**New probe verbs (likely):**
+
+- `/artest player give-item <item-id> [count]` — populate hotbar.
+- `/artest player swap-armor <slot> <item-id>` — equip armor slot.
+- `/artest player kill` — for death-persist tests.
+- `/artest player last-chat` — read most-recent received chat line
+  (for asserting i18n-message dispatch).
+- `/artest player equipment <slot>` — JSON of slot contents.
+- `/artest entity find <entity-id> <dim>` — for hovercraft spawn check.
+
+**Acceptance:**
+
+- [ ] `ItemHovercraftSpawnE2ETest` (~2 tests)
+- [ ] `ItemSpaceArmorUseFluidE2ETest` (~2 tests)
+- [ ] `ItemSpaceChestDeathPersistE2ETest` (~2 tests)
+- [ ] `ItemBiomeChangerActionE2ETest` (~2 tests)
+- [ ] `ItemWeatherControllerActionE2ETest` (~1-2 tests)
+- [ ] `ItemSealDetectorPlayerMessagesE2ETest` (~6 tests + cross-pin)
+- [ ] `ItemAtmosphereAnalzerPlayerReadoutE2ETest` (~1-2 tests)
+- [ ] Decide scope for ItemBlockCrystal / ItemBlockFluidTank /
+      ItemPackedStructure — defer or include
+- [ ] Full pyramid PASS
+- [ ] EOD marker

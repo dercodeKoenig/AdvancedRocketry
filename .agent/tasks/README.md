@@ -18,8 +18,9 @@ testServer wall time: **8m 27s** (50 % faster than pre-B2).
 | TASK-07 | Rocket flight cycle beyond launch (orbit / dim-transition / descent / landing / dismantle / failure modes) | ✅ |
 | TASK-08-mixin | Rewrite ASM coremod (`ClassTransformer.java` + vendored HookLib) to Mixin; behavioural pin for `setBlockState` hook; existing 239-test suite implicitly pins gravity + atmosphere hooks | ✅ |
 | TASK-10 | TASK-03 deferred tail — A2 remainder (4 deep-tile tests: FluidTank NBT round-trip, UV-vs-Rocket assembler class identity, SuitWorkStation assembly, FuelingStation matched accounting) + B3 single-method-smoke suite-grouping (MachineDomainSmokeSuite, ServerBootSmokeSuite) | ✅ |
-| TASK-10b | testClient e2e player-event coverage (atmosphere bookkeeping, space-dim guard, advancements, sleep/flint vacuum guards, low-gravity fall) — 5 e2e suites, 15 pins, 9 new `/artest` verbs | ✅ |
+| TASK-10b | testClient e2e player-event coverage — Phases 1-6 ✅ (5 e2e suites, 15 pins, 9 new `/artest` verbs). **Phase 7 reopened 2026-05-21** to absorb TASK-05 player-tier remainder (Hovercraft / SpaceArmor useFluid / SpaceChest death-persist / BiomeChanger + WeatherController right-click / SealDetector messages / AtmosphereAnalzer readout). | ✅ partial |
 | TASK-09 | Per-satellite-type behavioural depth — 3 suites / 14 pins (`SatelliteTickBehaviourTest` 4: base power + cap + SatelliteData accumulation/cap; `SatelliteTypeBehaviourTest` 3: IUniversalEnergyTransmitter marker + BiomeChanger terraform + WeatherController mode-0; `SatelliteCoverageGapsTest` 7: weather modes 1/2 + mode-change clear + biome batch-10 + biome null-guard + canTick gating + isDead removal) + 15 new `/artest` verbs | ✅ |
+| TASK-05 | Item-behaviour suite — unit-tier surface for 12 of 21 item classes (5 chips, 2 data-carriers, BeaconFinder, OreScanner, Thermite, BiomeChanger / WeatherController metadata+wire, JackHammer pure-fn) via `ChipNBTRoundTripTest`, `ItemDataCarrierNBTRoundTripTest`, `ScannerDetectorItemContractTest`, `SpecialPurposeItemContractTest`, `JackHammerContractTest`, plus SealDetector dispatch via new `/artest seal-detector check` probe (`SealDetectorDispatchTest` 8 server tests). ~48 contract pins, +1 production bug (`ItemSpaceElevatorChip` wrong removeTag key). Player-tier surface moved to TASK-10b Phase 7. | ✅ partial |
 
 ## Backlog — prioritised
 
@@ -33,14 +34,21 @@ rewrite: closed — see Done table.)*
 
 ### 🟡 P1 — broad surface, medium impact
 
-4. **TASK-05** — Item-behaviour suite. ~16-20 h. ~25 % of mod
-   surface; 0 % isolated coverage today. EntityPlayer-touching items
-   belong in the **testClient** e2e layer, not testServer.
+4. **TASK-10b Phase 7** — TASK-05 player-tier item behaviour
+   (~10-14 h). Hovercraft spawn, SpaceArmor useFluid + damage
+   absorption, SpaceChest death-persist, BiomeChanger /
+   WeatherController right-click satellite action, SealDetector
+   per-branch player message, AtmosphereAnalzer readout. The
+   unit-tier surface for items closed in TASK-05 (12 of 21 classes);
+   what remains genuinely needs a real EntityPlayer, so per the
+   no-FakePlayer rule it lives in testClient e2e under TASK-10b's
+   harness.
 
 ### 🟢 P2 — narrower, lower urgency
 
 5. **TASK-06** — Mission system depth. ~10-12 h. Reward-grant tests
-   that need a real EntityPlayer go into **testClient** e2e.
+   that need a real EntityPlayer go into **testClient** e2e
+   (TASK-10b extension if scope grows).
 
 ### Already-known deferred (no task doc yet — surface in a future plan)
 
@@ -78,13 +86,13 @@ FakePlayer injection.
 
 If picking the next session:
 
-1. **If team wants the biggest player-visible coverage win**:
-   start TASK-10b (testClient e2e player-event coverage — also unlocks
-   the deferred inventory-distance-bypass pin from TASK-08-mixin).
-2. **If team wants quick wall-time win**: start TASK-10 Phase 2 (B3
-   suite-grouping — mechanical, ~3 h).
-3. **If team wants the most "items checked off"**: start TASK-09
-   (smallest task; ~3-4 sessions).
+1. **Player-visible coverage win**: start TASK-10b Phase 7 (TASK-05
+   player-tier remainder). Each item sub-suite is independently
+   shippable in 1-2 h. Start with `ItemSpaceArmorUseFluidE2ETest` or
+   `ItemSealDetectorPlayerMessagesE2ETest` — they extend existing
+   testClient suites and reuse the seal-detector probe surface.
+2. **Smallest-but-coherent**: start TASK-06 (mission system depth).
+   ~2-3 h infra (`/artest mission` probes) then 3 phases of ~2-3 h.
 
 ## Conventions
 

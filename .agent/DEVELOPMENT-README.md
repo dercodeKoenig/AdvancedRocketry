@@ -110,17 +110,28 @@ prioritised backlog (TASK-04 through TASK-10) and dependency graph.
 - TASK-01 — SMART per-scenario depth coverage ✅
 - TASK-02 — Functional coverage expansion ✅
 - TASK-03 — Test depth deepening + harness consolidation ✅
-  (A3 / B3 tail deferred to TASK-10)
+  (A3 / B3 tail closed via TASK-10 / TASK-10b)
+- TASK-04 — Multiblock machine depth ✅ (12 multiblocks, 55 tests)
+- TASK-07 — Rocket flight cycle beyond launch ✅
+- TASK-08-mixin — ASM coremod → Mixin rewrite ✅
+- TASK-09 — Per-satellite-type behavioural depth ✅
+- TASK-10 — TASK-03 deferred tail (A2 + B3) ✅
+- TASK-10b — testClient e2e player-event coverage ✅ Phases 1-6
+- TASK-05 — Item-behaviour suite ✅ partial (unit-tier surface, 12/21
+  classes). Player-tier remainder moved to TASK-10b Phase 7.
+
+**Obsolete**:
+- TASK-08 — ASM coremod safety net. Premise vanished when TASK-08-mixin
+  removed the legacy `ClassTransformer` + `gloomyfolken/hooklib` repack.
+  A future Mixin-byte-snapshot safety net would be a fresh TASK-08b
+  (not P0 — Mixin is less brittle than ASM).
 
 **Pending (prioritised)**:
-- TASK-04 — Multiblock machine depth (P0)
-- TASK-07 — Rocket flight cycle beyond launch (P0)
-- TASK-08 — ASM coremod safety net (P0, highest single-point-of-failure)
-- TASK-10 — TASK-03 tail: A2 remainder + B3 suite-grouping (P1)
-- TASK-10b — testClient e2e player-event coverage (proposed)
-- TASK-05 — Item-behaviour suite (P1)
-- TASK-09 — Per-satellite-type behavioural depth (P1)
-- TASK-06 — Mission system depth (P2)
+- TASK-10b Phase 7 — TASK-05 player-tier item behaviour (~10-14 h, P1):
+  Hovercraft / SpaceArmor useFluid / SpaceChest death-persist /
+  BiomeChanger + WeatherController right-click satellite action /
+  SealDetector player-message dispatch / AtmosphereAnalzer readout.
+- TASK-06 — Mission system depth (P2, ~10-12 h, 3 mission classes)
 
 **Format**: `TASK-XX-feature-slug.md`
 

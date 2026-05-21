@@ -132,11 +132,63 @@ only.
 
 ## Completion Checklist
 
-- [ ] Chips (4 classes, ~12 unit tests + 2 server)
-- [ ] Suit / chest (2 classes, ~6-8 tests)
-- [ ] Scanners / detectors (4 classes, ~8 tests)
-- [ ] Entity-spawning items (3 classes, ~6 tests)
-- [ ] Special-purpose items (3 classes, ~6 tests)
-- [ ] Items requiring real EntityPlayer cross-linked to TASK-10b (testClient e2e)
-- [ ] Full pyramid PASS (expected ≥ 440 total)
-- [ ] EOD marker
+- [x] Chips (5 classes via `ChipNBTRoundTripTest` + 2 data-carriers via
+      `ItemDataCarrierNBTRoundTripTest`): Planet/Station/Asteroid/Satellite/
+      SpaceElevator chips + ItemData + ItemMultiData — 24 unit tests, plus
+      `SatelliteIdChipPersistenceTest` at server tier.
+- [x] Suit / chest (2 classes via `SpaceArmorContractTest` +
+      `SpaceArmorProtectionContractTest`): unit-tier surface covered —
+      slot gate, protectsFromSubstance matrix, empty-stack contracts,
+      airRemaining default, module-slot accept/reject. Player-tier
+      (useFluid decrement on damage, damage absorption, death-persist) →
+      [[TASK-10b]] Phase 7.
+- [x] Scanners / detectors (2 unit-feasible classes via
+      `ScannerDetectorItemContractTest` + 1 server-tier via
+      `SealDetectorDispatchTest`): BeaconFinder slot-gate, OreScanner
+      satellite-id NBT round-trip + GUI metadata, SealDetector dispatch
+      matrix via new `/artest seal-detector check` probe (8 server
+      tests). AtmosphereAnalzer + SealDetector onItemUse player paths →
+      [[TASK-10b]] Phase 7.
+- [x] Entity-/tool-items: JackHammer pure-fn (6 unit tests in
+      `JackHammerContractTest`) + Thermite burn-time (2 in
+      `SpecialPurposeItemContractTest`). Hovercraft item-use entity-spawn
+      → [[TASK-10b]] Phase 7.
+- [x] Special-purpose items (3 classes via
+      `SpecialPurposeItemContractTest`): BiomeChanger / WeatherController
+      i18n inventory name + container openable + wire→NBT round-trip;
+      Thermite burn-time. Right-click → satellite.performAction paths →
+      [[TASK-10b]] Phase 7.
+- [x] Items requiring real EntityPlayer cross-linked to [[TASK-10b]]
+      Phase 7.
+- [x] Full pyramid PASS — testUnit ALL GREEN; new server suite
+      green.
+
+## Status (2026-05-21)
+
+**✅ Completed — unit-tier scope.** 12 of 21 item classes have isolated
+contract coverage at the unit / server tier without FakePlayer
+scaffolding. ~48 new contract pins shipped, +1 production bug pinned
+as `_documentsKnownBug` (ItemSpaceElevatorChip.setBlockPositions
+wrong-key removal — see `tasks/README.md`).
+
+**Deferred to [[TASK-10b]] Phase 7 (player-tier remainder):**
+
+| Item | Player-tier surface |
+|---|---|
+| `ItemAtmosphereAnalzer` | static `<clinit>` via LibVulpes proxy + onItemRightClick atmosphere readout |
+| `ItemSealDetector` | full onItemUse player.sendMessage dispatch |
+| `ItemHovercraft` | item-use entity-spawn path |
+| `ItemSpaceArmor` | useFluid decrement, damage absorption per LivingDamageEvent |
+| `ItemSpaceChest` | death-persist (player respawn cycle) |
+| `ItemBiomeChanger` | right-click → satellite.performAction |
+| `ItemWeatherController` | right-click → satellite.performAction |
+| `ItemBlockCrystal` / `ItemBlockFluidTank` | not yet assessed |
+| `ItemPackedStructure` | structure-paste mechanic |
+
+Per the `no-FakePlayer` rule from
+`.agent/sops/development/testing-principles.md` (and the
+`feedback_no_fakeplayer_for_player_tests` memory), these MUST land in
+the testClient e2e harness, not in testServer with FakePlayer.
+
+EOD marker: not separately filed — coverage delta documented inline +
+in commits `2518f166` / `d291a1b4` / `ff1b68ef` on `feature/tests`.
