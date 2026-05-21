@@ -17,6 +17,7 @@ testServer wall time: **8m 27s** (50 % faster than pre-B2).
 | TASK-04 | Multiblock machine depth (Warp / Laser Drill / Elevator / Black Hole / 12 multiblocks) | ✅ |
 | TASK-07 | Rocket flight cycle beyond launch (orbit / dim-transition / descent / landing / dismantle / failure modes) | ✅ |
 | TASK-08-mixin | Rewrite ASM coremod (`ClassTransformer.java` + vendored HookLib) to Mixin; behavioural pin for `setBlockState` hook; existing 239-test suite implicitly pins gravity + atmosphere hooks | ✅ |
+| TASK-10 | TASK-03 deferred tail — A2 remainder (4 deep-tile tests: FluidTank NBT round-trip, UV-vs-Rocket assembler class identity, SuitWorkStation assembly, FuelingStation matched accounting) + B3 single-method-smoke suite-grouping (MachineDomainSmokeSuite, ServerBootSmokeSuite) | ✅ |
 | TASK-10b | testClient e2e player-event coverage (atmosphere bookkeeping, space-dim guard, advancements, sleep/flint vacuum guards, low-gravity fall) — 5 e2e suites, 15 pins, 9 new `/artest` verbs | ✅ |
 
 ## Backlog — prioritised
@@ -31,18 +32,15 @@ rewrite: closed — see Done table.)*
 
 ### 🟡 P1 — broad surface, medium impact
 
-4. **TASK-10** — TASK-03 tail (A2 remainder + B3 suite-grouping).
-   ~8-10 h. Pure server-harness work. (Earlier FakePlayer phases
-   reverted on 2026-05-19 — see TASK-10 doc.)
-5. **TASK-05** — Item-behaviour suite. ~16-20 h. ~25 % of mod
+4. **TASK-05** — Item-behaviour suite. ~16-20 h. ~25 % of mod
    surface; 0 % isolated coverage today. EntityPlayer-touching items
    belong in the **testClient** e2e layer, not testServer.
-6. **TASK-09** — Per-satellite-type behavioural depth. ~10-12 h.
+5. **TASK-09** — Per-satellite-type behavioural depth. ~10-12 h.
    Player-facing passive-production layer.
 
 ### 🟢 P2 — narrower, lower urgency
 
-7. **TASK-06** — Mission system depth. ~10-12 h. Reward-grant tests
+6. **TASK-06** — Mission system depth. ~10-12 h. Reward-grant tests
    that need a real EntityPlayer go into **testClient** e2e.
 
 ### Already-known deferred (no task doc yet — surface in a future plan)

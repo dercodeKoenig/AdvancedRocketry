@@ -18,7 +18,7 @@
   fueling / NBT) and B3 (suite-grouping single-method smokes) deferred.
   Originally bundled with A3 (player-event tests via FakePlayer); A3 is
   now out of scope here — it's a `testClient` job, see TASK-10b proposal.
-- Status: Pending
+- Status: ✅ Completed (2026-05-19; index sync 2026-05-21)
 - Created: 2026-05-19
 - Revised: 2026-05-19 (FakePlayer direction reverted)
 - Predecessor: `.agent/.context-markers/2026-05-19-1530_task07-rocket-flight-cycle-eod.md`
