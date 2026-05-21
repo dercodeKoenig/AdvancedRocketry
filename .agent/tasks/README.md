@@ -19,6 +19,7 @@ testServer wall time: **8m 27s** (50 % faster than pre-B2).
 | TASK-08-mixin | Rewrite ASM coremod (`ClassTransformer.java` + vendored HookLib) to Mixin; behavioural pin for `setBlockState` hook; existing 239-test suite implicitly pins gravity + atmosphere hooks | ✅ |
 | TASK-10 | TASK-03 deferred tail — A2 remainder (4 deep-tile tests: FluidTank NBT round-trip, UV-vs-Rocket assembler class identity, SuitWorkStation assembly, FuelingStation matched accounting) + B3 single-method-smoke suite-grouping (MachineDomainSmokeSuite, ServerBootSmokeSuite) | ✅ |
 | TASK-10b | testClient e2e player-event coverage (atmosphere bookkeeping, space-dim guard, advancements, sleep/flint vacuum guards, low-gravity fall) — 5 e2e suites, 15 pins, 9 new `/artest` verbs | ✅ |
+| TASK-09 | Per-satellite-type behavioural depth — `SatelliteTickBehaviourTest` (4 pins: base power accrual + cap + SatelliteData accumulation + maxData cap) + `SatelliteTypeBehaviourTest` (3 pins: IUniversalEnergyTransmitter marker + BiomeChanger terraforms + WeatherController setBlockState) + 9 new `/artest satellite` / `block biome-at` verbs | ✅ |
 
 ## Backlog — prioritised
 
@@ -35,12 +36,10 @@ rewrite: closed — see Done table.)*
 4. **TASK-05** — Item-behaviour suite. ~16-20 h. ~25 % of mod
    surface; 0 % isolated coverage today. EntityPlayer-touching items
    belong in the **testClient** e2e layer, not testServer.
-5. **TASK-09** — Per-satellite-type behavioural depth. ~10-12 h.
-   Player-facing passive-production layer.
 
 ### 🟢 P2 — narrower, lower urgency
 
-6. **TASK-06** — Mission system depth. ~10-12 h. Reward-grant tests
+5. **TASK-06** — Mission system depth. ~10-12 h. Reward-grant tests
    that need a real EntityPlayer go into **testClient** e2e.
 
 ### Already-known deferred (no task doc yet — surface in a future plan)

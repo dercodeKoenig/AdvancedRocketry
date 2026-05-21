@@ -1532,6 +1532,51 @@ public class TestProbeCommand extends CommandBase {
                 return;
             }
             sat.setDimensionId(dim);
+            // SatelliteBase's constructor sizes the battery off the freshly-
+            // built (empty) satelliteProperties and SatelliteData's
+            // constructor builds DataStorage with no maxData — neither
+            // re-syncs when satelliteProperties is later swapped in via
+            // reflection. Mirror what setProperties(ItemStack) would do
+            // so the synthetic satellite behaves like a builder-assembled
+            // one when tested.
+            try {
+                java.lang.reflect.Field bf = SatelliteBase.class.getDeclaredField("battery");
+                bf.setAccessible(true);
+                zmaster587.libVulpes.util.UniversalBattery batt =
+                        (zmaster587.libVulpes.util.UniversalBattery) bf.get(sat);
+                batt.setMaxEnergyStored(powerStorage);
+            } catch (ReflectiveOperationException e) {
+                send(sender, "{\"error\":\"failed to size battery\",\"msg\":\""
+                        + escapeJson(e.getMessage()) + "\"}");
+                return;
+            }
+            if (sat instanceof zmaster587.advancedRocketry.satellite.SatelliteData) {
+                zmaster587.advancedRocketry.satellite.SatelliteData sd =
+                        (zmaster587.advancedRocketry.satellite.SatelliteData) sat;
+                sd.data.setMaxData(maxData);
+                // SatelliteData's constructor pre-computes powerConsumption +
+                // collectionTime off the empty satelliteProperties (powerGen=0
+                // → collectionTime = 200/sqrt(0) = Integer.MAX_VALUE on int
+                // cast). Mirror what setProperties(ItemStack) does so the
+                // worldTime % collectionTime data gate fires within a
+                // reasonable tick budget.
+                try {
+                    java.lang.reflect.Field pcf = zmaster587.advancedRocketry.satellite.SatelliteData
+                            .class.getDeclaredField("powerConsumption");
+                    pcf.setAccessible(true);
+                    pcf.setInt(sd, powerGen);
+                    java.lang.reflect.Field ctf = zmaster587.advancedRocketry.satellite.SatelliteData
+                            .class.getDeclaredField("collectionTime");
+                    ctf.setAccessible(true);
+                    int collectionTime = (int) (200.0 / Math.sqrt(0.1 * powerGen));
+                    if (collectionTime <= 0) collectionTime = 200;
+                    ctf.setInt(sd, collectionTime);
+                } catch (ReflectiveOperationException e) {
+                    send(sender, "{\"error\":\"failed to init SatelliteData fields\",\"msg\":\""
+                            + escapeJson(e.getMessage()) + "\"}");
+                    return;
+                }
+            }
             initMissionPersistentNbtIfNeeded(sat);
             props.addSatellite(sat, dim, false);
             send(sender, "{\"ok\":true,\"id\":" + satId + ",\"type\":\"" + escapeJson(typeId)
@@ -1687,7 +1732,345 @@ public class TestProbeCommand extends CommandBase {
             send(sender, jsonMap(info));
             return;
         }
-        send(sender, "{\"error\":\"unknown satellite subcommand — try list <dim> | info <dim> <id> | create <dim> <type> [...] | types | imprint-terminal <dim> <x> <y> <z> <satId> | terminal-info <dim> <x> <y> <z>\"}");
+        if ("tick".equalsIgnoreCase(args[0]) && args.length >= 4) {
+            // /artest satellite tick <dim> <satId> <ticks>
+            //
+            // Directly invokes SatelliteBase.tickEntity() N times on the
+            // satellite, bypassing the world tick scheduler. Each call
+            // also advances the overworld's totalWorldTime by 1 — this
+            // is what SatelliteData subclasses query through
+            // AdvancedRocketry.proxy.getWorldTimeUniversal(0) for their
+            // % collectionTime == 0 data-gate. Without the bump, the
+            // gate either always-fires or never-fires across the whole
+            // batch depending on starting worldTime, which makes
+            // SatelliteData accumulation tests non-deterministic.
+            int dim = parseIntOr(args[1], Integer.MIN_VALUE);
+            long satId = parseLongOr(args[2], Long.MIN_VALUE);
+            int ticks = parseIntOr(args[3], 1);
+            DimensionProperties props = DimensionManager.getInstance().getDimensionProperties(dim);
+            if (props == null) {
+                send(sender, "{\"error\":\"dim not registered\",\"dim\":" + dim + "}");
+                return;
+            }
+            SatelliteBase sat = props.getSatellite(satId);
+            if (sat == null) {
+                send(sender, "{\"error\":\"satellite not found\",\"dim\":" + dim + ",\"id\":" + satId + "}");
+                return;
+            }
+            net.minecraft.world.WorldServer overworld = server.getWorld(0);
+            long startTime = overworld == null ? -1 : overworld.getTotalWorldTime();
+            // Capture pre-tick battery/data snapshots BEFORE the loop, then
+            // post-tick AFTER, both on the same server thread call. Tests
+            // can assert on the delta (preStored→postStored, preData→postData)
+            // to nail down the per-tick contract without contamination from
+            // background DimensionManager.tickDimensions ticks that fire
+            // between probe invocations.
+            zmaster587.libVulpes.util.UniversalBattery batt = null;
+            try {
+                java.lang.reflect.Field bf = zmaster587.advancedRocketry.api.satellite.SatelliteBase
+                        .class.getDeclaredField("battery");
+                bf.setAccessible(true);
+                batt = (zmaster587.libVulpes.util.UniversalBattery) bf.get(sat);
+            } catch (ReflectiveOperationException e) {
+                send(sender, "{\"error\":\"battery reflection failed\",\"msg\":\""
+                        + escapeJson(e.getMessage()) + "\"}");
+                return;
+            }
+            long preStored = batt.getUniversalEnergyStored();
+            long preData = -1L;
+            if (sat instanceof zmaster587.advancedRocketry.satellite.SatelliteData) {
+                preData = ((zmaster587.advancedRocketry.satellite.SatelliteData) sat).data.getData();
+            }
+            int actualTicked = 0;
+            try {
+                for (int i = 0; i < ticks; i++) {
+                    if (overworld != null) {
+                        overworld.getWorldInfo().setWorldTotalTime(startTime + i + 1);
+                    }
+                    sat.tickEntity();
+                    actualTicked++;
+                }
+            } catch (RuntimeException e) {
+                send(sender, "{\"error\":\"tickEntity threw after " + actualTicked + " ticks: "
+                        + escapeJson(e.getClass().getSimpleName() + ": " + e.getMessage()) + "\"}");
+                return;
+            } finally {
+                if (overworld != null) overworld.getWorldInfo().setWorldTotalTime(startTime);
+            }
+            long postStored = batt.getUniversalEnergyStored();
+            long postData = -1L;
+            if (sat instanceof zmaster587.advancedRocketry.satellite.SatelliteData) {
+                postData = ((zmaster587.advancedRocketry.satellite.SatelliteData) sat).data.getData();
+            }
+            send(sender, "{\"ok\":true,\"id\":" + satId + ",\"dim\":" + dim
+                    + ",\"ticked\":" + actualTicked
+                    + ",\"preStored\":" + preStored
+                    + ",\"postStored\":" + postStored
+                    + ",\"preData\":" + preData
+                    + ",\"postData\":" + postData
+                    + ",\"satClass\":\"" + sat.getClass().getName() + "\"}");
+            return;
+        }
+        if ("battery".equalsIgnoreCase(args[0]) && args.length >= 3) {
+            // /artest satellite battery <dim> <satId>
+            int dim = parseIntOr(args[1], Integer.MIN_VALUE);
+            long satId = parseLongOr(args[2], Long.MIN_VALUE);
+            DimensionProperties props = DimensionManager.getInstance().getDimensionProperties(dim);
+            if (props == null) {
+                send(sender, "{\"error\":\"dim not registered\",\"dim\":" + dim + "}");
+                return;
+            }
+            SatelliteBase sat = props.getSatellite(satId);
+            if (sat == null) {
+                send(sender, "{\"error\":\"satellite not found\",\"dim\":" + dim + ",\"id\":" + satId + "}");
+                return;
+            }
+            // SatelliteBase.battery is protected — reach it via reflection so
+            // future probe additions don't need a getter on the public API.
+            try {
+                java.lang.reflect.Field bf = zmaster587.advancedRocketry.api.satellite.SatelliteBase
+                        .class.getDeclaredField("battery");
+                bf.setAccessible(true);
+                zmaster587.libVulpes.util.UniversalBattery batt =
+                        (zmaster587.libVulpes.util.UniversalBattery) bf.get(sat);
+                send(sender, "{\"ok\":true,\"id\":" + satId
+                        + ",\"stored\":" + batt.getUniversalEnergyStored()
+                        + ",\"max\":" + batt.getMaxEnergyStored() + "}");
+            } catch (ReflectiveOperationException e) {
+                send(sender, "{\"error\":\"reflection failed\",\"msg\":\""
+                        + escapeJson(e.getMessage()) + "\"}");
+            }
+            return;
+        }
+        if ("data".equalsIgnoreCase(args[0]) && args.length >= 3) {
+            // /artest satellite data <dim> <satId>
+            //
+            // SatelliteData family only — exposes the DataStorage state
+            // (current data points, max, data type). Errors out cleanly
+            // for non-SatelliteData satellites so tests can use this as
+            // a class-family probe too.
+            int dim = parseIntOr(args[1], Integer.MIN_VALUE);
+            long satId = parseLongOr(args[2], Long.MIN_VALUE);
+            DimensionProperties props = DimensionManager.getInstance().getDimensionProperties(dim);
+            if (props == null) {
+                send(sender, "{\"error\":\"dim not registered\",\"dim\":" + dim + "}");
+                return;
+            }
+            SatelliteBase sat = props.getSatellite(satId);
+            if (sat == null) {
+                send(sender, "{\"error\":\"satellite not found\",\"dim\":" + dim + ",\"id\":" + satId + "}");
+                return;
+            }
+            if (!(sat instanceof zmaster587.advancedRocketry.satellite.SatelliteData)) {
+                send(sender, "{\"error\":\"not a SatelliteData subclass\",\"satClass\":\""
+                        + sat.getClass().getName() + "\"}");
+                return;
+            }
+            zmaster587.advancedRocketry.satellite.SatelliteData sd =
+                    (zmaster587.advancedRocketry.satellite.SatelliteData) sat;
+            zmaster587.advancedRocketry.api.DataStorage ds = sd.data;
+            send(sender, "{\"ok\":true,\"id\":" + satId
+                    + ",\"data\":" + ds.getData()
+                    + ",\"maxData\":" + ds.getMaxData()
+                    + ",\"dataType\":\"" + ds.getDataType() + "\"}");
+            return;
+        }
+        if ("markers".equalsIgnoreCase(args[0]) && args.length >= 3) {
+            // /artest satellite markers <dim> <satId> — exposes marker
+            // interfaces relevant for per-type contract tests
+            // (IUniversalEnergyTransmitter, IUniversalEnergy, etc.).
+            int dim = parseIntOr(args[1], Integer.MIN_VALUE);
+            long satId = parseLongOr(args[2], Long.MIN_VALUE);
+            DimensionProperties props = DimensionManager.getInstance().getDimensionProperties(dim);
+            if (props == null) {
+                send(sender, "{\"error\":\"dim not registered\",\"dim\":" + dim + "}");
+                return;
+            }
+            SatelliteBase sat = props.getSatellite(satId);
+            if (sat == null) {
+                send(sender, "{\"error\":\"satellite not found\",\"dim\":" + dim + ",\"id\":" + satId + "}");
+                return;
+            }
+            send(sender, "{\"ok\":true,\"id\":" + satId
+                    + ",\"satClass\":\"" + sat.getClass().getName() + "\""
+                    + ",\"canTick\":" + sat.canTick()
+                    + ",\"isUniversalEnergyTransmitter\":"
+                    + (sat instanceof zmaster587.libVulpes.api.IUniversalEnergyTransmitter)
+                    + ",\"isUniversalEnergy\":"
+                    + (sat instanceof zmaster587.libVulpes.api.IUniversalEnergy)
+                    + ",\"isSatelliteData\":"
+                    + (sat instanceof zmaster587.advancedRocketry.satellite.SatelliteData) + "}");
+            return;
+        }
+        if ("force-charge".equalsIgnoreCase(args[0]) && args.length >= 4) {
+            // /artest satellite force-charge <dim> <satId> <amount> —
+            // injects energy directly into the battery (battery.acceptEnergy
+            // with simulate=false). Used to pre-charge the BiomeChanger /
+            // WeatherController above their per-action threshold without
+            // having to spin many ticks.
+            int dim = parseIntOr(args[1], Integer.MIN_VALUE);
+            long satId = parseLongOr(args[2], Long.MIN_VALUE);
+            int amount = parseIntOr(args[3], 0);
+            DimensionProperties props = DimensionManager.getInstance().getDimensionProperties(dim);
+            if (props == null) {
+                send(sender, "{\"error\":\"dim not registered\",\"dim\":" + dim + "}");
+                return;
+            }
+            SatelliteBase sat = props.getSatellite(satId);
+            if (sat == null) {
+                send(sender, "{\"error\":\"satellite not found\",\"dim\":" + dim + ",\"id\":" + satId + "}");
+                return;
+            }
+            try {
+                java.lang.reflect.Field bf = zmaster587.advancedRocketry.api.satellite.SatelliteBase
+                        .class.getDeclaredField("battery");
+                bf.setAccessible(true);
+                zmaster587.libVulpes.util.UniversalBattery batt =
+                        (zmaster587.libVulpes.util.UniversalBattery) bf.get(sat);
+                int accepted = batt.acceptEnergy(amount, false);
+                send(sender, "{\"ok\":true,\"id\":" + satId + ",\"accepted\":" + accepted
+                        + ",\"stored\":" + batt.getUniversalEnergyStored() + "}");
+            } catch (ReflectiveOperationException e) {
+                send(sender, "{\"error\":\"reflection failed\",\"msg\":\""
+                        + escapeJson(e.getMessage()) + "\"}");
+            }
+            return;
+        }
+        if ("biome-add-pos".equalsIgnoreCase(args[0]) && args.length >= 6) {
+            // /artest satellite biome-add-pos <dim> <satId> <x> <y> <z>
+            int dim = parseIntOr(args[1], Integer.MIN_VALUE);
+            long satId = parseLongOr(args[2], Long.MIN_VALUE);
+            int x = parseIntOr(args[3], 0);
+            int y = parseIntOr(args[4], 0);
+            int z = parseIntOr(args[5], 0);
+            DimensionProperties props = DimensionManager.getInstance().getDimensionProperties(dim);
+            if (props == null) {
+                send(sender, "{\"error\":\"dim not registered\",\"dim\":" + dim + "}");
+                return;
+            }
+            SatelliteBase sat = props.getSatellite(satId);
+            if (!(sat instanceof zmaster587.advancedRocketry.satellite.SatelliteBiomeChanger)) {
+                send(sender, "{\"error\":\"not a SatelliteBiomeChanger\",\"satClass\":\""
+                        + (sat == null ? "null" : sat.getClass().getName()) + "\"}");
+                return;
+            }
+            ((zmaster587.advancedRocketry.satellite.SatelliteBiomeChanger) sat).addBlockToList(
+                    new zmaster587.libVulpes.util.HashedBlockPosition(x, y, z));
+            send(sender, "{\"ok\":true,\"id\":" + satId + ",\"added\":[" + x + "," + y + "," + z + "]}");
+            return;
+        }
+        if ("biome-set".equalsIgnoreCase(args[0]) && args.length >= 4) {
+            // /artest satellite biome-set <dim> <satId> <biomeId>
+            int dim = parseIntOr(args[1], Integer.MIN_VALUE);
+            long satId = parseLongOr(args[2], Long.MIN_VALUE);
+            int biomeIdInt = parseIntOr(args[3], -1);
+            DimensionProperties props = DimensionManager.getInstance().getDimensionProperties(dim);
+            if (props == null) {
+                send(sender, "{\"error\":\"dim not registered\",\"dim\":" + dim + "}");
+                return;
+            }
+            SatelliteBase sat = props.getSatellite(satId);
+            if (!(sat instanceof zmaster587.advancedRocketry.satellite.SatelliteBiomeChanger)) {
+                send(sender, "{\"error\":\"not a SatelliteBiomeChanger\"}");
+                return;
+            }
+            net.minecraft.world.biome.Biome b = net.minecraft.world.biome.Biome.getBiome(biomeIdInt);
+            if (b == null) {
+                send(sender, "{\"error\":\"unknown biome id\",\"id\":" + biomeIdInt + "}");
+                return;
+            }
+            ((zmaster587.advancedRocketry.satellite.SatelliteBiomeChanger) sat).setBiome(b);
+            send(sender, "{\"ok\":true,\"id\":" + satId + ",\"biomeId\":" + biomeIdInt
+                    + ",\"biomeName\":\"" + escapeJson(b.getRegistryName().toString()) + "\"}");
+            return;
+        }
+        if ("biome-list-size".equalsIgnoreCase(args[0]) && args.length >= 3) {
+            int dim = parseIntOr(args[1], Integer.MIN_VALUE);
+            long satId = parseLongOr(args[2], Long.MIN_VALUE);
+            DimensionProperties props = DimensionManager.getInstance().getDimensionProperties(dim);
+            SatelliteBase sat = props == null ? null : props.getSatellite(satId);
+            if (!(sat instanceof zmaster587.advancedRocketry.satellite.SatelliteBiomeChanger)) {
+                send(sender, "{\"error\":\"not a SatelliteBiomeChanger\"}");
+                return;
+            }
+            try {
+                java.lang.reflect.Field lf = zmaster587.advancedRocketry.satellite.SatelliteBiomeChanger
+                        .class.getDeclaredField("toChangeList");
+                lf.setAccessible(true);
+                java.util.List<?> list = (java.util.List<?>) lf.get(sat);
+                send(sender, "{\"ok\":true,\"id\":" + satId + ",\"listSize\":" + list.size() + "}");
+            } catch (ReflectiveOperationException e) {
+                send(sender, "{\"error\":\"reflection failed\",\"msg\":\""
+                        + escapeJson(e.getMessage()) + "\"}");
+            }
+            return;
+        }
+        if ("weather-add-pos".equalsIgnoreCase(args[0]) && args.length >= 6) {
+            int dim = parseIntOr(args[1], Integer.MIN_VALUE);
+            long satId = parseLongOr(args[2], Long.MIN_VALUE);
+            int x = parseIntOr(args[3], 0);
+            int y = parseIntOr(args[4], 0);
+            int z = parseIntOr(args[5], 0);
+            DimensionProperties props = DimensionManager.getInstance().getDimensionProperties(dim);
+            SatelliteBase sat = props == null ? null : props.getSatellite(satId);
+            if (!(sat instanceof zmaster587.advancedRocketry.satellite.SatelliteWeatherController)) {
+                send(sender, "{\"error\":\"not a SatelliteWeatherController\"}");
+                return;
+            }
+            try {
+                java.lang.reflect.Field vf = zmaster587.advancedRocketry.satellite.SatelliteWeatherController
+                        .class.getDeclaredField("viable_positions");
+                vf.setAccessible(true);
+                @SuppressWarnings("unchecked")
+                java.util.List<BlockPos> list = (java.util.List<BlockPos>) vf.get(sat);
+                list.add(new BlockPos(x, y, z));
+                send(sender, "{\"ok\":true,\"id\":" + satId + ",\"added\":[" + x + "," + y + "," + z
+                        + "],\"listSize\":" + list.size() + "}");
+            } catch (ReflectiveOperationException e) {
+                send(sender, "{\"error\":\"reflection failed\",\"msg\":\""
+                        + escapeJson(e.getMessage()) + "\"}");
+            }
+            return;
+        }
+        if ("weather-mode".equalsIgnoreCase(args[0]) && args.length >= 4) {
+            int dim = parseIntOr(args[1], Integer.MIN_VALUE);
+            long satId = parseLongOr(args[2], Long.MIN_VALUE);
+            int mode = parseIntOr(args[3], 0);
+            DimensionProperties props = DimensionManager.getInstance().getDimensionProperties(dim);
+            SatelliteBase sat = props == null ? null : props.getSatellite(satId);
+            if (!(sat instanceof zmaster587.advancedRocketry.satellite.SatelliteWeatherController)) {
+                send(sender, "{\"error\":\"not a SatelliteWeatherController\"}");
+                return;
+            }
+            zmaster587.advancedRocketry.satellite.SatelliteWeatherController wc =
+                    (zmaster587.advancedRocketry.satellite.SatelliteWeatherController) sat;
+            wc.mode_id = mode;
+            wc.last_mode_id = mode; // suppress the clear-list-on-mode-change branch
+            send(sender, "{\"ok\":true,\"id\":" + satId + ",\"mode_id\":" + mode + "}");
+            return;
+        }
+        if ("can-tick".equalsIgnoreCase(args[0]) && args.length >= 3) {
+            // /artest satellite can-tick <dim> <satId> — pins
+            // SatelliteBase.canTick() per-type contract (e.g. SpyTelescope
+            // returns false).
+            int dim = parseIntOr(args[1], Integer.MIN_VALUE);
+            long satId = parseLongOr(args[2], Long.MIN_VALUE);
+            DimensionProperties props = DimensionManager.getInstance().getDimensionProperties(dim);
+            if (props == null) {
+                send(sender, "{\"error\":\"dim not registered\",\"dim\":" + dim + "}");
+                return;
+            }
+            SatelliteBase sat = props.getSatellite(satId);
+            if (sat == null) {
+                send(sender, "{\"error\":\"satellite not found\",\"dim\":" + dim + ",\"id\":" + satId + "}");
+                return;
+            }
+            send(sender, "{\"ok\":true,\"id\":" + satId
+                    + ",\"satClass\":\"" + sat.getClass().getName() + "\""
+                    + ",\"canTick\":" + sat.canTick() + "}");
+            return;
+        }
+        send(sender, "{\"error\":\"unknown satellite subcommand — try list <dim> | info <dim> <id> | create <dim> <type> [...] | types | imprint-terminal <dim> <x> <y> <z> <satId> | terminal-info <dim> <x> <y> <z> | tick <dim> <id> <ticks> | battery <dim> <id> | data <dim> <id> | can-tick <dim> <id>\"}");
     }
 
     /**
@@ -6629,10 +7012,12 @@ public class TestProbeCommand extends CommandBase {
      * mutation) without going through a tile entity.
      */
     private void handleBlock(MinecraftServer server, ICommandSender sender, String[] args) {
-        if (args.length < 5 || !"at".equalsIgnoreCase(args[0])) {
-            send(sender, "{\"error\":\"unknown block subcommand — try at <dim> <x> <y> <z>\"}");
+        if (args.length < 5
+                || !("at".equalsIgnoreCase(args[0]) || "biome-at".equalsIgnoreCase(args[0]))) {
+            send(sender, "{\"error\":\"unknown block subcommand — try at <dim> <x> <y> <z> | biome-at <dim> <x> <y> <z>\"}");
             return;
         }
+        boolean biomeMode = "biome-at".equalsIgnoreCase(args[0]);
         int dim = parseIntOr(args[1], Integer.MIN_VALUE);
         int x = parseIntOr(args[2], 0);
         int y = parseIntOr(args[3], 0);
@@ -6643,6 +7028,14 @@ public class TestProbeCommand extends CommandBase {
             return;
         }
         BlockPos pos = new BlockPos(x, y, z);
+        if (biomeMode) {
+            net.minecraft.world.biome.Biome biome = world.getBiome(pos);
+            net.minecraft.util.ResourceLocation rn = biome.getRegistryName();
+            send(sender, "{\"pos\":[" + x + "," + y + "," + z + "]"
+                    + ",\"biome\":\"" + escapeJson(rn == null ? "null" : rn.toString()) + "\""
+                    + ",\"biomeId\":" + net.minecraft.world.biome.Biome.getIdForBiome(biome) + "}");
+            return;
+        }
         net.minecraft.block.state.IBlockState state = world.getBlockState(pos);
         net.minecraft.util.ResourceLocation rn = state.getBlock().getRegistryName();
         @SuppressWarnings("deprecation")
