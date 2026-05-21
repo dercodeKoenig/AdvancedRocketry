@@ -2057,6 +2057,63 @@ public class TestProbeCommand extends CommandBase {
                     + ",\"last_mode_id\":" + wc.last_mode_id + "}");
             return;
         }
+        if ("weather-discard-test".equalsIgnoreCase(args[0]) && args.length >= 8) {
+            // /artest satellite weather-discard-test <dim> <satId>
+            //                                         <newMode> <baseX> <y> <z> <numPositions>
+            //
+            // Atomic compound probe — all four operations run on the
+            // server thread within ONE command dispatch, so no
+            // DimensionManager background tick can interleave:
+            //   1. set mode_id = last_mode_id = 0 (synced baseline)
+            //   2. add N AIR-targeting positions to viable_positions
+            //   3. set mode_id = newMode (now last_mode_id (0) != mode_id)
+            //   4. invoke sat.tickEntity() once — the mismatch fires
+            //      the clear-on-mode-change branch BEFORE either old
+            //      or new mode runs against the queue
+            //
+            // Used to pin the contract "mode change between queue-build
+            // and tick discards queued work" — the visible-block-state
+            // assertion lives in the test; this probe just guarantees
+            // the race-free server-thread atomicity.
+            int dim = parseIntOr(args[1], Integer.MIN_VALUE);
+            long satId = parseLongOr(args[2], Long.MIN_VALUE);
+            int newMode = parseIntOr(args[3], 0);
+            int baseX = parseIntOr(args[4], 0);
+            int y = parseIntOr(args[5], 0);
+            int z = parseIntOr(args[6], 0);
+            int n = parseIntOr(args[7], 1);
+            DimensionProperties props = DimensionManager.getInstance().getDimensionProperties(dim);
+            SatelliteBase sat = props == null ? null : props.getSatellite(satId);
+            if (!(sat instanceof zmaster587.advancedRocketry.satellite.SatelliteWeatherController)) {
+                send(sender, "{\"error\":\"not a SatelliteWeatherController\"}");
+                return;
+            }
+            zmaster587.advancedRocketry.satellite.SatelliteWeatherController wc =
+                    (zmaster587.advancedRocketry.satellite.SatelliteWeatherController) sat;
+            try {
+                java.lang.reflect.Field vf = zmaster587.advancedRocketry.satellite.SatelliteWeatherController
+                        .class.getDeclaredField("viable_positions");
+                vf.setAccessible(true);
+                @SuppressWarnings("unchecked")
+                java.util.List<BlockPos> list = (java.util.List<BlockPos>) vf.get(wc);
+                list.clear();
+                wc.mode_id = 0;
+                wc.last_mode_id = 0;
+                for (int i = 0; i < n; i++) {
+                    list.add(new BlockPos(baseX + i, y, z));
+                }
+                wc.mode_id = newMode;
+                // Single atomic tickEntity — the mismatch branch fires
+                // inside it.
+                wc.tickEntity();
+                send(sender, "{\"ok\":true,\"id\":" + satId + ",\"mode_id\":"
+                        + wc.mode_id + ",\"last_mode_id\":" + wc.last_mode_id + "}");
+            } catch (ReflectiveOperationException e) {
+                send(sender, "{\"error\":\"reflection failed\",\"msg\":\""
+                        + escapeJson(e.getMessage()) + "\"}");
+            }
+            return;
+        }
         if ("weather-list-size".equalsIgnoreCase(args[0]) && args.length >= 3) {
             int dim = parseIntOr(args[1], Integer.MIN_VALUE);
             long satId = parseLongOr(args[2], Long.MIN_VALUE);
@@ -2072,72 +2129,6 @@ public class TestProbeCommand extends CommandBase {
                 vf.setAccessible(true);
                 java.util.List<?> list = (java.util.List<?>) vf.get(sat);
                 send(sender, "{\"ok\":true,\"id\":" + satId + ",\"listSize\":" + list.size() + "}");
-            } catch (ReflectiveOperationException e) {
-                send(sender, "{\"error\":\"reflection failed\",\"msg\":\""
-                        + escapeJson(e.getMessage()) + "\"}");
-            }
-            return;
-        }
-        if ("biome-batch-tick".equalsIgnoreCase(args[0]) && args.length >= 7) {
-            // /artest satellite biome-batch-tick <dim> <satId> <chargeAmount>
-            //                                    <baseX> <baseZ> <numPositions>
-            //
-            // Atomic compound probe — all five operations run on the
-            // server thread within ONE command dispatch, so no
-            // DimensionManager background tick can interleave:
-            //   1. clear toChangeList
-            //   2. set biomeId via reflection to plains (id 1)
-            //   3. force-charge battery to <chargeAmount>
-            //   4. addBlockToList for <numPositions> at (baseX+i, 70, baseZ)
-            //   5. invoke sat.tickEntity() exactly once
-            // Returns the queue size after the tick. Used to pin the
-            // "BiomeChanger processes up to 10 positions per tickEntity
-            // call" contract deterministically.
-            int dim = parseIntOr(args[1], Integer.MIN_VALUE);
-            long satId = parseLongOr(args[2], Long.MIN_VALUE);
-            int charge = parseIntOr(args[3], 0);
-            int baseX = parseIntOr(args[4], 0);
-            int baseZ = parseIntOr(args[5], 0);
-            int n = parseIntOr(args[6], 1);
-            DimensionProperties props = DimensionManager.getInstance().getDimensionProperties(dim);
-            SatelliteBase sat = props == null ? null : props.getSatellite(satId);
-            if (!(sat instanceof zmaster587.advancedRocketry.satellite.SatelliteBiomeChanger)) {
-                send(sender, "{\"error\":\"not a SatelliteBiomeChanger\"}");
-                return;
-            }
-            zmaster587.advancedRocketry.satellite.SatelliteBiomeChanger bc =
-                    (zmaster587.advancedRocketry.satellite.SatelliteBiomeChanger) sat;
-            try {
-                // (1) clear queue
-                java.lang.reflect.Field lf = zmaster587.advancedRocketry.satellite.SatelliteBiomeChanger
-                        .class.getDeclaredField("toChangeList");
-                lf.setAccessible(true);
-                ((java.util.List<?>) lf.get(bc)).clear();
-                // (2) set biomeId to plains
-                bc.setBiome(net.minecraft.world.biome.Biome.getBiome(1));
-                // (3) force-charge
-                java.lang.reflect.Field bf = zmaster587.advancedRocketry.api.satellite.SatelliteBase
-                        .class.getDeclaredField("battery");
-                bf.setAccessible(true);
-                zmaster587.libVulpes.util.UniversalBattery batt =
-                        (zmaster587.libVulpes.util.UniversalBattery) bf.get(bc);
-                batt.acceptEnergy(charge, false);
-                // (4) addBlockToList N times at unique positions
-                for (int i = 0; i < n; i++) {
-                    bc.addBlockToList(new zmaster587.libVulpes.util.HashedBlockPosition(baseX + i, 70, baseZ));
-                }
-                int preTickSize = ((java.util.List<?>) lf.get(bc)).size();
-                long preStored = batt.getUniversalEnergyStored();
-                // (5) one tickEntity call
-                bc.tickEntity();
-                int postTickSize = ((java.util.List<?>) lf.get(bc)).size();
-                long postStored = batt.getUniversalEnergyStored();
-                send(sender, "{\"ok\":true,\"id\":" + satId
-                        + ",\"preTickSize\":" + preTickSize
-                        + ",\"postTickSize\":" + postTickSize
-                        + ",\"processed\":" + (preTickSize - postTickSize)
-                        + ",\"preStored\":" + preStored
-                        + ",\"postStored\":" + postStored + "}");
             } catch (ReflectiveOperationException e) {
                 send(sender, "{\"error\":\"reflection failed\",\"msg\":\""
                         + escapeJson(e.getMessage()) + "\"}");
