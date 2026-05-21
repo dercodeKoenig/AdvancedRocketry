@@ -6477,6 +6477,120 @@ public class TestProbeCommand extends CommandBase {
                     + ",\"health\":" + player.getHealth() + "}");
             return;
         }
+        if ("try-fall".equals(sub) && args.length >= 2) {
+            // /artest player try-fall <distance>
+            //
+            // Posts a synthetic LivingFallEvent with the supplied raw
+            // fall distance and reports the post-handler distance.
+            // PlanetEventHandler.fallEvent (line 612-618) scales by the
+            // provider's gravitational multiplier on IPlanetaryProvider
+            // dims, so the returned distance is < input on low-grav and
+            // equal-to-input on the overworld (no IPlanetaryProvider).
+            float input = (float) parseDoubleOr(args[1], 20.0);
+            net.minecraftforge.event.entity.living.LivingFallEvent ev =
+                    new net.minecraftforge.event.entity.living.LivingFallEvent(player, input, 1.0F);
+            net.minecraftforge.common.MinecraftForge.EVENT_BUS.post(ev);
+            double gravity = -1.0;
+            if (player.world.provider instanceof zmaster587.advancedRocketry.api.IPlanetaryProvider) {
+                gravity = ((zmaster587.advancedRocketry.api.IPlanetaryProvider) player.world.provider)
+                        .getGravitationalMultiplier(player.getPosition());
+            }
+            send(sender, "{\"ok\":true,\"player\":\""
+                    + escapeJson(player.getName()) + "\""
+                    + ",\"dim\":" + player.world.provider.getDimension()
+                    + ",\"inputDistance\":" + input
+                    + ",\"resultDistance\":" + ev.getDistance()
+                    + ",\"isPlanetaryProvider\":"
+                    + (player.world.provider instanceof zmaster587.advancedRocketry.api.IPlanetaryProvider)
+                    + ",\"gravityMultiplier\":" + gravity + "}");
+            return;
+        }
+        if ("try-sleep".equals(sub)) {
+            // /artest player try-sleep
+            //
+            // Fires a synthetic PlayerSleepInBedEvent at the player's
+            // current BlockPos and reports the post-handler result
+            // status. Used to pin PlanetEventHandler.sleepEvent's
+            // vacuum-refuses-sleep guard without going through the
+            // real bed-right-click code path (which would need a
+            // placed bed block + the vanilla EntityPlayer.trySleep
+            // pre-checks like night-time, no enemies, etc.).
+            net.minecraftforge.event.entity.player.PlayerSleepInBedEvent ev =
+                    new net.minecraftforge.event.entity.player.PlayerSleepInBedEvent(player, player.getPosition());
+            net.minecraftforge.common.MinecraftForge.EVENT_BUS.post(ev);
+            net.minecraft.entity.player.EntityPlayer.SleepResult status = ev.getResultStatus();
+            send(sender, "{\"ok\":true,\"player\":\""
+                    + escapeJson(player.getName()) + "\""
+                    + ",\"dim\":" + player.world.provider.getDimension()
+                    + ",\"resultStatus\":\""
+                    + (status == null ? "null" : status.name()) + "\"}");
+            return;
+        }
+        if ("try-ignite".equals(sub)) {
+            // /artest player try-ignite
+            //
+            // Equips a flint-and-steel into the player's main hand,
+            // posts a synthetic RightClickBlock event at the player's
+            // position with EnumFacing.UP, and reports event.isCanceled().
+            // Used to pin PlanetEventHandler.blockRightClicked's
+            // vacuum-no-fire guard.
+            net.minecraft.item.ItemStack flint = new net.minecraft.item.ItemStack(
+                    net.minecraft.init.Items.FLINT_AND_STEEL);
+            player.setHeldItem(net.minecraft.util.EnumHand.MAIN_HAND, flint);
+            net.minecraftforge.event.entity.player.PlayerInteractEvent.RightClickBlock ev =
+                    new net.minecraftforge.event.entity.player.PlayerInteractEvent.RightClickBlock(
+                            player,
+                            net.minecraft.util.EnumHand.MAIN_HAND,
+                            player.getPosition(),
+                            net.minecraft.util.EnumFacing.UP,
+                            net.minecraft.util.math.Vec3d.ZERO);
+            net.minecraftforge.common.MinecraftForge.EVENT_BUS.post(ev);
+            send(sender, "{\"ok\":true,\"player\":\""
+                    + escapeJson(player.getName()) + "\""
+                    + ",\"dim\":" + player.world.provider.getDimension()
+                    + ",\"canceled\":" + ev.isCanceled() + "}");
+            return;
+        }
+        if ("advancement".equals(sub) && args.length >= 2) {
+            // /artest player advancement <id>
+            // /artest player advancement reset <id>
+            //
+            // <id> is a ResourceLocation accepted by AdvancementManager —
+            // e.g. "advancedrocketry:moonlanding". Returns isDone() for the
+            // root completion criterion. The reset path revokes ALL
+            // criteria on the advancement (used by counter-tests that need
+            // to re-run within a single workdir).
+            String maybeReset = args[1].toLowerCase(java.util.Locale.ROOT);
+            boolean reset = "reset".equals(maybeReset) && args.length >= 3;
+            String idStr = reset ? args[2] : args[1];
+            net.minecraft.util.ResourceLocation rl;
+            try {
+                rl = new net.minecraft.util.ResourceLocation(idStr);
+            } catch (Exception ex) {
+                send(sender, "{\"error\":\"invalid advancement id\",\"value\":\""
+                        + escapeJson(idStr) + "\"}");
+                return;
+            }
+            net.minecraft.advancements.Advancement adv = server.getAdvancementManager().getAdvancement(rl);
+            if (adv == null) {
+                send(sender, "{\"error\":\"unknown advancement\",\"id\":\""
+                        + escapeJson(idStr) + "\"}");
+                return;
+            }
+            net.minecraft.advancements.AdvancementProgress progress = player.getAdvancements().getProgress(adv);
+            if (reset) {
+                for (String crit : progress.getCompletedCriteria()) {
+                    player.getAdvancements().revokeCriterion(adv, crit);
+                }
+                progress = player.getAdvancements().getProgress(adv);
+            }
+            send(sender, "{\"ok\":true,\"player\":\""
+                    + escapeJson(player.getName()) + "\""
+                    + ",\"advancement\":\"" + escapeJson(idStr) + "\""
+                    + ",\"isDone\":" + progress.isDone()
+                    + ",\"reset\":" + reset + "}");
+            return;
+        }
         if ("give-suit-chest".equals(sub)) {
             // Equip a fresh full-air space-suit chestplate into the
             // player's CHEST armor slot. The 6th-arg `air` (optional)
@@ -6503,7 +6617,7 @@ public class TestProbeCommand extends CommandBase {
                     + "}");
             return;
         }
-        send(sender, "{\"error\":\"unknown player subcommand — try inv-bypass <add|remove|status> | open-container | health | set-health <hp> | held-air | give-suit-chest [air]\"}");
+        send(sender, "{\"error\":\"unknown player subcommand — try inv-bypass <add|remove|status> | open-container | health | set-health <hp> | held-air | give-suit-chest [air] | advancement <id> | advancement reset <id>\"}");
     }
 
     // §7.18 — generic block-state probe ---------------------------------------

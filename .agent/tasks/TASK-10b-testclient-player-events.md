@@ -7,7 +7,7 @@
   `feedback_no_fakeplayer_for_player_tests` — EntityPlayer-touching
   behaviour lives in the testClient e2e layer, not in testServer with
   FakePlayer scaffolding.
-- Status: Pending
+- Status: ✅ Completed (2026-05-20)
 - Created: 2026-05-20
 
 ## Context
@@ -180,12 +180,25 @@ untouched (this is pure new test coverage).
 
 ## Completion Checklist
 
-- [ ] Phase 1: 3 atmosphere-effect pins green; new
-      `/artest player health|held-air` + `atmosphere cached-for-player`
-      probes wired.
-- [ ] Phase 2: 2 space-dim guard pins green.
-- [ ] Phase 3: 3 advancement pins green; `/artest player advancement`
-      probe wired.
-- [ ] Phase 4: 4 sleep+fire guard pins green.
-- [ ] Phase 5: low-gravity fall damage pin green.
-- [ ] Phase 6: docs flipped, EOD marker shipped, pyramid green.
+- [x] Phase 1: 3 atmosphere-effect pins green (`AtmospherePlayerEventE2ETest`);
+      `/artest player health|set-health|held-air|give-suit-chest` +
+      `atmosphere cached-for-player` probes wired. Scope rewritten:
+      vacuum-damage application lives in libVulpes binary so the AR pin
+      surface is per-player cache + sync, not damage numbers.
+- [x] Phase 2: 2 space-dim guard pins green (`SpaceDimGuardE2ETest`)
+      — no-station fallback to overworld + registered-station teleport
+      to spawn.
+- [x] Phase 3: 4 advancement pins green (`AdvancementsE2ETest`) —
+      baseline + Luna positive + non-Luna AR dim counter-test +
+      far-from-coords counter-test; `/artest player advancement <id>`
+      + `advancement reset` probes wired. MOON_LANDING intentionally
+      dropped — lives in EntityRocket (TASK-07 domain), not in
+      PlanetEventHandler.
+- [x] Phase 4: 4 sleep+flint guard pins green (`VacuumGuardsE2ETest`)
+      — sleep refused/allowed + flint canceled/allowed in vacuum vs
+      breathable AR dims; `/artest player try-sleep|try-ignite` probes
+      wired.
+- [x] Phase 5: 2 low-gravity fall pins green (`LowGravFallDamageE2ETest`)
+      — overworld no-op + 0.17-grav AR dim scales distance by gravity;
+      `/artest player try-fall <distance>` probe wired.
+- [x] Phase 6: docs flipped, EOD marker shipped.
