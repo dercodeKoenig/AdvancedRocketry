@@ -15,8 +15,8 @@ in TASK-08-mixin)
 small targeted bugfixes over large refactors; preserve existing public API/registry IDs
 to avoid breaking saves and dependent mods.
 
-**Last Updated**: 2026-05-11
-**Navigator Version**: 5.5.0
+**Last Updated**: 2026-05-21
+**Navigator Version**: 6.15.4
 
 ---
 

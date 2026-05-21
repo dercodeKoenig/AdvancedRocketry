@@ -103,8 +103,8 @@ All TASK-NN docs share a structure:
 
 ## Notes on `_documentsKnownBug`
 
-The TASK-02 / TASK-03 audit surfaced 4 real production bugs we chose
-NOT to fix in-scope (per the "no production logic changes" rule).
+The TASK-02 / TASK-03 / TASK-05 audits surfaced 5 real production bugs
+we chose NOT to fix in-scope (per the "no production logic changes" rule).
 Tests pin the **current** behaviour as expected so a future fix has to
 update them:
 
@@ -112,6 +112,9 @@ update them:
 2. `CableNetwork.merge` addAll-before-dedupe ordering.
 3. `EnergyNetwork.merge` battery-migration cascade from (2).
 4. `SpaceStationObject:801` writes `"autoLand"`, reads `"occupied"`.
+5. `ItemSpaceElevatorChip:42` calls `removeTag("positions")` to clear
+   the list — but `NBTStorableListList` stores entries under key
+   `"list"`. Setting an empty position list is a no-op.
 
 A separate **bug-fix ticket** should address all four; once fixed,
 the corresponding `_documentsKnownBug` tests flip to expected-passing

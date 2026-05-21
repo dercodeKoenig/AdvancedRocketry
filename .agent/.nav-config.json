@@ -1,5 +1,5 @@
 {
-  "version": "5.5.0",
+  "version": "6.15.4",
   "project_name": "AdvancedRocketry",
   "tech_stack": "Java 8, Minecraft Forge 1.12.2, Kotlin DSL Gradle",
   "project_management": "none",
@@ -9,9 +9,35 @@
   "compact_strategy": "conservative",
   "auto_update": {
     "enabled": true,
-    "check_interval_hours": 1
+    "check_interval_hours": 1,
+    "last_check": "2026-05-21T18:31:33.580405"
   },
   "read_guard_hook": {
     "escalate_threshold": 20
+  },
+  "tom_features": {
+    "verification_checkpoints": true,
+    "confirmation_threshold": "high-stakes",
+    "profile_enabled": true,
+    "diagnose_enabled": true,
+    "belief_anchors": false
+  },
+  "loop_mode": {
+    "enabled": false,
+    "max_iterations": 5,
+    "stagnation_threshold": 3,
+    "exit_requires_explicit_signal": true
+  },
+  "simplification": {
+    "enabled": true,
+    "trigger": "post-implementation",
+    "scope": "modified"
+  },
+  "task_mode": {
+    "enabled": true,
+    "auto_detect": true,
+    "defer_to_skills": true,
+    "complexity_threshold": 0.5,
+    "show_phase_indicator": true
   }
 }
