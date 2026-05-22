@@ -196,6 +196,9 @@ public class TestProbeCommand extends CommandBase {
                 case "seal-detector":
                     handleSealDetector(server, sender, tail(args));
                     break;
+                case "mission":
+                    handleMission(server, sender, tail(args));
+                    break;
                 default:
                     send(sender, "{\"error\":\"unknown subcommand\",\"sub\":\"" + args[0] + "\"}");
             }
@@ -7758,6 +7761,411 @@ public class TestProbeCommand extends CommandBase {
         }
         send(sender, "{\"pos\":[" + x + "," + y + "," + z + "]"
                 + ",\"branch\":\"" + branch + "\"}");
+    }
+
+    // §7.19 — mission probe (TASK-06) ----------------------------------------
+
+    /**
+     * {@code /artest mission ...} — drives MissionResourceCollection
+     * subclasses (MissionGasCollection / MissionOreMining) without
+     * requiring a real rocket launch.
+     *
+     * <p>Verbs:</p>
+     * <ul>
+     *   <li>{@code start-gas <dim> <rocketEntityId> <duration> <fluidName>}
+     *       — construct a MissionGasCollection bound to the rocket, register
+     *       on the dim, return the mission's satellite id.</li>
+     *   <li>{@code start-ore <dim> <rocketEntityId> <duration> <drillingPower>}
+     *       — analogue for MissionOreMining; injects an ItemAsteroidChip
+     *       into the rocket's guidance computer with mid-range data values
+     *       and the requested drilling-power into the rocket's StatsRocket.</li>
+     *   <li>{@code state <missionId>} — JSON dump of mission progress + state.</li>
+     *   <li>{@code advance <missionId> <ticks>} — backdates
+     *       {@code startWorldTime} by the given tick count, observationally
+     *       equivalent to advancing world time but deterministic + cheap.</li>
+     *   <li>{@code complete-now <missionId>} — advances until progress reaches
+     *       1.0 then drives one {@code tickEntity()} to fire side effects.</li>
+     *   <li>{@code rocket-cargo <missionId>} — after completion, scan launch
+     *       coords for the respawned rocket entity and report its fluid +
+     *       inventory tile contents as JSON.</li>
+     *   <li>{@code infra-state <missionId>} — list infrastructureCoords + how
+     *       many resolve to live IInfrastructure tiles currently pointing
+     *       back at this mission via {@code getLinkedMission()}.</li>
+     * </ul>
+     *
+     * <p>Reads/writes the mission's package-private fields
+     * ({@code startWorldTime}, {@code duration}, {@code x/y/z},
+     * {@code launchDimension}, {@code infrastructureCoords}) via reflection
+     * — the contract being pinned is the player-visible save/lifecycle
+     * shape, not the internal field naming. If a future refactor renames
+     * these, this probe needs updating but the test assertions don't.</p>
+     */
+    private void handleMission(net.minecraft.server.MinecraftServer server,
+                               ICommandSender sender, String[] args) {
+        if (args.length == 0) {
+            send(sender, "{\"error\":\"missing mission subcommand — try start-gas | start-ore | state | advance | complete-now | rocket-cargo | infra-state\"}");
+            return;
+        }
+        String sub = args[0].toLowerCase(java.util.Locale.ROOT);
+        try {
+            if ("start-gas".equals(sub) && args.length >= 5) {
+                // /artest mission start-gas <dim> <rocketEntityId> <duration> <fluidName> [intakePower]
+                // intakePower defaults to 0 (matches a freshly assembled rocket
+                // with no intake module). Set > 0 to exercise the fluid-fill
+                // branch in MissionGasCollection.onMissionComplete.
+                int dim = parseIntOr(args[1], Integer.MIN_VALUE);
+                int rocketId = parseIntOr(args[2], -1);
+                long duration = (long) parseDoubleOr(args[3], 0);
+                String fluidName = args[4];
+                int intakePower = args.length >= 6 ? parseIntOr(args[5], 0) : 0;
+                net.minecraft.world.WorldServer world = server.getWorld(dim);
+                if (world == null) {
+                    send(sender, "{\"error\":\"world not loaded\",\"dim\":" + dim + "}");
+                    return;
+                }
+                net.minecraft.entity.Entity ent = world.getEntityByID(rocketId);
+                if (!(ent instanceof zmaster587.advancedRocketry.entity.EntityRocket)) {
+                    send(sender, "{\"error\":\"entity " + rocketId + " is not an EntityRocket\"}");
+                    return;
+                }
+                zmaster587.advancedRocketry.entity.EntityRocket rocket =
+                        (zmaster587.advancedRocketry.entity.EntityRocket) ent;
+                net.minecraftforge.fluids.Fluid fluid =
+                        net.minecraftforge.fluids.FluidRegistry.getFluid(fluidName);
+                if (fluid == null) {
+                    send(sender, "{\"error\":\"unknown fluid\",\"name\":\"" + escapeJson(fluidName) + "\"}");
+                    return;
+                }
+                // Set intakePower BEFORE the mission ctor so the mission's
+                // rocketStats reference reads the configured value at
+                // completion time. StatsRocket.setStatTag(name, int) writes
+                // the named tag in the NBT-keyed tag map.
+                rocket.stats.setStatTag("intakePower", intakePower);
+                java.util.LinkedList<zmaster587.advancedRocketry.api.IInfrastructure> infra =
+                        new java.util.LinkedList<>();
+                zmaster587.advancedRocketry.mission.MissionGasCollection mission =
+                        new zmaster587.advancedRocketry.mission.MissionGasCollection(
+                                duration, rocket, infra, fluid);
+                mission.setDimensionId(dim);
+                zmaster587.advancedRocketry.dimension.DimensionProperties props =
+                        zmaster587.advancedRocketry.dimension.DimensionManager.getInstance()
+                                .getDimensionProperties(dim);
+                if (props == null) {
+                    send(sender, "{\"error\":\"no DimensionProperties for dim\",\"dim\":" + dim + "}");
+                    return;
+                }
+                props.addSatellite(mission, world);
+                send(sender, "{\"ok\":true,\"missionId\":" + mission.getId()
+                        + ",\"dim\":" + dim
+                        + ",\"duration\":" + duration
+                        + ",\"gas\":\"" + escapeJson(fluidName) + "\""
+                        + ",\"intakePower\":" + intakePower
+                        + ",\"type\":\"gas\"}");
+                return;
+            }
+            if ("start-ore".equals(sub) && args.length >= 5) {
+                int dim = parseIntOr(args[1], Integer.MIN_VALUE);
+                int rocketId = parseIntOr(args[2], -1);
+                long duration = (long) parseDoubleOr(args[3], 0);
+                float drillingPower = (float) parseDoubleOr(args[4], 0);
+                net.minecraft.world.WorldServer world = server.getWorld(dim);
+                if (world == null) {
+                    send(sender, "{\"error\":\"world not loaded\",\"dim\":" + dim + "}");
+                    return;
+                }
+                net.minecraft.entity.Entity ent = world.getEntityByID(rocketId);
+                if (!(ent instanceof zmaster587.advancedRocketry.entity.EntityRocket)) {
+                    send(sender, "{\"error\":\"entity " + rocketId + " is not an EntityRocket\"}");
+                    return;
+                }
+                zmaster587.advancedRocketry.entity.EntityRocket rocket =
+                        (zmaster587.advancedRocketry.entity.EntityRocket) ent;
+                // Equip a programmed asteroid chip in the guidance computer's
+                // slot 0 with full max-data values so production's random
+                // rolls (distance/composition/mass over maxData) effectively
+                // always fire. The chip's "type" is set to a sentinel; if no
+                // asteroid type is registered for it production will short
+                // circuit on `asteroid != null` and skip the harvest fill —
+                // chip-replacement still runs (the post-condition tests).
+                net.minecraft.item.ItemStack chipStack = new net.minecraft.item.ItemStack(
+                        zmaster587.advancedRocketry.api.AdvancedRocketryItems.itemAsteroidChip);
+                zmaster587.advancedRocketry.item.ItemAsteroidChip chip =
+                        (zmaster587.advancedRocketry.item.ItemAsteroidChip) chipStack.getItem();
+                chip.setMaxData(chipStack, 100);
+                chip.setData(chipStack, 100, zmaster587.advancedRocketry.api.DataStorage.DataType.DISTANCE);
+                chip.setData(chipStack, 100, zmaster587.advancedRocketry.api.DataStorage.DataType.COMPOSITION);
+                chip.setData(chipStack, 100, zmaster587.advancedRocketry.api.DataStorage.DataType.MASS);
+                chip.setType(chipStack, "ar-test-fixture");
+                chip.setUUID(chipStack, System.nanoTime());
+                if (rocket.storage == null) {
+                    send(sender, "{\"error\":\"rocket has null storage chunk\"}");
+                    return;
+                }
+                zmaster587.advancedRocketry.tile.TileGuidanceComputer gc =
+                        rocket.storage.getGuidanceComputer();
+                if (gc == null) {
+                    send(sender, "{\"error\":\"rocket has no guidance computer\"}");
+                    return;
+                }
+                gc.setInventorySlotContents(0, chipStack);
+                rocket.stats.setDrillingPower(drillingPower);
+
+                java.util.LinkedList<zmaster587.advancedRocketry.api.IInfrastructure> infra =
+                        new java.util.LinkedList<>();
+                zmaster587.advancedRocketry.mission.MissionOreMining mission =
+                        new zmaster587.advancedRocketry.mission.MissionOreMining(
+                                duration, rocket, infra);
+                mission.setDimensionId(dim);
+                zmaster587.advancedRocketry.dimension.DimensionProperties props =
+                        zmaster587.advancedRocketry.dimension.DimensionManager.getInstance()
+                                .getDimensionProperties(dim);
+                if (props == null) {
+                    send(sender, "{\"error\":\"no DimensionProperties for dim\",\"dim\":" + dim + "}");
+                    return;
+                }
+                props.addSatellite(mission, world);
+                send(sender, "{\"ok\":true,\"missionId\":" + mission.getId()
+                        + ",\"dim\":" + dim
+                        + ",\"duration\":" + duration
+                        + ",\"drillingPower\":" + drillingPower
+                        + ",\"type\":\"ore\"}");
+                return;
+            }
+            if ("state".equals(sub) && args.length >= 2) {
+                long missionId = (long) parseDoubleOr(args[1], -1);
+                zmaster587.advancedRocketry.mission.MissionResourceCollection m = findMission(missionId);
+                if (m == null) {
+                    send(sender, "{\"error\":\"mission not found\",\"missionId\":" + missionId + "}");
+                    return;
+                }
+                long startTime = readLongField(m, "startWorldTime");
+                long duration = readLongField(m, "duration");
+                int worldId = readIntField(m, "worldId");
+                int launchDim = readIntField(m, "launchDimension");
+                net.minecraft.world.World w = net.minecraftforge.common.DimensionManager.getWorld(m.getDimensionId());
+                double progress = w == null ? -1.0 : m.getProgress(w);
+                String type = m instanceof zmaster587.advancedRocketry.mission.MissionGasCollection
+                        ? "gas"
+                        : (m instanceof zmaster587.advancedRocketry.mission.MissionOreMining ? "ore" : "resource");
+                java.util.LinkedList<?> infra =
+                        (java.util.LinkedList<?>) readObjectField(m, "infrastructureCoords");
+                int infraCount = infra == null ? 0 : infra.size();
+                send(sender, "{\"ok\":true,\"missionId\":" + missionId
+                        + ",\"type\":\"" + type + "\""
+                        + ",\"progress\":" + progress
+                        + ",\"startWorldTime\":" + startTime
+                        + ",\"duration\":" + duration
+                        + ",\"worldId\":" + worldId
+                        + ",\"launchDim\":" + launchDim
+                        + ",\"infraCount\":" + infraCount
+                        + ",\"isDead\":" + m.isDead() + "}");
+                return;
+            }
+            if ("advance".equals(sub) && args.length >= 3) {
+                long missionId = (long) parseDoubleOr(args[1], -1);
+                long ticks = (long) parseDoubleOr(args[2], 0);
+                zmaster587.advancedRocketry.mission.MissionResourceCollection m = findMission(missionId);
+                if (m == null) {
+                    send(sender, "{\"error\":\"mission not found\",\"missionId\":" + missionId + "}");
+                    return;
+                }
+                long startTime = readLongField(m, "startWorldTime");
+                writeLongField(m, "startWorldTime", startTime - ticks);
+                net.minecraft.world.World w = net.minecraftforge.common.DimensionManager.getWorld(m.getDimensionId());
+                double progress = w == null ? -1.0 : m.getProgress(w);
+                send(sender, "{\"ok\":true,\"missionId\":" + missionId
+                        + ",\"ticksAdvanced\":" + ticks
+                        + ",\"newStartWorldTime\":" + (startTime - ticks)
+                        + ",\"progress\":" + progress + "}");
+                return;
+            }
+            if ("complete-now".equals(sub) && args.length >= 2) {
+                long missionId = (long) parseDoubleOr(args[1], -1);
+                zmaster587.advancedRocketry.mission.MissionResourceCollection m = findMission(missionId);
+                if (m == null) {
+                    send(sender, "{\"error\":\"mission not found\",\"missionId\":" + missionId + "}");
+                    return;
+                }
+                long duration = readLongField(m, "duration");
+                net.minecraft.world.World w = net.minecraftforge.common.DimensionManager.getWorld(m.getDimensionId());
+                if (w == null) {
+                    send(sender, "{\"error\":\"mission dim not loaded\",\"dim\":" + m.getDimensionId() + "}");
+                    return;
+                }
+                long now = w.getTotalWorldTime();
+                // Snapshot launch coords + dim BEFORE tickEntity so we can
+                // read cargo from the re-spawned rocket atomically — the
+                // natural DimensionProperties.tick loop prunes dead
+                // satellites between commands, so a follow-up rocket-cargo
+                // call would race the prune.
+                double lx = readDoubleField(m, "x");
+                double ly = readDoubleField(m, "y");
+                double lz = readDoubleField(m, "z");
+                int launchDim = readIntField(m, "launchDimension");
+                // Backdate startWorldTime so progress = 1.0 exactly.
+                writeLongField(m, "startWorldTime", now - duration);
+                boolean wasDead = m.isDead();
+                m.tickEntity();
+                // Synchronous cargo readback while we still know the launch
+                // coords — even after the prune the respawned rocket entity
+                // persists in the launch dim, but the mission registry no
+                // longer exposes its coords.
+                String cargo = snapshotCargoJson(server, launchDim, lx, ly, lz);
+                send(sender, "{\"ok\":true,\"missionId\":" + missionId
+                        + ",\"wasDeadBefore\":" + wasDead
+                        + ",\"isDeadAfter\":" + m.isDead()
+                        + ",\"completed\":" + (!wasDead && m.isDead())
+                        + ",\"launchDim\":" + launchDim
+                        + ",\"launchPos\":[" + lx + "," + ly + "," + lz + "]"
+                        + "," + cargo + "}");
+                return;
+            }
+            if ("rocket-cargo".equals(sub) && args.length >= 2) {
+                long missionId = (long) parseDoubleOr(args[1], -1);
+                zmaster587.advancedRocketry.mission.MissionResourceCollection m = findMission(missionId);
+                if (m == null) {
+                    send(sender, "{\"error\":\"mission not found\",\"missionId\":" + missionId + "}");
+                    return;
+                }
+                double lx = readDoubleField(m, "x");
+                double ly = readDoubleField(m, "y");
+                double lz = readDoubleField(m, "z");
+                int launchDim = readIntField(m, "launchDimension");
+                String cargo = snapshotCargoJson(server, launchDim, lx, ly, lz);
+                send(sender, "{\"ok\":true,\"missionId\":" + missionId
+                        + ",\"launchDim\":" + launchDim
+                        + ",\"launchPos\":[" + lx + "," + ly + "," + lz + "]"
+                        + "," + cargo + "}");
+                return;
+            }
+            send(sender, "{\"error\":\"unknown mission subcommand — try start-gas | start-ore | state | advance | complete-now | rocket-cargo\"}");
+        } catch (ReflectiveOperationException e) {
+            send(sender, "{\"error\":\"reflection failed: " + escapeJson(e.getMessage()) + "\"}");
+        }
+    }
+
+    /**
+     * Returns a JSON fragment (without enclosing braces) describing the
+     * fluid + inventory contents of all EntityRockets within a 128-block
+     * cube around the given coords. Used by both the standalone
+     * {@code rocket-cargo} verb and the atomic {@code complete-now}
+     * which embeds cargo readback to avoid the natural-tick-prune
+     * race between commands.
+     *
+     * <p>Fragment shape:</p>
+     * <pre>"rocketCount":N,"fluidEntries":F,"itemEntries":I,
+     * "fluids":[...],"items":[...]</pre>
+     */
+    private static String snapshotCargoJson(net.minecraft.server.MinecraftServer server,
+                                            int launchDim, double lx, double ly, double lz) {
+        net.minecraft.world.WorldServer lw = server.getWorld(launchDim);
+        if (lw == null) {
+            return "\"rocketCount\":0,\"fluidEntries\":0,\"itemEntries\":0"
+                    + ",\"fluids\":[],\"items\":[],\"cargoError\":\"launch dim not loaded\"";
+        }
+        net.minecraft.util.math.AxisAlignedBB bb = new net.minecraft.util.math.AxisAlignedBB(
+                lx - 128, ly - 64, lz - 128, lx + 128, ly + 256, lz + 128);
+        java.util.List<zmaster587.advancedRocketry.entity.EntityRocket> rockets =
+                lw.getEntitiesWithinAABB(zmaster587.advancedRocketry.entity.EntityRocket.class, bb);
+        StringBuilder fluidsJson = new StringBuilder("[");
+        StringBuilder itemsJson = new StringBuilder("[");
+        int fluidEntries = 0, itemEntries = 0;
+        for (zmaster587.advancedRocketry.entity.EntityRocket r : rockets) {
+            if (r.storage == null) continue;
+            for (net.minecraft.tileentity.TileEntity t : r.storage.getFluidTiles()) {
+                if (t.hasCapability(net.minecraftforge.fluids.capability.CapabilityFluidHandler.FLUID_HANDLER_CAPABILITY, null)) {
+                    net.minecraftforge.fluids.capability.IFluidHandler fh =
+                            t.getCapability(net.minecraftforge.fluids.capability.CapabilityFluidHandler.FLUID_HANDLER_CAPABILITY, null);
+                    if (fh == null) continue;
+                    for (net.minecraftforge.fluids.capability.IFluidTankProperties p : fh.getTankProperties()) {
+                        net.minecraftforge.fluids.FluidStack fs = p.getContents();
+                        if (fs == null || fs.amount == 0) continue;
+                        if (fluidEntries++ > 0) fluidsJson.append(',');
+                        fluidsJson.append("{\"type\":\"")
+                                .append(escapeJson(fs.getFluid().getName()))
+                                .append("\",\"amount\":").append(fs.amount).append('}');
+                    }
+                }
+            }
+            for (net.minecraft.tileentity.TileEntity t : r.storage.getInventoryTiles()) {
+                net.minecraftforge.items.IItemHandler ih = t.hasCapability(
+                        net.minecraftforge.items.CapabilityItemHandler.ITEM_HANDLER_CAPABILITY,
+                        net.minecraft.util.EnumFacing.UP)
+                        ? t.getCapability(net.minecraftforge.items.CapabilityItemHandler.ITEM_HANDLER_CAPABILITY,
+                                net.minecraft.util.EnumFacing.UP)
+                        : null;
+                if (ih != null) {
+                    for (int i = 0; i < ih.getSlots(); i++) {
+                        net.minecraft.item.ItemStack s = ih.getStackInSlot(i);
+                        if (s == null || s.isEmpty()) continue;
+                        if (itemEntries++ > 0) itemsJson.append(',');
+                        itemsJson.append("{\"id\":\"")
+                                .append(escapeJson(s.getItem().getRegistryName() == null
+                                        ? "null"
+                                        : s.getItem().getRegistryName().toString()))
+                                .append("\",\"count\":").append(s.getCount())
+                                .append(",\"slot\":").append(i).append('}');
+                    }
+                }
+            }
+        }
+        fluidsJson.append(']');
+        itemsJson.append(']');
+        return "\"rocketCount\":" + rockets.size()
+                + ",\"fluidEntries\":" + fluidEntries
+                + ",\"itemEntries\":" + itemEntries
+                + ",\"fluids\":" + fluidsJson
+                + ",\"items\":" + itemsJson;
+    }
+
+    private static zmaster587.advancedRocketry.mission.MissionResourceCollection findMission(long id) {
+        zmaster587.advancedRocketry.api.satellite.SatelliteBase sat =
+                zmaster587.advancedRocketry.dimension.DimensionManager.getInstance().getSatellite(id);
+        return sat instanceof zmaster587.advancedRocketry.mission.MissionResourceCollection
+                ? (zmaster587.advancedRocketry.mission.MissionResourceCollection) sat
+                : null;
+    }
+
+    private static long readLongField(Object target, String name) throws ReflectiveOperationException {
+        java.lang.reflect.Field f = findFieldInHierarchy(target.getClass(), name);
+        f.setAccessible(true);
+        return f.getLong(target);
+    }
+
+    private static void writeLongField(Object target, String name, long value) throws ReflectiveOperationException {
+        java.lang.reflect.Field f = findFieldInHierarchy(target.getClass(), name);
+        f.setAccessible(true);
+        f.setLong(target, value);
+    }
+
+    private static int readIntField(Object target, String name) throws ReflectiveOperationException {
+        java.lang.reflect.Field f = findFieldInHierarchy(target.getClass(), name);
+        f.setAccessible(true);
+        return f.getInt(target);
+    }
+
+    private static double readDoubleField(Object target, String name) throws ReflectiveOperationException {
+        java.lang.reflect.Field f = findFieldInHierarchy(target.getClass(), name);
+        f.setAccessible(true);
+        return f.getDouble(target);
+    }
+
+    private static Object readObjectField(Object target, String name) throws ReflectiveOperationException {
+        java.lang.reflect.Field f = findFieldInHierarchy(target.getClass(), name);
+        f.setAccessible(true);
+        return f.get(target);
+    }
+
+    private static java.lang.reflect.Field findFieldInHierarchy(Class<?> cls, String name) throws NoSuchFieldException {
+        Class<?> c = cls;
+        while (c != null) {
+            try {
+                return c.getDeclaredField(name);
+            } catch (NoSuchFieldException ignored) {
+                c = c.getSuperclass();
+            }
+        }
+        throw new NoSuchFieldException(name);
     }
 
     // §7.18 — force-field projector state probe -------------------------------
