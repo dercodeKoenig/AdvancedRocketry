@@ -281,14 +281,37 @@ remains needs a real EntityPlayerMP and lives in testClient e2e.
 
 **Acceptance:**
 
-- [ ] `ItemHovercraftSpawnE2ETest` (~2 tests)
-- [ ] `ItemSpaceArmorUseFluidE2ETest` (~2 tests)
-- [ ] `ItemSpaceChestDeathPersistE2ETest` (~2 tests)
-- [ ] `ItemBiomeChangerActionE2ETest` (~2 tests)
-- [ ] `ItemWeatherControllerActionE2ETest` (~1-2 tests)
-- [ ] `ItemSealDetectorPlayerMessagesE2ETest` (~6 tests + cross-pin)
-- [ ] `ItemAtmosphereAnalzerPlayerReadoutE2ETest` (~1-2 tests)
-- [ ] Decide scope for ItemBlockCrystal / ItemBlockFluidTank /
-      ItemPackedStructure — defer or include
-- [ ] Full pyramid PASS
-- [ ] EOD marker
+- [x] `ItemSealDetectorPlayerMessagesE2ETest` (8 tests, 6 fixtures
+      + chat-clear scaffold + error envelope) — `6184f3e7`
+- [x] `ItemAtmosphereAnalzerPlayerReadoutE2ETest` (3 tests, AIR
+      readout on vanilla dim + 2 error envelopes) — `5f88b777`
+- [x] `ItemHovercraftSpawnE2ETest` (3 tests, target-block spawn
+      + empty-ray PASS + error envelope) — `6282334a`
+- [x] `ItemBiomeChangerActionE2ETest` (2 tests, posList save-format
+      pin + error envelope) — `23e9aadd`
+- [~] `ItemWeatherControllerActionE2ETest` — **rescoped/dropped.**
+      The right-click effect on a WeatherController-bound chip is
+      `performAction` populating the private `viable_positions`
+      list. That list is NOT persisted to NBT (writeToNBT only emits
+      mode_id / last_mode_id / floodlevel), so there is no
+      save-format observable to pin against. Reading
+      `viable_positions` via reflection would be impl-field testing
+      — anti-pattern per testing-principles SOP. Real player-visible
+      contract (eventual rain/dry change) needs full battery + tick
+      cycle, out of unit/probe scope. Leave for a future ticket that
+      adds either an NBT pin in production or a tick-loop driver.
+- [~] `ItemSpaceArmorUseFluidE2ETest` — **deferred.** Real drain
+      contract (suit air decremented while in vacuum) needs a
+      planetary-dim fixture + atmosphere-tick cycle (~3-4h probe
+      infra: configure dim with AtmosphereNeedsSuit + register
+      handler + drive AtmosphereHandler.runEffectsOnPlayer). Worth
+      a follow-up ticket — out of scope for Phase 7 close-out.
+- [~] `ItemSpaceChestDeathPersistE2ETest` — **dropped, not a mod
+      contract.** Production has no custom PlayerEvent.Clone /
+      death-keep / drop handler for SpaceChest. Pin would test
+      vanilla Minecraft ItemStack NBT survival through entity
+      drops — not the mod's contract. SOP litmus fails.
+- [ ] ItemBlockCrystal / ItemBlockFluidTank / ItemPackedStructure
+      — still deferred, separate ticket if needed.
+- [x] Phase 7 partial pyramid PASS (16/16 across the 4 shipped suites)
+- [x] EOD marker (`.agent/.context-markers/2026-05-22_task10b-phase7-closeout.md`)
