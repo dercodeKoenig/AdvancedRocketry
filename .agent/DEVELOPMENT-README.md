@@ -127,11 +127,18 @@ prioritised backlog (TASK-04 through TASK-10) and dependency graph.
   (not P0 — Mixin is less brittle than ASM).
 
 **Pending (prioritised)**:
-- TASK-10b Phase 7 — TASK-05 player-tier item behaviour (~10-14 h, P1):
-  Hovercraft / SpaceArmor useFluid / SpaceChest death-persist /
-  BiomeChanger + WeatherController right-click satellite action /
-  SealDetector player-message dispatch / AtmosphereAnalzer readout.
-- TASK-06 — Mission system depth (P2, ~10-12 h, 3 mission classes)
+- TASK-06 follow-ups (P2, ~5-7 h):
+  - Fluid-cargo rocket fixture variant to restore the strong
+    "64000 mB oxygen fill" assertion in gas completion (~1 h)
+  - Multi-boot persistence tests for gas + ore missions (~2-3 h)
+  - Phase 5 infrastructure lifecycle tests (~2-3 h, needs
+    `/artest mission infra-state` verb + fixture infra tile)
+- TASK-10b Phase 7 follow-ups (P2):
+  - SpaceArmor useFluid e2e — needs vacuum-dim fixture +
+    atmosphere-tick driver (~3-4 h)
+  - WeatherController right-click e2e — gated on either production
+    adding NBT pin for `viable_positions` or test framework
+    growing a tick-loop driver
 
 **Format**: `TASK-XX-feature-slug.md`
 

@@ -6,10 +6,11 @@
   only `MissionResourceCollection` covered at unit tier
   (`MissionResourceCollectionContractTest`). `MissionGasCollection`
   and `MissionOreMining` are completely untested.
-- Status: In Progress (replan 2026-05-22 — see "History" below)
-- Created: 2026-05-19; replanned 2026-05-22
+- Status: Phases 1-4 ✅ Completed (2026-05-22). Phases 5 + persistence
+  deferred — see "Deferred follow-ups" below.
+- Created: 2026-05-19; replanned 2026-05-22; partial close 2026-05-22.
 - Predecessor: `.agent/.context-markers/2026-05-19-1230_task03-A-and-B-mostly-done-eod.md`
-- Successor marker: TBD
+- Successor marker: `.agent/.context-markers/2026-05-22_task06-phases-1-4-shipped.md`
 
 ## Context
 
@@ -226,15 +227,59 @@ ctor reads — `posX/Y/Z`, `world`, `storage`, `stats`, and
 
 ## Completion Checklist
 
-- [ ] 7 new `/artest mission` probe verbs (Phase 1)
-- [ ] Phase 2: 6 lifecycle tests
-- [ ] Phase 3: 4 gas-completion tests + 1 NBT + 1 persistence = 6
-- [ ] Phase 4: 4 ore-completion tests + 1 persistence = 5
-- [ ] Phase 5: 3 infrastructure-lifecycle tests
-- [ ] Full pyramid PASS
-- [ ] EOD marker
-- [ ] `.agent/tasks/README.md` updated
+- [x] 5 `/artest mission` probe verbs landed (start-gas, start-ore,
+      state, advance, complete-now + standalone rocket-cargo) —
+      infra-state verb deferred with Phase 5
+- [x] Phase 2: 5 lifecycle tests (`MissionLifecyclePyramidTest`)
+- [x] Phase 3: 3 gas-completion tests (`MissionGasCompletionTest`)
+      + 3 NBT round-trip tests (`MissionNbtRoundTripTest` at unit-tier);
+      multi-boot persistence deferred
+- [x] Phase 4: 3 ore-completion tests (`MissionOreCompletionTest`);
+      multi-boot persistence deferred
+- [ ] Phase 5 infra-lifecycle tests — deferred
+- [x] Phase 2-4 pyramid PASS (3 unit + 11 server, 14/14 green)
+- [x] EOD marker
+      (`.agent/.context-markers/2026-05-22_task06-phases-1-4-shipped.md`)
+- [x] `.agent/tasks/README.md` Done table updated
 
-**Test count target**: ~20 new tests across 5 new test classes (1
-unit + 4 server) + 1 multi-boot persistence class extending the
-existing pattern.
+**Tests landed**: 14 (3 unit + 11 server). Original target was ~20 —
+the 6-test shortfall is the deferred Phase 5 + multi-boot persistence
++ the dropped strong "64000 mB oxygen fill" assertion that requires
+a fluid-cargo rocket fixture variant.
+
+## Deferred follow-ups (not blocking close-out)
+
+The following remain as future tickets — captured here so the work
+isn't lost:
+
+1. **Fluid-cargo rocket fixture**
+   `simple` fixture's BlockFuelTank has no TileEntity → empty
+   `StorageChunk.liquidTiles` → `MissionGasCollection.onMissionComplete`'s
+   fill loop iterates zero times. The "fluid tiles get 64000 mB of
+   configured fluid" assertion is the actual player-visible contract
+   but isn't observable without a fixture that includes a tile with
+   `CapabilityFluidHandler.FLUID_HANDLER_CAPABILITY`. Add a
+   `with-fluid-cargo` variant to `/artest fixture rocket` and restore
+   the strong pin. Effort: ~1 h.
+
+2. **Multi-boot persistence tests** for both gas and ore missions
+   (Phase 3 last bullet + Phase 4 last bullet of plan). Extends
+   `PersistenceRestartSmokeTest` pattern with a mission-start →
+   shutdown → reboot → state-still-recognisable flow. Effort: ~2-3 h.
+   Note: persistence is exercised indirectly by all completion tests
+   (the mission is registered via `DimensionProperties.addSatellite`
+   which serialises through the dim's save), but an explicit
+   reboot-roundtrip is the gold standard.
+
+3. **Phase 5: infrastructure-lifecycle tests** (`startLinks…`,
+   `completionUnlinks…`, `infraNbtRoundTrip`). Requires:
+   - `/artest mission infra-state <missionId>` probe verb
+   - A fixture infrastructure tile in the world (e.g.
+     `TileGuidanceComputerAccessHatch`) wired into the mission's
+     `infrastructureCoords` list
+   Effort: ~2-3 h. The unit-tier `infraNbtRoundTrip` is already
+   covered structurally by
+   `MissionNbtRoundTripTest.infrastructureNbtTagListShapeIsKeyLocPlusIntArrayTriple`
+   — only the live-tile lifecycle remains.
+
+Total deferred work: ~5-7 h.
