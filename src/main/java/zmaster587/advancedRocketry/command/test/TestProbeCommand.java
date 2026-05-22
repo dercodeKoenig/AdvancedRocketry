@@ -4328,6 +4328,13 @@ public class TestProbeCommand extends CommandBase {
             boolean includeSeat = !"invalid-no-seat".equals(variant);
             boolean includeGuidance = !"invalid-no-guidance".equals(variant);
             boolean includeCargo = "with-cargo".equals(variant);
+            // with-fluid-cargo: same as simple but replaces 2 of the 6 BlockFuelTank
+            // positions with BlockPressurizedFluidTank (registry "liquidTank") which
+            // creates TileFluidTank — a TE exposing CapabilityFluidHandler. The
+            // rocket's StorageChunk then populates `liquidTiles` with these TEs so
+            // MissionGasCollection.onMissionComplete can fill them.
+            // Production NOFUEL gate needs >=1 fuel tank; 4 remain.
+            boolean includeFluidCargo = "with-fluid-cargo".equals(variant);
 
             net.minecraft.world.WorldServer world = server.getWorld(dim);
             if (world == null) {
@@ -4351,10 +4358,16 @@ public class TestProbeCommand extends CommandBase {
                     ForgeRegistries.BLOCKS.getValue(new ResourceLocation("advancedrocketry", "seat"));
             net.minecraft.block.Block creativePlug =
                     ForgeRegistries.BLOCKS.getValue(new ResourceLocation("libvulpes", "advStructureMachine"));
+            net.minecraft.block.Block liquidTank =
+                    ForgeRegistries.BLOCKS.getValue(new ResourceLocation("advancedrocketry", "liquidTank"));
 
             if (launchpad == null || rocketBuilder == null || advEngine == null
                     || fuelTank == null || guidanceComputer == null || seat == null) {
                 send(sender, "{\"error\":\"missing AR block(s) in registry\"}");
+                return;
+            }
+            if (includeFluidCargo && liquidTank == null) {
+                send(sender, "{\"error\":\"missing liquidTank block (advancedrocketry:liquidTank)\"}");
                 return;
             }
 
@@ -4405,6 +4418,14 @@ public class TestProbeCommand extends CommandBase {
                                 fuelTank.getDefaultState());
                     }
                 }
+            }
+            if (includeFluidCargo) {
+                // Swap 2 of the 6 fuel-tank slots for liquidTank (TileFluidTank).
+                // Pos: dx=±1, dy=2 — outer columns, upper row.
+                world.setBlockState(new BlockPos(rocketX - 1, rocketY + 2, rocketZ),
+                        liquidTank.getDefaultState());
+                world.setBlockState(new BlockPos(rocketX + 1, rocketY + 2, rocketZ),
+                        liquidTank.getDefaultState());
             }
             if (includeGuidance) {
                 world.setBlockState(new BlockPos(rocketX, rocketY + 3, rocketZ), guidanceComputer.getDefaultState());
@@ -8038,7 +8059,73 @@ public class TestProbeCommand extends CommandBase {
                         + "," + cargo + "}");
                 return;
             }
-            send(sender, "{\"error\":\"unknown mission subcommand — try start-gas | start-ore | state | advance | complete-now | rocket-cargo\"}");
+            if ("link-infra".equals(sub) && args.length >= 6) {
+                // /artest mission link-infra <missionId> <dim> <x> <y> <z>
+                // Mirrors what EntityRocket.createMission does AFTER the mission
+                // ctor: registers the infrastructure tile coord on the mission
+                // AND calls tile.linkMission(mission) so the tile starts
+                // tracking the mission. Pre-condition: tile at (x,y,z) is
+                // already placed and implements IInfrastructure.
+                long missionId = (long) parseDoubleOr(args[1], -1);
+                int dim = parseIntOr(args[2], Integer.MIN_VALUE);
+                int ix = parseIntOr(args[3], 0);
+                int iy = parseIntOr(args[4], 0);
+                int iz = parseIntOr(args[5], 0);
+                zmaster587.advancedRocketry.mission.MissionResourceCollection m = findMission(missionId);
+                if (m == null) {
+                    send(sender, "{\"error\":\"mission not found\",\"missionId\":" + missionId + "}");
+                    return;
+                }
+                net.minecraft.world.WorldServer w = server.getWorld(dim);
+                if (w == null) {
+                    send(sender, "{\"error\":\"world not loaded\",\"dim\":" + dim + "}");
+                    return;
+                }
+                net.minecraft.tileentity.TileEntity tile = w.getTileEntity(new net.minecraft.util.math.BlockPos(ix, iy, iz));
+                if (!(tile instanceof zmaster587.advancedRocketry.api.IInfrastructure)) {
+                    send(sender, "{\"error\":\"tile not IInfrastructure\",\"pos\":[" + ix + "," + iy + "," + iz + "]}");
+                    return;
+                }
+                @SuppressWarnings("unchecked")
+                java.util.LinkedList<zmaster587.libVulpes.util.HashedBlockPosition> coords =
+                        (java.util.LinkedList<zmaster587.libVulpes.util.HashedBlockPosition>) readObjectField(m, "infrastructureCoords");
+                coords.add(new zmaster587.libVulpes.util.HashedBlockPosition(ix, iy, iz));
+                boolean linked = ((zmaster587.advancedRocketry.api.IInfrastructure) tile).linkMission(m);
+                send(sender, "{\"ok\":true,\"missionId\":" + missionId
+                        + ",\"linked\":" + linked
+                        + ",\"infraCount\":" + coords.size() + "}");
+                return;
+            }
+            if ("infra-state".equals(sub) && args.length >= 5) {
+                // /artest mission infra-state <dim> <x> <y> <z>
+                // Reads the infrastructure tile's current mission ref via
+                // reflection on the package-private `mission` field (present
+                // on TileRocketMonitoringStation / TileFuelingStation /
+                // TileRocketServiceStation / TileRocketLoader / TileRocketFluidLoader).
+                int dim = parseIntOr(args[1], Integer.MIN_VALUE);
+                int ix = parseIntOr(args[2], 0);
+                int iy = parseIntOr(args[3], 0);
+                int iz = parseIntOr(args[4], 0);
+                net.minecraft.world.WorldServer w = server.getWorld(dim);
+                if (w == null) {
+                    send(sender, "{\"error\":\"world not loaded\",\"dim\":" + dim + "}");
+                    return;
+                }
+                net.minecraft.tileentity.TileEntity tile = w.getTileEntity(new net.minecraft.util.math.BlockPos(ix, iy, iz));
+                if (tile == null) {
+                    send(sender, "{\"error\":\"no tile at pos\",\"pos\":[" + ix + "," + iy + "," + iz + "]}");
+                    return;
+                }
+                Object missionRef = readObjectFieldOrNull(tile, "mission");
+                long mid = (missionRef instanceof zmaster587.advancedRocketry.api.IMission)
+                        ? ((zmaster587.advancedRocketry.api.IMission) missionRef).getMissionId()
+                        : -1;
+                send(sender, "{\"ok\":true,\"tileClass\":\"" + escapeJson(tile.getClass().getSimpleName())
+                        + "\",\"hasMission\":" + (missionRef != null)
+                        + ",\"missionId\":" + mid + "}");
+                return;
+            }
+            send(sender, "{\"error\":\"unknown mission subcommand — try start-gas | start-ore | state | advance | complete-now | rocket-cargo | link-infra | infra-state\"}");
         } catch (ReflectiveOperationException e) {
             send(sender, "{\"error\":\"reflection failed: " + escapeJson(e.getMessage()) + "\"}");
         }
@@ -8069,8 +8156,28 @@ public class TestProbeCommand extends CommandBase {
                 lw.getEntitiesWithinAABB(zmaster587.advancedRocketry.entity.EntityRocket.class, bb);
         StringBuilder fluidsJson = new StringBuilder("[");
         StringBuilder itemsJson = new StringBuilder("[");
-        int fluidEntries = 0, itemEntries = 0;
+        StringBuilder infraJson = new StringBuilder("[");
+        int fluidEntries = 0, itemEntries = 0, infraEntries = 0;
         for (zmaster587.advancedRocketry.entity.EntityRocket r : rockets) {
+            // Post-completion re-link verification: EntityRocket.infrastructureCoords
+            // (HashSet<HashedBlockPosition>) lists tiles this rocket considers
+            // connected. Production's MissionGasCollection.onMissionComplete
+            // calls rocket.linkInfrastructure(tile) for each mission infra tile,
+            // which adds to this set.
+            try {
+                Object coordsObj = readObjectField(r, "infrastructureCoords");
+                if (coordsObj instanceof java.util.Collection) {
+                    for (Object pos : (java.util.Collection<?>) coordsObj) {
+                        zmaster587.libVulpes.util.HashedBlockPosition hbp =
+                                (zmaster587.libVulpes.util.HashedBlockPosition) pos;
+                        if (infraEntries++ > 0) infraJson.append(',');
+                        infraJson.append('[').append(hbp.x).append(',').append(hbp.y)
+                                .append(',').append(hbp.z).append(']');
+                    }
+                }
+            } catch (ReflectiveOperationException ignored) {
+                // Field absent in a future refactor — leave infra list empty.
+            }
             if (r.storage == null) continue;
             for (net.minecraft.tileentity.TileEntity t : r.storage.getFluidTiles()) {
                 if (t.hasCapability(net.minecraftforge.fluids.capability.CapabilityFluidHandler.FLUID_HANDLER_CAPABILITY, null)) {
@@ -8111,11 +8218,14 @@ public class TestProbeCommand extends CommandBase {
         }
         fluidsJson.append(']');
         itemsJson.append(']');
+        infraJson.append(']');
         return "\"rocketCount\":" + rockets.size()
                 + ",\"fluidEntries\":" + fluidEntries
                 + ",\"itemEntries\":" + itemEntries
+                + ",\"infraEntries\":" + infraEntries
                 + ",\"fluids\":" + fluidsJson
-                + ",\"items\":" + itemsJson;
+                + ",\"items\":" + itemsJson
+                + ",\"infrastructure\":" + infraJson;
     }
 
     private static zmaster587.advancedRocketry.mission.MissionResourceCollection findMission(long id) {
@@ -8154,6 +8264,14 @@ public class TestProbeCommand extends CommandBase {
         java.lang.reflect.Field f = findFieldInHierarchy(target.getClass(), name);
         f.setAccessible(true);
         return f.get(target);
+    }
+
+    private static Object readObjectFieldOrNull(Object target, String name) {
+        try {
+            return readObjectField(target, name);
+        } catch (ReflectiveOperationException e) {
+            return null;
+        }
     }
 
     private static java.lang.reflect.Field findFieldInHierarchy(Class<?> cls, String name) throws NoSuchFieldException {

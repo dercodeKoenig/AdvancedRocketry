@@ -41,6 +41,10 @@ public class MissionGasCompletionTest extends AbstractSharedServerTest {
     }
 
     private int buildAndAssembleRocket(int baseX) throws Exception {
+        return buildAndAssembleRocket(baseX, "simple");
+    }
+
+    private int buildAndAssembleRocket(int baseX, String variant) throws Exception {
         int baseY = 64;
         int baseZ = 600;
         ok(client().execute(
@@ -48,7 +52,7 @@ public class MissionGasCompletionTest extends AbstractSharedServerTest {
                         + " " + (baseX + 7) + " " + (baseY + 10) + " " + (baseZ + 7)
                         + " minecraft:air"));
         String fixture = ok(client().execute(
-                "artest fixture rocket 0 " + baseX + " " + baseY + " " + baseZ + " simple"));
+                "artest fixture rocket 0 " + baseX + " " + baseY + " " + baseZ + " " + variant));
         Matcher bp = BUILDER_POS.matcher(fixture);
         assertTrue("fixture missing builderPos: " + fixture, bp.find());
         int bx = Integer.parseInt(bp.group(1));
@@ -128,5 +132,32 @@ public class MissionGasCompletionTest extends AbstractSharedServerTest {
         assertTrue("at least one rocket entity must exist near launch coords after gas completion: "
                         + cargo,
                 cargo.contains("\"rocketCount\":") && !cargo.contains("\"rocketCount\":0"));
+    }
+
+    /** Strong contract: with intakePower>0 AND a rocket carrying fluid
+     *  tiles (TileFluidTank, exposing FLUID_HANDLER capability) the
+     *  gas completion fills each fluid tile with exactly 64000 mB of
+     *  the configured fluid (MissionGasCollection line 50:
+     *  {@code fill(new FluidStack(type, 64000), true)}).
+     *  Uses the `with-fluid-cargo` fixture variant that swaps 2 of 6
+     *  fuel tanks for liquidTank blocks so StorageChunk.liquidTiles is
+     *  non-empty. */
+    @Test
+    public void gasCompletionFillsRocketFluidTilesWithConfiguredFluid() throws Exception {
+        int rid = buildAndAssembleRocket(8300, "with-fluid-cargo");
+        long mid = startGasMission(rid, 1000, "oxygen", 10);
+        String cargo = ok(client().execute("artest mission complete-now " + mid));
+        assertFalse("complete-now must not error: " + cargo, cargo.contains("\"error\""));
+        // fluidEntries > 0 — fill loop ran on at least one TE. Exact
+        // count depends on whether the original EntityRocket still
+        // lingers next to the freshly spawned StationDeployedRocket
+        // (both share the same StorageChunk via reference). Loose pin
+        // avoids that ambiguity.
+        assertFalse("fluidEntries must be > 0 (production filled fluid tiles): " + cargo,
+                cargo.contains("\"fluidEntries\":0"));
+        // Each filled tile holds 64000 mB of oxygen — production literal
+        // at MissionGasCollection.java:50 (FluidStack(type, 64000)).
+        assertTrue("fluid contents must include oxygen 64000 mB: " + cargo,
+                cargo.contains("\"type\":\"oxygen\"") && cargo.contains("\"amount\":64000"));
     }
 }
