@@ -2,8 +2,8 @@
 
 ## Current state (post-TASK-03)
 
-Pyramid: **398 / 0 / 3** (testUnit 162 / testIntegration 80 /
-testServer 150 / testClient 6).
+Pyramid: **403 / 0 / 3** (testUnit 162 / testIntegration 80 /
+testServer 155 / testClient 6).
 testServer wall time: **8m 27s** (50 % faster than pre-B2).
 Bug ledger: **6** real production bugs recorded (5 pinned by
 `_documentsKnownBug` tests, 1 ledger-only — see bottom of file).
@@ -22,7 +22,7 @@ Bug ledger: **6** real production bugs recorded (5 pinned by
 | TASK-10b | testClient e2e player-event coverage — Phases 1-6 ✅ (5 e2e suites, 15 pins, 9 new `/artest` verbs). **Phase 7 reopened 2026-05-21** to absorb TASK-05 player-tier remainder (Hovercraft / SpaceArmor useFluid / SpaceChest death-persist / BiomeChanger + WeatherController right-click / SealDetector messages / AtmosphereAnalzer readout). | ✅ partial |
 | TASK-09 | Per-satellite-type behavioural depth — 3 suites / 14 pins (`SatelliteTickBehaviourTest` 4: base power + cap + SatelliteData accumulation/cap; `SatelliteTypeBehaviourTest` 3: IUniversalEnergyTransmitter marker + BiomeChanger terraform + WeatherController mode-0; `SatelliteCoverageGapsTest` 7: weather modes 1/2 + mode-change clear + biome batch-10 + biome null-guard + canTick gating + isDead removal) + 15 new `/artest` verbs | ✅ |
 | TASK-05 | Item-behaviour suite — unit-tier surface for 12 of 21 item classes (5 chips, 2 data-carriers, BeaconFinder, OreScanner, Thermite, BiomeChanger / WeatherController metadata+wire, JackHammer pure-fn) via `ChipNBTRoundTripTest`, `ItemDataCarrierNBTRoundTripTest`, `ScannerDetectorItemContractTest`, `SpecialPurposeItemContractTest`, `JackHammerContractTest`, plus SealDetector dispatch via new `/artest seal-detector check` probe (`SealDetectorDispatchTest` 8 server tests). ~48 contract pins, +1 production bug (`ItemSpaceElevatorChip` wrong removeTag key). Player-tier surface moved to TASK-10b Phase 7. | ✅ partial |
-| TASK-06 | Mission-system depth — Phases 1-4: 5 `/artest mission` probe verbs + 14 tests (lifecycle progress/completion/registry-prune + gas no-crash + gas no-fill counter-test + ore chip-refill + ore drilling=0 gate + 3 NBT round-trips). Phase 5 (infra lifecycle) + multi-boot persistence + the strong "64000 mB fluid fill" assertion deferred (need fluid-cargo rocket fixture variant). | ✅ partial |
+| TASK-06 | Mission-system depth — 19 tests (3 unit + 16 server) covering lifecycle progress/completion/registry-prune, gas + ore completion, gas fluid-fill (strong 64000 mB pin via new `with-fluid-cargo` fixture), 3 NBT round-trips, infra-tile link/unlink lifecycle, and gas+ore multi-boot persistence. 7 `/artest mission` probe verbs (incl. link-infra + infra-state). Rocket-side relink assertion deferred (narrow investigation). | ✅ |
 
 ## Backlog — prioritised
 
@@ -48,9 +48,9 @@ rewrite: closed — see Done table.)*
 
 ### 🟢 P2 — narrower, lower urgency
 
-5. **TASK-06** — Mission system depth. ~10-12 h. Reward-grant tests
-   that need a real EntityPlayer go into **testClient** e2e
-   (TASK-10b extension if scope grows).
+*(TASK-06 mission system depth: closed — see Done table. Rocket-side
+relink investigation remains as a narrow follow-up tracked in
+`TASK-06-mission-system-depth.md`.)*
 
 ### Already-known deferred (no task doc yet — surface in a future plan)
 

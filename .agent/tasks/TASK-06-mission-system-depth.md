@@ -6,11 +6,15 @@
   only `MissionResourceCollection` covered at unit tier
   (`MissionResourceCollectionContractTest`). `MissionGasCollection`
   and `MissionOreMining` are completely untested.
-- Status: Phases 1-4 ✅ Completed (2026-05-22). Phases 5 + persistence
-  deferred — see "Deferred follow-ups" below.
-- Created: 2026-05-19; replanned 2026-05-22; partial close 2026-05-22.
+- Status: Phases 1-5 + persistence ✅ Completed (2026-05-22 later
+  session). Rocket-side relink remains as a narrow follow-up — see
+  bottom.
+- Created: 2026-05-19; replanned 2026-05-22; Phases 1-4 close 2026-05-22;
+  Phase 5 + persistence + strong fluid pin close 2026-05-22 (later).
 - Predecessor: `.agent/.context-markers/2026-05-19-1230_task03-A-and-B-mostly-done-eod.md`
-- Successor marker: `.agent/.context-markers/2026-05-22_task06-phases-1-4-shipped.md`
+- Successor markers:
+  `.agent/.context-markers/2026-05-22_task06-phases-1-4-shipped.md`,
+  `.agent/.context-markers/2026-05-22_task06-shipped.md` (this session)
 
 ## Context
 
@@ -227,59 +231,45 @@ ctor reads — `posX/Y/Z`, `world`, `storage`, `stats`, and
 
 ## Completion Checklist
 
-- [x] 5 `/artest mission` probe verbs landed (start-gas, start-ore,
-      state, advance, complete-now + standalone rocket-cargo) —
-      infra-state verb deferred with Phase 5
+- [x] 7 `/artest mission` probe verbs landed (start-gas, start-ore,
+      state, advance, complete-now, rocket-cargo, link-infra, infra-state)
 - [x] Phase 2: 5 lifecycle tests (`MissionLifecyclePyramidTest`)
-- [x] Phase 3: 3 gas-completion tests (`MissionGasCompletionTest`)
-      + 3 NBT round-trip tests (`MissionNbtRoundTripTest` at unit-tier);
-      multi-boot persistence deferred
-- [x] Phase 4: 3 ore-completion tests (`MissionOreCompletionTest`);
-      multi-boot persistence deferred
-- [ ] Phase 5 infra-lifecycle tests — deferred
-- [x] Phase 2-4 pyramid PASS (3 unit + 11 server, 14/14 green)
-- [x] EOD marker
-      (`.agent/.context-markers/2026-05-22_task06-phases-1-4-shipped.md`)
+- [x] Phase 3: 4 gas-completion tests (`MissionGasCompletionTest`,
+      including new strong 64000 mB oxygen-fill pin via
+      `with-fluid-cargo` fixture variant)
+      + 3 NBT round-trip tests (`MissionNbtRoundTripTest` at unit-tier)
+- [x] Phase 4: 3 ore-completion tests (`MissionOreCompletionTest`)
+- [x] Phase 5: 2 infra-lifecycle tests
+      (`MissionInfrastructureLifecycleTest` — link on start +
+      unlink on completion)
+- [x] Multi-boot persistence: 2 tests
+      (`MissionPersistenceRestartTest` — gas + ore survive reboot)
+- [x] Full pyramid PASS (3 unit + 16 server, 19/19 green)
+- [x] EOD markers (Phases 1-4 + this session's marker)
 - [x] `.agent/tasks/README.md` Done table updated
 
-**Tests landed**: 14 (3 unit + 11 server). Original target was ~20 —
-the 6-test shortfall is the deferred Phase 5 + multi-boot persistence
-+ the dropped strong "64000 mB oxygen fill" assertion that requires
-a fluid-cargo rocket fixture variant.
+**Tests landed**: 19 (3 unit + 16 server). Original target was ~20 —
+we landed 19/20. The one missing assertion (rocket-side relink to the
+respawned EntityStationDeployedRocket) is documented as a narrow
+follow-up below — the tile-side unlinking half of the lifecycle IS
+pinned, which is the player-facing contract.
 
 ## Deferred follow-ups (not blocking close-out)
 
-The following remain as future tickets — captured here so the work
-isn't lost:
+1. **Rocket-side relink assertion** (Phase 5 nice-to-have)
+   `MissionGasCollection.onMissionComplete` does
+   `rocket.linkInfrastructure(tile)` on the freshly spawned
+   `EntityStationDeployedRocket` after unlinking the tile from the
+   mission. We pin the tile-side unlinking (`tile.mission` cleared)
+   but not the rocket-side coord registration: a snapshot scan of the
+   launch-dim bbox returns one EntityRocket vs the expected two
+   (original + StationDeployed), and that one's
+   `infrastructureCoords` is empty in observation. Either the original
+   rocket is removed by some hook OR the StationDeployed spawn-with-
+   overlap is suppressed by Forge's entity-collision logic. Investigate
+   and pin the rocket-side half once the cause is understood.
+   Effort: ~1-2 h (mostly investigation).
 
-1. **Fluid-cargo rocket fixture**
-   `simple` fixture's BlockFuelTank has no TileEntity → empty
-   `StorageChunk.liquidTiles` → `MissionGasCollection.onMissionComplete`'s
-   fill loop iterates zero times. The "fluid tiles get 64000 mB of
-   configured fluid" assertion is the actual player-visible contract
-   but isn't observable without a fixture that includes a tile with
-   `CapabilityFluidHandler.FLUID_HANDLER_CAPABILITY`. Add a
-   `with-fluid-cargo` variant to `/artest fixture rocket` and restore
-   the strong pin. Effort: ~1 h.
-
-2. **Multi-boot persistence tests** for both gas and ore missions
-   (Phase 3 last bullet + Phase 4 last bullet of plan). Extends
-   `PersistenceRestartSmokeTest` pattern with a mission-start →
-   shutdown → reboot → state-still-recognisable flow. Effort: ~2-3 h.
-   Note: persistence is exercised indirectly by all completion tests
-   (the mission is registered via `DimensionProperties.addSatellite`
-   which serialises through the dim's save), but an explicit
-   reboot-roundtrip is the gold standard.
-
-3. **Phase 5: infrastructure-lifecycle tests** (`startLinks…`,
-   `completionUnlinks…`, `infraNbtRoundTrip`). Requires:
-   - `/artest mission infra-state <missionId>` probe verb
-   - A fixture infrastructure tile in the world (e.g.
-     `TileGuidanceComputerAccessHatch`) wired into the mission's
-     `infrastructureCoords` list
-   Effort: ~2-3 h. The unit-tier `infraNbtRoundTrip` is already
-   covered structurally by
-   `MissionNbtRoundTripTest.infrastructureNbtTagListShapeIsKeyLocPlusIntArrayTriple`
-   — only the live-tile lifecycle remains.
-
-Total deferred work: ~5-7 h.
+The Phase-5 NBT roundtrip for the `infrastructure` tag list is
+already covered structurally by
+`MissionNbtRoundTripTest.infrastructureNbtTagListShapeIsKeyLocPlusIntArrayTriple`.
