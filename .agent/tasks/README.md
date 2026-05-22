@@ -5,7 +5,8 @@
 Pyramid: **398 / 0 / 3** (testUnit 162 / testIntegration 80 /
 testServer 150 / testClient 6).
 testServer wall time: **8m 27s** (50 % faster than pre-B2).
-`_documentsKnownBug` count: **4** real production bugs pinned.
+Bug ledger: **6** real production bugs recorded (5 pinned by
+`_documentsKnownBug` tests, 1 ledger-only — see bottom of file).
 
 ## Done
 
@@ -111,19 +112,47 @@ All TASK-NN docs share a structure:
 
 ## Notes on `_documentsKnownBug`
 
-The TASK-02 / TASK-03 / TASK-05 audits surfaced 5 real production bugs
-we chose NOT to fix in-scope (per the "no production logic changes" rule).
-Tests pin the **current** behaviour as expected so a future fix has to
-update them:
+Recorded as we found them across TASK-02 / TASK-03 / TASK-05 /
+TASK-10b audits. Entries 1-5 are pinned by `_documentsKnownBug`
+tests that assert the **current (wrong) behaviour** as expected —
+the day someone fixes production, the test fails and forces an
+update. Entry 6 is ledgered-only (see "Pin status" notes).
 
-1. `HandlerCableNetwork:67` assertion polarity inverted.
-2. `CableNetwork.merge` addAll-before-dedupe ordering.
-3. `EnergyNetwork.merge` battery-migration cascade from (2).
-4. `SpaceStationObject:801` writes `"autoLand"`, reads `"occupied"`.
-5. `ItemSpaceElevatorChip:42` calls `removeTag("positions")` to clear
-   the list — but `NBTStorableListList` stores entries under key
-   `"list"`. Setting an empty position list is a no-op.
+1. `HandlerCableNetwork:67` — assertion polarity inverted.
+   **Pin**: `_documentsKnownBug` in CableNetworkSuite (TASK-02).
+2. `CableNetwork.merge` — addAll-before-dedupe ordering causes
+   duplicate node retention.
+   **Pin**: `_documentsKnownBug` in CableNetworkSuite (TASK-02).
+3. `EnergyNetwork.merge` — battery-migration cascade from (2).
+   **Pin**: `_documentsKnownBug` in EnergyNetworkSuite (TASK-02).
+4. `SpaceStationObject:801` — writes NBT key `"autoLand"`, reads
+   key `"occupied"`. The autoLand flag is silently dropped across
+   save/load.
+   **Pin**: `_documentsKnownBug` in SpaceObjectPersistenceTest (TASK-03).
+5. `ItemSpaceElevatorChip:42` — calls `removeTag("positions")` to
+   clear the chip's stored positions, but `NBTStorableListList`
+   actually stores entries under the key `"list"`. Setting an empty
+   position list is a no-op; clearing the chip from the GUI doesn't
+   work.
+   **Pin**: `_documentsKnownBug` in ItemDataCarrierNBTRoundTripTest (TASK-05).
+6. `ItemSatelliteIdentificationChip.setSatellite(stack, SatelliteBase)`
+   (lines 54-64) — in the `else`-branch (stack has no existing
+   NBTTagCompound) the method constructs a new local NBT, writes
+   `satelliteName`/`dimId`/`satelliteId` into it, but never calls
+   `stack.setTagCompound(nbt)`. Result: the NBT is silently dropped
+   for any item that didn't already have a tag. Cross-reference:
+   the sibling overload `setSatellite(stack, SatelliteProperties)`
+   (line 72-89) DOES call `stack.setTagCompound(nbt)` at line 87 —
+   confirming the omission in the SatelliteBase overload is an
+   oversight, not deliberate. Player-visible consequence: programming
+   a fresh blank chip with a satellite reference via this code path
+   produces a still-blank chip; right-clicking it does nothing.
+   **Pin**: **none yet — ledger only.** Discovered during TASK-10b
+   Phase 7 BiomeChanger probe work where we worked around it by
+   writing the NBT directly in the probe. Worth a `_documentsKnownBug`
+   when a future test exercises the chip-programming path; for now,
+   the ledger entry is enough to ensure a bug-fix ticket sweeps it in.
 
-A separate **bug-fix ticket** should address all four; once fixed,
-the corresponding `_documentsKnownBug` tests flip to expected-passing
-semantics.
+A separate **bug-fix ticket** should address all six; once fixed,
+the pinned tests (#1-5) flip to expected-passing semantics and #6
+becomes "verified safe" (no test to flip).

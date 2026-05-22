@@ -81,6 +81,45 @@ tighter". Tighter is not always better.
 
 ---
 
+## Bug tracking — every discovered production bug must be logged
+
+When you uncover a real production bug during any activity (test
+authoring, depth audits, probe work, code review, debugging an
+unrelated issue), **log it immediately** in the bug ledger at
+[`.agent/tasks/README.md`](./.agent/tasks/README.md) under the
+"Notes on `_documentsKnownBug`" section, before moving on.
+
+A ledger entry is a one-paragraph record:
+
+- File + line where the bug lives.
+- One-sentence description of the wrong behaviour.
+- One-sentence description of the player-visible / API-visible
+  consequence — if the consequence is "nothing observable" then it
+  is not a bug worth logging, it is impl trivia.
+- Whether the bug is pinned by a `_documentsKnownBug` test (and
+  where), or merely ledgered (no test yet).
+
+Optional: a `_documentsKnownBug` test that pins the **current
+(wrong) behaviour** as expected — so the day someone fixes the bug
+in production, the test fails and forces an update. Write one when
+the bug sits on a code path the test suite already exercises;
+defer when adding a test costs more than ledgering does.
+
+**Reason**: bugs surface most often as a side-effect of unrelated
+work. If they aren't recorded the moment they are found, they
+evaporate from working memory and re-surface months later as
+"mystery" regressions. The ledger is the single point of truth so
+a future bug-fix ticket can sweep them in batch.
+
+**Per-session scope**: this is a logging rule, not a fix-now rule.
+The "no production logic changes" rule from each TASK still applies
+— record the bug, do not silently fix it in scope.
+
+Update the running counter at the top of `.agent/tasks/README.md`
+when you add or remove a ledger entry so it stays accurate.
+
+---
+
 ## Project-Specific Code Standards
 
 ### General Standards
