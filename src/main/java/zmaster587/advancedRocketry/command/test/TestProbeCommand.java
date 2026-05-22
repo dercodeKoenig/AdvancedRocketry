@@ -7184,6 +7184,83 @@ public class TestProbeCommand extends CommandBase {
                     + ",\"reset\":" + reset + "}");
             return;
         }
+        if ("last-chat".equals(sub)) {
+            // /artest player last-chat
+            //
+            // Returns the most-recently observed outbound SPacketChat
+            // translation key (or unformatted text) sent to this player,
+            // captured by the Netty-pipeline chat-tap installed on first
+            // use. Empty deque → "key" reports null.
+            installChatTap(player);
+            String head = chatLog.peekFirst();
+            int size = chatLog.size();
+            send(sender, "{\"ok\":true,\"player\":\""
+                    + escapeJson(player.getName()) + "\""
+                    + ",\"key\":" + (head == null ? "null" : "\"" + escapeJson(head) + "\"")
+                    + ",\"size\":" + size + "}");
+            return;
+        }
+        if ("chat-clear".equals(sub)) {
+            // /artest player chat-clear
+            //
+            // Drops every captured chat entry. Tests call this before the
+            // operation under test to avoid cross-contamination from
+            // prior chat traffic.
+            installChatTap(player);
+            chatLog.clear();
+            send(sender, "{\"ok\":true,\"player\":\""
+                    + escapeJson(player.getName()) + "\""
+                    + ",\"size\":0}");
+            return;
+        }
+        if ("try-seal-detect".equals(sub) && args.length >= 5) {
+            // /artest player try-seal-detect <dim> <x> <y> <z>
+            //
+            // Equips the player with ItemSealDetector and invokes
+            // onItemUse(...) against the target block, then reports the
+            // most-recent translation key the production code dispatched
+            // via player.sendMessage(...). The chat-tap is installed and
+            // drained synchronously by flushing the channel event-loop
+            // before reading.
+            //
+            // Production: ItemSealDetector.onItemUse:34-50 sends one of
+            // six msg.sealdetector.<branch> translation keys
+            // (sealed | notsealmat | notsealblock | notfullblock | fluid
+            // | other). This probe pins the player-visible side of the
+            // dispatch — i.e. that the chat actually reaches the player
+            // with the correct i18n key.
+            int dim = parseIntOr(args[1], Integer.MIN_VALUE);
+            int x = parseIntOr(args[2], 0);
+            int y = parseIntOr(args[3], 0);
+            int z = parseIntOr(args[4], 0);
+            net.minecraft.world.WorldServer world = server.getWorld(dim);
+            if (world == null) {
+                send(sender, "{\"error\":\"world not loaded\",\"dim\":" + dim + "}");
+                return;
+            }
+            installChatTap(player);
+            chatLog.clear();
+            net.minecraft.item.Item detector =
+                    zmaster587.advancedRocketry.api.AdvancedRocketryItems.itemSealDetector;
+            net.minecraft.item.ItemStack held = new net.minecraft.item.ItemStack(detector);
+            player.setHeldItem(net.minecraft.util.EnumHand.MAIN_HAND, held);
+            BlockPos pos = new BlockPos(x, y, z);
+            net.minecraft.util.EnumActionResult res =
+                    detector.onItemUse(player, world, pos,
+                            net.minecraft.util.EnumHand.MAIN_HAND,
+                            net.minecraft.util.EnumFacing.UP, 0.5F, 1.0F, 0.5F);
+            flushPlayerChannel(player);
+            String head = chatLog.peekFirst();
+            String branch = stripBranchPrefix(head);
+            send(sender, "{\"ok\":true,\"player\":\""
+                    + escapeJson(player.getName()) + "\""
+                    + ",\"pos\":[" + x + "," + y + "," + z + "]"
+                    + ",\"result\":\"" + res.name() + "\""
+                    + ",\"key\":" + (head == null ? "null" : "\"" + escapeJson(head) + "\"")
+                    + ",\"branch\":" + (branch == null ? "null" : "\"" + escapeJson(branch) + "\"")
+                    + "}");
+            return;
+        }
         if ("give-suit-chest".equals(sub)) {
             // Equip a fresh full-air space-suit chestplate into the
             // player's CHEST armor slot. The 6th-arg `air` (optional)
@@ -7210,7 +7287,171 @@ public class TestProbeCommand extends CommandBase {
                     + "}");
             return;
         }
-        send(sender, "{\"error\":\"unknown player subcommand — try inv-bypass <add|remove|status> | open-container | health | set-health <hp> | held-air | give-suit-chest [air] | advancement <id> | advancement reset <id>\"}");
+        send(sender, "{\"error\":\"unknown player subcommand — try inv-bypass <add|remove|status> | open-container | health | set-health <hp> | held-air | give-suit-chest [air] | advancement <id> | advancement reset <id> | last-chat | chat-clear | try-seal-detect <dim> <x> <y> <z>\"}");
+    }
+
+    // ── chat-tap (TASK-10b Phase 7) ──────────────────────────────────────
+    //
+    // Bounded deque of translation keys (or unformatted text) captured
+    // from outbound SPacketChat packets sent to tapped players. Tests
+    // observe a player-visible chat message by:
+    //   1) /artest player chat-clear           (drain stale entries)
+    //   2) trigger production code that fires player.sendMessage(...)
+    //   3) /artest player last-chat            (read head of deque)
+    //
+    // Capture happens at the Netty pipeline level so any production
+    // path that eventually calls EntityPlayerMP.sendMessage(ITextComponent)
+    // is observed — there's no production-side instrumentation to
+    // forget to add.
+    private static final java.util.concurrent.ConcurrentLinkedDeque<String> chatLog =
+            new java.util.concurrent.ConcurrentLinkedDeque<>();
+    private static final String CHAT_TAP_HANDLER_NAME = "ar-test-chat-tap";
+    private static final int CHAT_LOG_MAX = 64;
+
+    private static io.netty.channel.Channel playerChannel(net.minecraft.entity.player.EntityPlayerMP player) {
+        net.minecraft.network.NetworkManager nm = player.connection.netManager;
+        java.lang.reflect.Field f;
+        try {
+            f = net.minecraft.network.NetworkManager.class.getDeclaredField("channel");
+        } catch (NoSuchFieldException ignored) {
+            try {
+                f = net.minecraft.network.NetworkManager.class.getDeclaredField("field_150746_c");
+            } catch (NoSuchFieldException nested) {
+                return null;
+            }
+        }
+        f.setAccessible(true);
+        try {
+            return (io.netty.channel.Channel) f.get(nm);
+        } catch (IllegalAccessException e) {
+            return null;
+        }
+    }
+
+    private static void installChatTap(net.minecraft.entity.player.EntityPlayerMP player) {
+        // Idempotency is keyed on the live channel's pipeline rather than
+        // a per-UUID flag because the FG6 client harness may reconnect
+        // mid-suite (new channel, same UUID); a UUID-set would then leave
+        // the new channel untapped.
+        io.netty.channel.Channel ch = playerChannel(player);
+        if (ch == null) return;
+        if (ch.pipeline().get(CHAT_TAP_HANDLER_NAME) != null) return;
+        // addLast: in Netty, outbound events flow tail->head, so addLast
+        // puts us at the very source of outbound writes — we see the
+        // SPacketChat BEFORE the PacketEncoder serializes it to a ByteBuf.
+        // (addFirst would put us last on outbound, after encoding, where
+        // `msg instanceof SPacketChat` is always false.)
+        ch.pipeline().addLast(CHAT_TAP_HANDLER_NAME,
+                new io.netty.channel.ChannelOutboundHandlerAdapter() {
+                    @Override
+                    public void write(io.netty.channel.ChannelHandlerContext ctx,
+                                      Object msg,
+                                      io.netty.channel.ChannelPromise promise) throws Exception {
+                        if (msg instanceof net.minecraft.network.play.server.SPacketChat) {
+                            net.minecraft.util.text.ITextComponent comp =
+                                    readSPacketChatComponent((net.minecraft.network.play.server.SPacketChat) msg);
+                            if (comp != null) {
+                                String key = componentKey(comp);
+                                // Drop command-echo broadcasts ("Player issued
+                                // server command: /artest …"). Every /artest
+                                // call triggers one of these, which would
+                                // otherwise drown the player-visible chat the
+                                // tests want to observe.
+                                if (!"chat.type.announcement".equals(key)) {
+                                    chatLog.offerFirst(key);
+                                    while (chatLog.size() > CHAT_LOG_MAX) chatLog.pollLast();
+                                }
+                            }
+                        }
+                        super.write(ctx, msg, promise);
+                    }
+                });
+    }
+
+    // SPacketChat exposes its component as `getChatComponent()` in MCP
+    // mappings, `func_148915_a()` in SRG. The deobf transformer is not
+    // applied to the testClient runtime classpath, so calling the MCP
+    // name compiles but throws NoSuchMethodError at run time. Resolve
+    // the method reflectively, caching the lookup, and fall back to
+    // direct field access if neither name is available.
+    private static volatile java.lang.reflect.Method SPACKETCHAT_GET_COMPONENT;
+    private static volatile boolean SPACKETCHAT_LOOKUP_DONE;
+    private static volatile java.lang.reflect.Field SPACKETCHAT_COMPONENT_FIELD;
+
+    private static net.minecraft.util.text.ITextComponent readSPacketChatComponent(
+            net.minecraft.network.play.server.SPacketChat pkt) {
+        if (!SPACKETCHAT_LOOKUP_DONE) {
+            synchronized (TestProbeCommand.class) {
+                if (!SPACKETCHAT_LOOKUP_DONE) {
+                    for (String name : new String[]{"getChatComponent", "func_148915_a"}) {
+                        try {
+                            java.lang.reflect.Method m =
+                                    net.minecraft.network.play.server.SPacketChat.class.getMethod(name);
+                            if (net.minecraft.util.text.ITextComponent.class.isAssignableFrom(m.getReturnType())) {
+                                m.setAccessible(true);
+                                SPACKETCHAT_GET_COMPONENT = m;
+                                break;
+                            }
+                        } catch (NoSuchMethodException ignored) { /* try next */ }
+                    }
+                    if (SPACKETCHAT_GET_COMPONENT == null) {
+                        for (String fname : new String[]{"chatComponent", "field_148919_a"}) {
+                            try {
+                                java.lang.reflect.Field f =
+                                        net.minecraft.network.play.server.SPacketChat.class.getDeclaredField(fname);
+                                f.setAccessible(true);
+                                SPACKETCHAT_COMPONENT_FIELD = f;
+                                break;
+                            } catch (NoSuchFieldException ignored) { /* try next */ }
+                        }
+                    }
+                    SPACKETCHAT_LOOKUP_DONE = true;
+                }
+            }
+        }
+        try {
+            if (SPACKETCHAT_GET_COMPONENT != null) {
+                return (net.minecraft.util.text.ITextComponent) SPACKETCHAT_GET_COMPONENT.invoke(pkt);
+            }
+            if (SPACKETCHAT_COMPONENT_FIELD != null) {
+                return (net.minecraft.util.text.ITextComponent) SPACKETCHAT_COMPONENT_FIELD.get(pkt);
+            }
+        } catch (ReflectiveOperationException ignored) { /* fall through */ }
+        return null;
+    }
+
+    /** Returns the translation key for a TextComponentTranslation, else
+     *  the unformatted text — gives tests a stable handle to match on
+     *  without rendering through the i18n table. */
+    private static String componentKey(net.minecraft.util.text.ITextComponent comp) {
+        if (comp instanceof net.minecraft.util.text.TextComponentTranslation) {
+            return ((net.minecraft.util.text.TextComponentTranslation) comp).getKey();
+        }
+        return comp.getUnformattedComponentText();
+    }
+
+    /** Submits a no-op to the player's Netty event-loop and blocks for
+     *  it to run, ensuring any prior queued packet writes (and the
+     *  chat-tap's deque mutation) have executed before we read. */
+    private static void flushPlayerChannel(net.minecraft.entity.player.EntityPlayerMP player) {
+        io.netty.channel.Channel ch = playerChannel(player);
+        if (ch == null) return;
+        try {
+            ch.eventLoop().submit(() -> null)
+                    .get(500, java.util.concurrent.TimeUnit.MILLISECONDS);
+        } catch (Exception ignored) {
+            // best-effort; tests have their own retry/wait loop
+        }
+    }
+
+    /** {@code msg.sealdetector.notsealmat} → {@code notsealmat}. Returns
+     *  null when the key doesn't carry the SealDetector prefix. Lets
+     *  tests assert on a clean branch name without re-parsing the key. */
+    private static String stripBranchPrefix(String key) {
+        if (key == null) return null;
+        final String prefix = "msg.sealdetector.";
+        if (key.startsWith(prefix)) return key.substring(prefix.length());
+        return null;
     }
 
     // §7.18 — generic block-state probe ---------------------------------------
