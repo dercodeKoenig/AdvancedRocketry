@@ -6,95 +6,219 @@
   only `MissionResourceCollection` covered at unit tier
   (`MissionResourceCollectionContractTest`). `MissionGasCollection`
   and `MissionOreMining` are completely untested.
-- Status: Pending
-- Created: 2026-05-19
+- Status: In Progress (replan 2026-05-22 — see "History" below)
+- Created: 2026-05-19; replanned 2026-05-22
 - Predecessor: `.agent/.context-markers/2026-05-19-1230_task03-A-and-B-mostly-done-eod.md`
+- Successor marker: TBD
 
 ## Context
 
-Missions are a player-facing feature: a satellite launches → mission
-ticks → resources accrue → reward delivered. The chain currently has
-test coverage only at the unit-contract layer for one mission type. A
-regression in:
+Missions are a player-facing late-game feature: a rocket launches with a
+guidance computer chip → a `Mission*` subclass is constructed on launch
+→ the mission gets registered with the orbital `DimensionProperties` as
+a tickable `SatelliteBase` → progress accrues over world time → on
+completion the rocket is respawned in its launch dim with cargo (fluid
+or items) filled in.
 
-- `MissionGasCollection.requiresGasCollectorSatellite` — silently lets
-  any satellite tick gas mission progress (free resources).
-- `MissionOreMining.respectsAsteroidMinerOreSet` — wrong ore types in
-  output.
-- `Mission.persistAcrossServerRestart` — mission state lost on every
-  reboot (player progress evaporates).
-- `Mission.completeGrantsReward` — mission completes silently without
-  awarding the configured reward stack.
+A regression in any of these would silently corrupt the progression
+loop:
 
-…would each ship to modpacks without a CI signal.
+- `MissionResourceCollection.getProgress` returning wrong fraction →
+  mission completes too early / never completes.
+- `MissionResourceCollection.tickEntity` not firing `onMissionComplete`
+  at the crossing → mission stalls.
+- `MissionGasCollection.onMissionComplete` not filling fluid tiles, or
+  respawning the wrong rocket type / wrong dim → cargo loss.
+- `MissionOreMining.onMissionComplete` not replacing the consumed
+  asteroid chip → chip leak; or not filling inventory → ore loss.
+- NBT round-trip dropping `gas` / `infrastructure` / `rocketStorage`
+  keys → save-on-reboot drops mission state entirely.
+- Infrastructure tiles not unlinked + relinked → orphan
+  `linkMission(...)` pointers, stuck infrastructure GUIs.
 
-Out of scope: client-side mission GUI; mission XML config loader (cover
-in a separate ticket if needed).
+Out of scope: client-side mission GUI; mission XML config loader;
+player-facing reward retrieval (the rocket-access flow, separate
+ticket — production doesn't grant anything directly to a player at
+completion, cargo is in the respawned rocket).
 
 **No production logic changes** (same rule as TASK-01 §15).
 
+## History
+
+A 2026-05-19 draft of this task proposed 4 sub-tests that don't map
+to real production contracts after a code audit:
+
+| Old plan item | Audit result |
+|---|---|
+| `gasMissionRefusesIncompatibleSatellite_documentsContract` | No satellite-type gate exists in `MissionGasCollection`; the mission ticks unconditionally. Not a contract. |
+| `gasMissionRespectsGasTypeConfig` (different fluids → different rates) | Rate is purely the `duration` ctor arg; `gasFluid` only matters at completion time (sets the fluid type filled). Not a contract. |
+| `missionCompletionGrantsConfiguredRewardToSelectedPlayer` | No player grant at completion — cargo ends up in the respawned rocket, retrieved by normal rocket access. Reframed as `rocket-cargo` pin. |
+| `missionRewardClampsByInventoryCapacity` | Overflow handling = vanilla `IItemHandler.insertItem` semantics. Not a mod contract. |
+
+These items removed from the current plan. Phase numbering preserved
+where the scope was real.
+
 ## Implementation Plan
 
-### Phase 1: Probe surface (~2 h)
+### Phase 1 — Mission probe surface (~3-4 h)
 
-- [ ] `/artest mission create <type> <satelliteId> [args...]` — start a
-  mission of the given type bound to a satellite.
-- [ ] `/artest mission state <missionId>` — dump current progress %,
-  isComplete, accrued resources, target.
-- [ ] `/artest mission tick <missionId> <ticks>` — drive the mission's
-  per-tick logic deterministically.
-- [ ] `/artest mission complete-now <missionId>` — force-complete for
-  test determinism (used in reward tests).
+New namespace `/artest mission ...`. Verbs:
 
-### Phase 2: Gas-collection mission (~2-3 h)
+- [ ] `start-gas <dim> <duration> <fluidName>` — build a fixture
+  rocket, instantiate `MissionGasCollection(duration, rocket, infra,
+  FluidRegistry.getFluid(fluidName))`, register via
+  `DimensionProperties.addSatellite`, return JSON `{missionId, dim,
+  duration, gas}`.
+- [ ] `start-ore <dim> <duration> [drillingPower]` — analogue for
+  `MissionOreMining`. Equips a default `ItemAsteroidChip` into the
+  fixture rocket's guidance computer with mid-range data values so
+  the random asteroid harvest can fire (`distanceData/maxData` etc.
+  not zero).
+- [ ] `state <missionId>` — JSON dump: `progress` (double),
+  `startWorldTime`, `duration`, `dim`, `infraCount`, `isDead`,
+  `type`.
+- [ ] `advance <missionId> <ticks>` — backdate `startWorldTime` by
+  `-ticks` (observationally equivalent to advancing world time;
+  cheaper + deterministic vs scheduling N real ticks).
+- [ ] `complete-now <missionId>` — `advance` until `progress >= 1`,
+  then drive `tickEntity()` once so `onMissionComplete` fires.
+  Returns post-state JSON.
+- [ ] `rocket-cargo <missionId>` — after completion, finds the
+  respawned rocket entity via the satellite's stored launch coords
+  + dim and returns fluid-tile + inventory-tile contents as JSON
+  (`{fluids:[{type, amount}], items:[{id, count, slot}]}`).
+- [ ] `infra-state <missionId> <infraDim> <ix> <iy> <iz>` — read a
+  fixture infrastructure tile's `getLinkedMission()` and report
+  whether it still points at this mission's id.
 
-- [ ] `gasMissionAccruesWithCompatibleSatellite` — satellite type
-  matches; tick → progress advances.
-- [ ] `gasMissionRefusesIncompatibleSatellite_documentsContract` —
-  e.g. ore-mining satellite tries to run gas mission → progress stays 0.
-- [ ] `gasMissionRespectsGasTypeConfig` — different gas types yield
-  different progress rates (validates the gas-type lookup).
-- [ ] `gasMissionPersistsAcrossServerRestart` — multi-boot:
-  start mission → save → reboot → progress survived.
+**Fixture support**: check whether `/artest fixture rocket` already
+exists (TASK-04 / TASK-07 land); if so, reuse — otherwise build a
+minimal one as part of this phase (lifts from
+`TileGuidanceComputerAccessHatch`-side rocket assembly OR uses
+reflection on `EntityRocket` to seed the minimum fields the mission
+ctor reads — `posX/Y/Z`, `world`, `storage`, `stats`, and
+`writeMissionPersistentNBT`).
 
-### Phase 3: Ore-mining mission (~2-3 h)
+### Phase 2 — Progress / completion contract (~2 h)
 
-- [ ] `oreMissionAccrues` analog.
-- [ ] `oreMissionRespectsAsteroidOreSet` — only configured ores accrue.
-- [ ] `oreMissionPersistsAcrossRestart`.
+`MissionLifecyclePyramidTest` (server-tier):
 
-### Phase 4: Mission completion / reward (~2 h)
+- [ ] `progressAdvancesLinearlyWithWorldTime` — duration=1000;
+  advance 250 → progress ≈ 0.25 (±epsilon); 500 → ≈ 0.5; 1000 → 1.0
+  exactly.
+- [ ] `progressIsUnboundedAboveOne` — advance 2000 → progress = 2.0
+  (no upper cap — pin the unbounded behaviour so a future cap
+  surfaces here).
+- [ ] `progressClampsAtZeroWhenStartTimeInFuture` — synthesize
+  startTime > now via direct field write → progress = 0 (Math.max
+  guard).
+- [ ] `completionDoesNotFireBelowProgressOne` — advance to 999;
+  state shows `isDead=false`.
+- [ ] `completionFiresAtProgressOne` — advance to 1000; state shows
+  `isDead=true` and side-effects observable.
+- [ ] `completionFiresExactlyOnce` — repeated `complete-now` after
+  the first complete doesn't re-fire (setDead guard).
 
-- [ ] `missionCompletionFiresOnceAtTarget`.
-- [ ] `missionCompletionGrantsConfiguredRewardToSelectedPlayer` —
-  needs a real EntityPlayer; belongs in **testClient** e2e
-  (cross-link to TASK-10b).
-- [ ] `missionRewardClampsByInventoryCapacity` — reward exceeds player
-  inventory → overflow handled (drop on ground / refuse / queue).
+### Phase 3 — Gas mission specifics (~2-3 h)
 
-### Phase 5: Mission lifecycle smoke (~1 h)
+`MissionGasCompletionTest` (server-tier):
 
-- [ ] `missionCanBeAbandonedAndRestartedFresh`
-- [ ] `multipleMissionsOnSameSatelliteCoexistOrErrorCleanly`
+- [ ] `gasCompletionFillsRocketFluidTilesWithConfiguredFluid` —
+  start-gas with fluid="oxygen"; complete; rocket-cargo shows
+  oxygen=64000 mB in each fluid-tile.
+- [ ] `gasCompletionRespawnsStationDeployedRocketAtLaunchPos` —
+  EntityStationDeployedRocket exists in launch dim near
+  `launchLocation ± production offsets`; not a plain EntityRocket.
+- [ ] `gasCompletionSubtractsFuelByOneThousandForBipropellant` —
+  fuel-type=BIPROPELLANT → both liquid + oxidizer decremented by
+  1000; Math.max guards against going below 0.
+- [ ] `gasCompletionDoesNotFillWhenIntakePowerZero` — production
+  guard `(int)getStatTag("intakePower") > 0`; rocket-cargo fluid
+  list empty.
 
-### Phase 6: Validation + EOD (~1 h)
+`MissionGasNbtRoundTripTest` (unit-tier — small):
 
-- [ ] Full pyramid PASS.
-- [ ] EOD marker.
+- [ ] `gasNbtRoundTripPreservesFluidName` — write → read → fluid
+  restored via `FluidRegistry`.
+
+`MissionGasPersistenceTest` (server-tier multi-boot, extends
+`PersistenceRestartSmokeTest` pattern):
+
+- [ ] `gasMissionPersistsAcrossServerRestart` — start; save +
+  reboot; state shows same `progress`, `duration`, `gas`, and same
+  fixture infra coords.
+
+### Phase 4 — Ore mission specifics (~2 h)
+
+`MissionOreCompletionTest` (server-tier):
+
+- [ ] `oreCompletionReplacesConsumedAsteroidChipWithEmpty` —
+  guidance computer slot 0 post-complete: empty asteroid chip
+  (registry name match, no NBT).
+- [ ] `oreCompletionRespawnsPlainEntityRocketAtLaunchPos` — type is
+  `EntityRocket`, not `EntityStationDeployedRocket`.
+- [ ] `oreCompletionNoopsWhenDrillingPowerZero` — production gate
+  `rocketStats.getDrillingPower() != 0f`; rocket-cargo inventory
+  list empty.
+- [ ] `oreCompletionFillsInventoryWithinExpectedBoundsWithValidChip`
+  — loose pin: ≥0 stacks (don't pin exact roll outcomes — random
+  is impl); presence of at least the empty-asteroid-chip refill.
+
+`MissionOrePersistenceTest`:
+
+- [ ] `oreMissionPersistsAcrossServerRestart`.
+
+### Phase 5 — Infrastructure lifecycle (~1 h)
+
+`MissionInfrastructureLifecycleTest` (server-tier):
+
+- [ ] `startLinksInfrastructureToMission` — start-* with infra coord
+  → infra-state shows that mission id.
+- [ ] `completionUnlinksInfrastructureFromMissionAndLinksToRocket`
+  — after complete-now, infra-state shows null mission; the
+  respawned rocket's `connectedInfrastructure` contains the infra
+  tile (verify via a new probe verb or via rocket-cargo extension).
+- [ ] `infrastructureCoordsSurviveNbtRoundTrip` — unit-tier on
+  `MissionResourceCollection.writeToNBT/readFromNBT` cycle through
+  the "infrastructure" tag list.
+
+### Phase 6 — Validation + EOD (~1 h)
+
+- [ ] Full pyramid PASS (`./gradlew test` — unit + integration +
+  server; testClient untouched this round).
+- [ ] EOD marker `.agent/.context-markers/2026-05-XX_task06-shipped.md`.
+- [ ] Update `.agent/tasks/README.md` Done table + bug-ledger
+  counter if any new `_documentsKnownBug` lands.
 
 ## Technical Decisions
 
-- Mission unit tests at unit-tier where state is in-memory.
-- Persistence / reward tests at server-tier (multi-boot) — extend
-  `PersistenceRestartSmokeTest` pattern.
-- Reward-grant tests need a real EntityPlayer — they live in the
-  **testClient** e2e harness (proposed TASK-10b), not here. Do NOT
-  introduce a FakePlayer probe to short-circuit this.
+- **No FakePlayer**. Probe verbs run on the server thread without a
+  player object; the mission code paths that take `EntityPlayer` are
+  only used by `performAction`, which in this hierarchy always
+  returns false (the `getProgress`/`tickEntity`/`onMissionComplete`
+  paths take no player).
+- **`advance` over real ticking**. Backdating `startWorldTime` is
+  observationally equivalent to elapsing world time (production
+  reads `now - startWorldTime`), much faster, and side-effect free.
+  `complete-now` then does a single explicit `tickEntity()` to fire
+  side effects deterministically.
+- **Asteroid randomness is loose-pinned**. The 3 `Math.random()`
+  rolls in `MissionOreMining.onMissionComplete` are impl; tests pin
+  "≥0 stacks" + chip-replace + respawn-type. A future ticket could
+  add a seeded `RandomFixture` if needed.
+- **Mission XML config loader is out of scope** for this ticket.
+- **No production logic changes** — record any production bug found
+  in `.agent/tasks/README.md` ledger per CLAUDE.md's bug-tracking
+  rule; do not silently fix.
 
 ## Dependencies
 
-**Requires**: TASK-03 base.
-**Cross-cuts**: reward-grant tests live in testClient e2e (TASK-10b).
+- **Requires**: TASK-03 base, TASK-09 (satellite registration patterns
+  reused).
+- **Cross-cuts**: rocket-cargo retrieval by player would live in
+  testClient e2e — separate ticket, not this one.
+- **Reuses if available**: `/artest fixture rocket` (TASK-04 /
+  TASK-07). If not, ~1-2h extra in Phase 1.
 
 ## Estimated effort
 
@@ -102,34 +226,15 @@ in a separate ticket if needed).
 
 ## Completion Checklist
 
-- [ ] 4 new `/artest mission` probe verbs
-- [ ] Gas mission: 4 tests
-- [ ] Ore mission: 3 tests
-- [ ] Completion / reward: 3 tests (last 2 may be deferred to TASK-10)
-- [ ] Lifecycle: 2 tests
+- [ ] 7 new `/artest mission` probe verbs (Phase 1)
+- [ ] Phase 2: 6 lifecycle tests
+- [ ] Phase 3: 4 gas-completion tests + 1 NBT + 1 persistence = 6
+- [ ] Phase 4: 4 ore-completion tests + 1 persistence = 5
+- [ ] Phase 5: 3 infrastructure-lifecycle tests
 - [ ] Full pyramid PASS
 - [ ] EOD marker
+- [ ] `.agent/tasks/README.md` updated
 
-## Status note (2026-05-19, autonomous session)
-
-The unit-tier surface for the three mission classes is already covered
-by `MissionResourceCollectionContractTest` (~9 tests: default ctor,
-canTick, failureChance, performAction, inheritance, NBT-null-state
-guard, etc.). Going deeper requires either:
-
-1. **`/artest mission ...` probe verbs** to drive the per-tick logic
-   from a headless server (Phase 1 plan, ~2 h). The mission's
-   data-carrying ctor requires `EntityRocket` + `LinkedList<IInfrastructure>`
-   + a fluid (for gas) — that's a fixture-builder problem like the
-   multiblock case.
-
-2. **Direct construction at server tier** — instantiate the mission via
-   reflection on a server-side `EntityRocket` from `/artest fixture rocket`.
-   Workable but requires either reflection (brittle to API changes) or
-   a dedicated probe verb that mints a mission and returns its handle.
-
-Either path is ~2-3 h infrastructure before the first behavioural test
-lands. Out of scope for the small-remainders autonomous batch.
-
-Reward-grant tests (Phase 4) belong in `testClient` (TASK-10b) per the
-"no FakePlayer" rule.
+**Test count target**: ~20 new tests across 5 new test classes (1
+unit + 4 server) + 1 multi-boot persistence class extending the
+existing pattern.
