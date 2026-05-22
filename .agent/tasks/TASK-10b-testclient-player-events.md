@@ -7,8 +7,10 @@
   `feedback_no_fakeplayer_for_player_tests` — EntityPlayer-touching
   behaviour lives in the testClient e2e layer, not in testServer with
   FakePlayer scaffolding.
-- Status: Phases 1-6 ✅ Completed (2026-05-20). Phase 7 (TASK-05
-  player-tier remainder) reopened 2026-05-21.
+- Status: Phases 1-6 ✅ Completed (2026-05-20). Phase 7 ✅ Completed
+  (2026-05-22) — SpaceArmor drain pin closed the last workable
+  follow-up; remaining items (WeatherController, SpaceChest,
+  ItemBlock* trio) are rescoped/dropped per SOP litmus.
 - Created: 2026-05-20
 
 ## Context
@@ -300,12 +302,14 @@ remains needs a real EntityPlayerMP and lives in testClient e2e.
       contract (eventual rain/dry change) needs full battery + tick
       cycle, out of unit/probe scope. Leave for a future ticket that
       adds either an NBT pin in production or a tick-loop driver.
-- [~] `ItemSpaceArmorUseFluidE2ETest` — **deferred.** Real drain
-      contract (suit air decremented while in vacuum) needs a
-      planetary-dim fixture + atmosphere-tick cycle (~3-4h probe
-      infra: configure dim with AtmosphereNeedsSuit + register
-      handler + drive AtmosphereHandler.runEffectsOnPlayer). Worth
-      a follow-up ticket — out of scope for Phase 7 close-out.
+- [x] `ItemSpaceArmorUseFluidE2ETest` (3 tests) — suited vacuum drain
+      pin + breathable-dim counter + bare-skin damage cross-check.
+      Uses enchanted-vanilla-armor fixture (Path 1 of
+      `AtmosphereNeedsSuit.protectsFrom` — `ItemAirUtils.ItemAirWrapper`
+      drain into the static "air" NBT). New probes: `equip-airsuit`
+      + `clear-armor`. Reuses `OxygenSuitClientStateE2ETest`'s
+      in-place `set-density 0 0` pattern, dropping the XML-planet
+      scaffolding originally estimated at 3-4h.
 - [~] `ItemSpaceChestDeathPersistE2ETest` — **dropped, not a mod
       contract.** Production has no custom PlayerEvent.Clone /
       death-keep / drop handler for SpaceChest. Pin would test
@@ -313,5 +317,5 @@ remains needs a real EntityPlayerMP and lives in testClient e2e.
       drops — not the mod's contract. SOP litmus fails.
 - [ ] ItemBlockCrystal / ItemBlockFluidTank / ItemPackedStructure
       — still deferred, separate ticket if needed.
-- [x] Phase 7 partial pyramid PASS (16/16 across the 4 shipped suites)
+- [x] Phase 7 pyramid PASS (19/19 across the 5 shipped suites)
 - [x] EOD marker (`.agent/.context-markers/2026-05-22_task10b-phase7-closeout.md`)

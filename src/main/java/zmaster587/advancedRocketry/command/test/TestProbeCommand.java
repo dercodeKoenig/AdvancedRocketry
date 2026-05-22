@@ -7482,7 +7482,75 @@ public class TestProbeCommand extends CommandBase {
                     + "}");
             return;
         }
-        send(sender, "{\"error\":\"unknown player subcommand — try inv-bypass <add|remove|status> | open-container | health | set-health <hp> | held-air | give-suit-chest [air] | advancement <id> | advancement reset <id> | last-chat | chat-clear | try-seal-detect <dim> <x> <y> <z> | try-atm-analyze <dim> | try-hovercraft <dim> <px> <py> <pz> <yaw> <pitch> | try-biomechanger-rclick <dim>\"}");
+        if ("equip-airsuit".equals(sub)) {
+            // /artest player equip-airsuit [initialChestAir]
+            //
+            // Equips four vanilla iron-armor pieces, each enchanted with
+            // AdvancedRocketryAPI.enchantmentSpaceProtection — this is
+            // the "Path 1" branch of AtmosphereNeedsSuit.protectsFrom
+            // (ItemAirUtils.isStackValidAirContainer → enchant-tag check
+            // → ItemAirWrapper.protectsFromSubstance), which drains the
+            // chest's static "air" NBT key by 1 per AtmosphereVacuum
+            // tick (every 10 game ticks). The held-air probe reads
+            // that same "air" NBT.
+            //
+            // Why not itemSpaceSuit_Chest: ItemSpaceChest goes through
+            // the capability branch and stores its O2 buffer as oxygen
+            // fluid inside an embedded fluid-tank inventory — drain
+            // setup would require also seeding the embedded inventory.
+            // Enchanted vanilla armor is the cleanest fixture for
+            // pinning the drain contract end-to-end.
+            int initialChestAir = args.length >= 2 ? parseIntOr(args[1], 1000) : 1000;
+            net.minecraft.enchantment.Enchantment ench =
+                    zmaster587.advancedRocketry.api.AdvancedRocketryAPI.enchantmentSpaceProtection;
+            if (ench == null) {
+                send(sender, "{\"error\":\"enchantmentSpaceProtection is null — AR not initialised?\"}");
+                return;
+            }
+            net.minecraft.item.ItemStack helm =
+                    new net.minecraft.item.ItemStack(net.minecraft.init.Items.IRON_HELMET);
+            helm.addEnchantment(ench, 1);
+            net.minecraft.item.ItemStack chest =
+                    new net.minecraft.item.ItemStack(net.minecraft.init.Items.IRON_CHESTPLATE);
+            chest.addEnchantment(ench, 1);
+            zmaster587.advancedRocketry.util.ItemAirUtils.INSTANCE
+                    .setAirRemaining(chest, initialChestAir);
+            net.minecraft.item.ItemStack legs =
+                    new net.minecraft.item.ItemStack(net.minecraft.init.Items.IRON_LEGGINGS);
+            legs.addEnchantment(ench, 1);
+            net.minecraft.item.ItemStack feet =
+                    new net.minecraft.item.ItemStack(net.minecraft.init.Items.IRON_BOOTS);
+            feet.addEnchantment(ench, 1);
+            player.setItemStackToSlot(net.minecraft.inventory.EntityEquipmentSlot.HEAD, helm);
+            player.setItemStackToSlot(net.minecraft.inventory.EntityEquipmentSlot.CHEST, chest);
+            player.setItemStackToSlot(net.minecraft.inventory.EntityEquipmentSlot.LEGS, legs);
+            player.setItemStackToSlot(net.minecraft.inventory.EntityEquipmentSlot.FEET, feet);
+            send(sender, "{\"ok\":true,\"player\":\""
+                    + escapeJson(player.getName()) + "\""
+                    + ",\"chestSlot\":\""
+                    + escapeJson(chest.getItem().getRegistryName().toString()) + "\""
+                    + ",\"initialChestAir\":" + initialChestAir
+                    + ",\"chestAir\":"
+                    + zmaster587.advancedRocketry.util.ItemAirUtils.INSTANCE.getAirRemaining(chest)
+                    + "}");
+            return;
+        }
+        if ("clear-armor".equals(sub)) {
+            // /artest player clear-armor — empty all four armor slots.
+            // Used by drain counter-tests where the player must be
+            // bare-skinned in vacuum to observe the no-suit branch.
+            for (net.minecraft.inventory.EntityEquipmentSlot s : new net.minecraft.inventory.EntityEquipmentSlot[]{
+                    net.minecraft.inventory.EntityEquipmentSlot.HEAD,
+                    net.minecraft.inventory.EntityEquipmentSlot.CHEST,
+                    net.minecraft.inventory.EntityEquipmentSlot.LEGS,
+                    net.minecraft.inventory.EntityEquipmentSlot.FEET}) {
+                player.setItemStackToSlot(s, net.minecraft.item.ItemStack.EMPTY);
+            }
+            send(sender, "{\"ok\":true,\"player\":\""
+                    + escapeJson(player.getName()) + "\"}");
+            return;
+        }
+        send(sender, "{\"error\":\"unknown player subcommand — try inv-bypass <add|remove|status> | open-container | health | set-health <hp> | held-air | give-suit-chest [air] | equip-airsuit [air] | clear-armor | advancement <id> | advancement reset <id> | last-chat | chat-clear | try-seal-detect <dim> <x> <y> <z> | try-atm-analyze <dim> | try-hovercraft <dim> <px> <py> <pz> <yaw> <pitch> | try-biomechanger-rclick <dim>\"}");
     }
 
     // ── chat-tap (TASK-10b Phase 7) ──────────────────────────────────────
