@@ -7261,6 +7261,75 @@ public class TestProbeCommand extends CommandBase {
                     + "}");
             return;
         }
+        if ("try-biomechanger-rclick".equals(sub) && args.length >= 2) {
+            // /artest player try-biomechanger-rclick <dim>
+            //
+            // Constructs a SatelliteBiomeChanger, registers it on the
+            // supplied dim, equips an ItemBiomeChanger with NBT pointing
+            // to that satellite, then invokes onItemRightClick. The
+            // contract pinned by callers: after the right-click, the
+            // satellite's writeToNBT must emit a "posList" int-array
+            // populated with positions to change (save-format contract).
+            // An empty posList means production short-circuited
+            // performAction or stopped queuing positions — both are
+            // player-visible regressions (the BiomeChanger silently does
+            // nothing after right-click).
+            int dim = parseIntOr(args[1], Integer.MIN_VALUE);
+            net.minecraft.world.WorldServer world = server.getWorld(dim);
+            if (world == null) {
+                send(sender, "{\"error\":\"world not loaded\",\"dim\":" + dim + "}");
+                return;
+            }
+            zmaster587.advancedRocketry.satellite.SatelliteBiomeChanger sat =
+                    new zmaster587.advancedRocketry.satellite.SatelliteBiomeChanger();
+            long satId = System.nanoTime();
+            sat.getProperties().setId(satId);
+            zmaster587.advancedRocketry.dimension.DimensionProperties props =
+                    zmaster587.advancedRocketry.dimension.DimensionManager.getInstance()
+                            .getDimensionProperties(dim);
+            if (props == null) {
+                send(sender, "{\"error\":\"no DimensionProperties for dim\",\"dim\":" + dim + "}");
+                return;
+            }
+            props.addSatellite(sat, world);
+
+            net.minecraft.item.Item chip =
+                    zmaster587.advancedRocketry.api.AdvancedRocketryItems.itemBiomeChanger;
+            net.minecraft.item.ItemStack held = new net.minecraft.item.ItemStack(chip);
+            net.minecraft.nbt.NBTTagCompound chipNbt = new net.minecraft.nbt.NBTTagCompound();
+            chipNbt.setString("satelliteName", sat.getName());
+            chipNbt.setInteger("dimId", dim);
+            chipNbt.setLong("satelliteId", satId);
+            held.setTagCompound(chipNbt);
+            player.setHeldItem(net.minecraft.util.EnumHand.MAIN_HAND, held);
+
+            int posListBefore;
+            {
+                net.minecraft.nbt.NBTTagCompound snap = new net.minecraft.nbt.NBTTagCompound();
+                sat.writeToNBT(snap);
+                posListBefore = snap.getIntArray("posList").length;
+            }
+
+            net.minecraft.util.ActionResult<net.minecraft.item.ItemStack> res =
+                    chip.onItemRightClick(world, player, net.minecraft.util.EnumHand.MAIN_HAND);
+
+            int posListAfter;
+            {
+                net.minecraft.nbt.NBTTagCompound snap = new net.minecraft.nbt.NBTTagCompound();
+                sat.writeToNBT(snap);
+                posListAfter = snap.getIntArray("posList").length;
+            }
+            send(sender, "{\"ok\":true,\"player\":\""
+                    + escapeJson(player.getName()) + "\""
+                    + ",\"dim\":" + dim
+                    + ",\"satId\":" + satId
+                    + ",\"result\":\"" + res.getType().name() + "\""
+                    + ",\"posListBefore\":" + posListBefore
+                    + ",\"posListAfter\":" + posListAfter
+                    + ",\"posListDelta\":" + (posListAfter - posListBefore)
+                    + "}");
+            return;
+        }
         if ("try-hovercraft".equals(sub) && args.length >= 7) {
             // /artest player try-hovercraft <dim> <px> <py> <pz> <yaw> <pitch>
             //
@@ -7389,7 +7458,7 @@ public class TestProbeCommand extends CommandBase {
                     + "}");
             return;
         }
-        send(sender, "{\"error\":\"unknown player subcommand — try inv-bypass <add|remove|status> | open-container | health | set-health <hp> | held-air | give-suit-chest [air] | advancement <id> | advancement reset <id> | last-chat | chat-clear | try-seal-detect <dim> <x> <y> <z> | try-atm-analyze <dim> | try-hovercraft <dim> <px> <py> <pz> <yaw> <pitch>\"}");
+        send(sender, "{\"error\":\"unknown player subcommand — try inv-bypass <add|remove|status> | open-container | health | set-health <hp> | held-air | give-suit-chest [air] | advancement <id> | advancement reset <id> | last-chat | chat-clear | try-seal-detect <dim> <x> <y> <z> | try-atm-analyze <dim> | try-hovercraft <dim> <px> <py> <pz> <yaw> <pitch> | try-biomechanger-rclick <dim>\"}");
     }
 
     // ── chat-tap (TASK-10b Phase 7) ──────────────────────────────────────
