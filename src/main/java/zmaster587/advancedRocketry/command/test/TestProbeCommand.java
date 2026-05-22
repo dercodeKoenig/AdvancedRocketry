@@ -7812,6 +7812,13 @@ public class TestProbeCommand extends CommandBase {
      *   <li>{@code infra-state <missionId>} — list infrastructureCoords + how
      *       many resolve to live IInfrastructure tiles currently pointing
      *       back at this mission via {@code getLinkedMission()}.</li>
+     *   <li>{@code rocket-relink-state <dim>} — class-filtered scan
+     *       of the launch dim for EntityStationDeployedRocket entities
+     *       (post-completion respawn target), reporting each rocket's
+     *       infrastructureCoords list. Unlike {@code rocket-cargo} this
+     *       is not bbox-limited, so it finds the respawned rocket even
+     *       when production positions it at world origin (vanilla
+     *       EntityRocket's writeMissionPersistentNBT no-op default).</li>
      * </ul>
      *
      * <p>Reads/writes the mission's package-private fields
@@ -7824,7 +7831,7 @@ public class TestProbeCommand extends CommandBase {
     private void handleMission(net.minecraft.server.MinecraftServer server,
                                ICommandSender sender, String[] args) {
         if (args.length == 0) {
-            send(sender, "{\"error\":\"missing mission subcommand — try start-gas | start-ore | state | advance | complete-now | rocket-cargo | infra-state\"}");
+            send(sender, "{\"error\":\"missing mission subcommand — try start-gas | start-ore | state | advance | complete-now | rocket-cargo | link-infra | infra-state | rocket-relink-state\"}");
             return;
         }
         String sub = args[0].toLowerCase(java.util.Locale.ROOT);
@@ -8125,7 +8132,72 @@ public class TestProbeCommand extends CommandBase {
                         + ",\"missionId\":" + mid + "}");
                 return;
             }
-            send(sender, "{\"error\":\"unknown mission subcommand — try start-gas | start-ore | state | advance | complete-now | rocket-cargo | link-infra | infra-state\"}");
+            if ("rocket-relink-state".equals(sub) && args.length >= 2) {
+                // /artest mission rocket-relink-state <dim>
+                // After MissionGasCollection.onMissionComplete spawns a fresh
+                // EntityStationDeployedRocket and calls rocket.linkInfrastructure
+                // on each linked infra tile (production line 84), the new
+                // rocket's infrastructureCoords set holds those tile coords.
+                // The rocket-cargo / snapshotCargoJson scan is bbox-limited
+                // around the mission's stored launch coords, but the freshly
+                // spawned rocket is positioned by EntityStationDeployedRocket
+                // .launchLocation (restored from missionPersistantNBT). With
+                // a vanilla EntityRocket fixture, writeMissionPersistentNBT
+                // is a no-op so launchLocation defaults to (0,0,0) and the
+                // new rocket spawns at world origin — outside the cargo
+                // bbox. This verb is class-filtered (not bbox-filtered) so
+                // it finds EntityStationDeployedRocket entities regardless
+                // of position. Takes a dim arg directly because the mission
+                // satellite may have been pruned by the time this verb is
+                // called as a follow-up command after complete-now.
+                int launchDim = parseIntOr(args[1], Integer.MIN_VALUE);
+                net.minecraft.world.WorldServer lw = server.getWorld(launchDim);
+                if (lw == null) {
+                    send(sender, "{\"error\":\"launch dim not loaded\",\"dim\":" + launchDim + "}");
+                    return;
+                }
+                com.google.common.base.Predicate<net.minecraft.entity.Entity> alwaysTrue =
+                        com.google.common.base.Predicates.alwaysTrue();
+                java.util.List<zmaster587.advancedRocketry.entity.EntityStationDeployedRocket> deployed =
+                        lw.getEntities(zmaster587.advancedRocketry.entity.EntityStationDeployedRocket.class, alwaysTrue);
+                StringBuilder per = new StringBuilder("[");
+                int totalInfra = 0;
+                for (int idx = 0; idx < deployed.size(); idx++) {
+                    zmaster587.advancedRocketry.entity.EntityStationDeployedRocket r = deployed.get(idx);
+                    Object coordsObj;
+                    try {
+                        coordsObj = readObjectField(r, "infrastructureCoords");
+                    } catch (ReflectiveOperationException ignored) {
+                        coordsObj = null;
+                    }
+                    StringBuilder coordsJson = new StringBuilder("[");
+                    int n = 0;
+                    if (coordsObj instanceof java.util.Collection) {
+                        for (Object pos : (java.util.Collection<?>) coordsObj) {
+                            zmaster587.libVulpes.util.HashedBlockPosition hbp =
+                                    (zmaster587.libVulpes.util.HashedBlockPosition) pos;
+                            if (n++ > 0) coordsJson.append(',');
+                            coordsJson.append('[').append(hbp.x).append(',').append(hbp.y)
+                                    .append(',').append(hbp.z).append(']');
+                        }
+                    }
+                    coordsJson.append(']');
+                    totalInfra += n;
+                    if (idx > 0) per.append(',');
+                    per.append("{\"entityId\":").append(r.getEntityId())
+                            .append(",\"pos\":[").append(r.posX).append(',').append(r.posY)
+                            .append(',').append(r.posZ).append(']')
+                            .append(",\"infraCount\":").append(n)
+                            .append(",\"infrastructure\":").append(coordsJson).append('}');
+                }
+                per.append(']');
+                send(sender, "{\"ok\":true,\"launchDim\":" + launchDim
+                        + ",\"deployedCount\":" + deployed.size()
+                        + ",\"totalInfraEntries\":" + totalInfra
+                        + ",\"rockets\":" + per + "}");
+                return;
+            }
+            send(sender, "{\"error\":\"unknown mission subcommand — try start-gas | start-ore | state | advance | complete-now | rocket-cargo | link-infra | infra-state | rocket-relink-state\"}");
         } catch (ReflectiveOperationException e) {
             send(sender, "{\"error\":\"reflection failed: " + escapeJson(e.getMessage()) + "\"}");
         }

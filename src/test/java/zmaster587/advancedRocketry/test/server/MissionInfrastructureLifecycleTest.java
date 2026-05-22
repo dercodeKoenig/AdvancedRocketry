@@ -131,18 +131,11 @@ public class MissionInfrastructureLifecycleTest extends AbstractSharedServerTest
      *  tile.mission becomes null — the player-visible effect is that the
      *  monitoring station GUI stops showing the mission progress.
      *
-     *  <p>The production code also calls {@code rocket.linkInfrastructure}
-     *  to re-bind the tile to the freshly spawned EntityStationDeployedRocket.
-     *  That post-condition is not pinned here because the in-test scan
-     *  of the launch-dim bbox returns only one EntityRocket entity
-     *  (vs the expected two — the original assembled rocket + the
-     *  StationDeployedRocket spawned at completion) and that one
-     *  rocket's infrastructureCoords is observed empty. The discrepancy
-     *  may indicate the original rocket is removed by some hook during
-     *  completion, OR the StationDeployedRocket's spawn-with-overlap is
-     *  suppressed by Minecraft's entity collision logic — either way
-     *  it's a separate investigation. The unlinking half of the
-     *  lifecycle is the player-facing contract; that's what we pin. */
+     *  <p>The rocket-side half of the lifecycle (production also calls
+     *  {@code rocket.linkInfrastructure} on the freshly spawned
+     *  EntityStationDeployedRocket) is pinned by
+     *  {@link #completionLinksInfrastructureToRespawnedRocket} via the
+     *  {@code rocket-relink-state} probe. */
     @Test
     public void completionUnlinksInfrastructureFromMission() throws Exception {
         int baseX = 9100;
@@ -170,5 +163,54 @@ public class MissionInfrastructureLifecycleTest extends AbstractSharedServerTest
                 postState.contains("\"error\""));
         assertTrue("infra must report hasMission=false after completion: " + postState,
                 postState.contains("\"hasMission\":false"));
+    }
+
+    /** Rocket-side half of the lifecycle (MissionGasCollection.java:80-86):
+     *  for each entry in {@code infrastructureCoords} the gas-completion
+     *  loop calls {@code rocket.linkInfrastructure(tile)} on the freshly
+     *  spawned {@code EntityStationDeployedRocket}. Pins the post-condition
+     *  that the new rocket's {@code infrastructureCoords} set contains
+     *  the linked infra tile's coord, i.e. the "your monitoring station
+     *  now follows the returned rocket" UX.
+     *
+     *  <p>This test cannot reuse the bbox-restricted {@code rocket-cargo}
+     *  probe — with a vanilla EntityRocket fixture the
+     *  {@code writeMissionPersistentNBT} call inside the
+     *  MissionResourceCollection ctor is a no-op, so the new rocket's
+     *  {@code launchLocation} restored from empty NBT defaults to
+     *  (0,0,0). The rocket therefore spawns at world origin, outside
+     *  the {@code rocket-cargo} bbox around the original launch coords.
+     *  The {@code rocket-relink-state} probe is class-filtered (scans
+     *  the whole launch dim for EntityStationDeployedRocket instances)
+     *  and finds the rocket regardless of position. */
+    @Test
+    public void completionLinksInfrastructureToRespawnedRocket() throws Exception {
+        int baseX = 9200;
+        int rid = buildAndAssembleRocket(baseX);
+        long mid = startGasMission(rid, 1000);
+        int[] ipos = placeMonitoringStation(baseX, 600);
+        String link = ok(client().execute("artest mission link-infra " + mid
+                + " 0 " + ipos[0] + " " + ipos[1] + " " + ipos[2]));
+        assertTrue("setup link-infra must succeed: " + link, link.contains("\"linked\":true"));
+
+        String cargo = ok(client().execute("artest mission complete-now " + mid));
+        assertTrue("completion must fire: " + cargo, cargo.contains("\"completed\":true"));
+
+        String relink = ok(client().execute("artest mission rocket-relink-state 0"));
+        assertFalse("rocket-relink-state must not error: " + relink,
+                relink.contains("\"error\""));
+        // At least one EntityStationDeployedRocket exists in launch dim
+        // post-completion — production's onMissionComplete spawned it.
+        assertFalse("deployedCount must be > 0 after gas completion: " + relink,
+                relink.contains("\"deployedCount\":0"));
+        // Production looped infrastructureCoords and called
+        // rocket.linkInfrastructure for each entry. The placed monitoring
+        // station coord must appear in some StationDeployedRocket's
+        // infrastructureCoords list. Test for the exact triple as JSON
+        // array to avoid matching a coincidental coord-with-shared-axis.
+        String expected = "[" + ipos[0] + "," + ipos[1] + "," + ipos[2] + "]";
+        assertTrue("rocket infrastructureCoords must contain "
+                        + expected + ": " + relink,
+                relink.contains(expected));
     }
 }

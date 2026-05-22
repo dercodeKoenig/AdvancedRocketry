@@ -6,9 +6,8 @@
   only `MissionResourceCollection` covered at unit tier
   (`MissionResourceCollectionContractTest`). `MissionGasCollection`
   and `MissionOreMining` are completely untested.
-- Status: Phases 1-5 + persistence ✅ Completed (2026-05-22 later
-  session). Rocket-side relink remains as a narrow follow-up — see
-  bottom.
+- Status: Phases 1-5 + persistence + rocket-side relink ✅ Completed
+  (2026-05-22, three sessions same day).
 - Created: 2026-05-19; replanned 2026-05-22; Phases 1-4 close 2026-05-22;
   Phase 5 + persistence + strong fluid pin close 2026-05-22 (later).
 - Predecessor: `.agent/.context-markers/2026-05-19-1230_task03-A-and-B-mostly-done-eod.md`
@@ -231,44 +230,52 @@ ctor reads — `posX/Y/Z`, `world`, `storage`, `stats`, and
 
 ## Completion Checklist
 
-- [x] 7 `/artest mission` probe verbs landed (start-gas, start-ore,
-      state, advance, complete-now, rocket-cargo, link-infra, infra-state)
+- [x] 9 `/artest mission` probe verbs landed (start-gas, start-ore,
+      state, advance, complete-now, rocket-cargo, link-infra, infra-state,
+      rocket-relink-state)
 - [x] Phase 2: 5 lifecycle tests (`MissionLifecyclePyramidTest`)
 - [x] Phase 3: 4 gas-completion tests (`MissionGasCompletionTest`,
       including new strong 64000 mB oxygen-fill pin via
       `with-fluid-cargo` fixture variant)
       + 3 NBT round-trip tests (`MissionNbtRoundTripTest` at unit-tier)
 - [x] Phase 4: 3 ore-completion tests (`MissionOreCompletionTest`)
-- [x] Phase 5: 2 infra-lifecycle tests
-      (`MissionInfrastructureLifecycleTest` — link on start +
-      unlink on completion)
+- [x] Phase 5: 3 infra-lifecycle tests
+      (`MissionInfrastructureLifecycleTest` — link on start,
+      tile-side unlink on completion, rocket-side relink on completion)
 - [x] Multi-boot persistence: 2 tests
       (`MissionPersistenceRestartTest` — gas + ore survive reboot)
-- [x] Full pyramid PASS (3 unit + 16 server, 19/19 green)
+- [x] Full pyramid PASS (3 unit + 17 server, 20/20 green)
 - [x] EOD markers (Phases 1-4 + this session's marker)
 - [x] `.agent/tasks/README.md` Done table updated
 
-**Tests landed**: 19 (3 unit + 16 server). Original target was ~20 —
-we landed 19/20. The one missing assertion (rocket-side relink to the
-respawned EntityStationDeployedRocket) is documented as a narrow
-follow-up below — the tile-side unlinking half of the lifecycle IS
-pinned, which is the player-facing contract.
+**Tests landed**: 20 (3 unit + 17 server). Rocket-side relink follow-up
+closed 2026-05-22 — see "Closed follow-up" below.
 
-## Deferred follow-ups (not blocking close-out)
+## Closed follow-up
 
-1. **Rocket-side relink assertion** (Phase 5 nice-to-have)
-   `MissionGasCollection.onMissionComplete` does
-   `rocket.linkInfrastructure(tile)` on the freshly spawned
-   `EntityStationDeployedRocket` after unlinking the tile from the
-   mission. We pin the tile-side unlinking (`tile.mission` cleared)
-   but not the rocket-side coord registration: a snapshot scan of the
-   launch-dim bbox returns one EntityRocket vs the expected two
-   (original + StationDeployed), and that one's
-   `infrastructureCoords` is empty in observation. Either the original
-   rocket is removed by some hook OR the StationDeployed spawn-with-
-   overlap is suppressed by Forge's entity-collision logic. Investigate
-   and pin the rocket-side half once the cause is understood.
-   Effort: ~1-2 h (mostly investigation).
+1. **Rocket-side relink assertion** — CLOSED 2026-05-22.
+   Root cause of the original observation: `MissionResourceCollection`
+   ctor seeds `missionPersistantNBT` via `entity.writeMissionPersistentNBT`,
+   but `EntityRocket`'s implementation is a no-op (line 2081). The
+   freshly spawned `EntityStationDeployedRocket` then restores
+   `launchLocation = (0,0,0)` and `forwardDirection = DOWN` from empty
+   NBT, so production positions the new rocket at world origin
+   `(0.5, y, 0.5)` — outside the bbox that `rocket-cargo` scans
+   around the original launch coords. The original rocket alone was
+   visible in the bbox, hence `rocketCount=1` + empty
+   `infrastructureCoords` (production called `linkInfrastructure` on
+   the new rocket at world origin, not the original).
+   Resolution: new probe verb `rocket-relink-state <dim>` does a
+   class-filtered scan (not bbox-limited), and the new test
+   `completionLinksInfrastructureToRespawnedRocket` asserts the
+   placed monitoring station's coord appears in some
+   EntityStationDeployedRocket's `infrastructureCoords`.
+   Production-side note: this no-op `writeMissionPersistentNBT` on
+   the vanilla EntityRocket is not a player-facing bug — production
+   only constructs a gas mission from `EntityStationDeployedRocket
+   .onOrbitReached`, where the entity IS a StationDeployed and its
+   overridden `writeMissionPersistentNBT` populates the launch coords
+   correctly. Test-fixture-only edge case.
 
 The Phase-5 NBT roundtrip for the `infrastructure` tag list is
 already covered structurally by
