@@ -7261,6 +7261,66 @@ public class TestProbeCommand extends CommandBase {
                     + "}");
             return;
         }
+        if ("try-hovercraft".equals(sub) && args.length >= 7) {
+            // /artest player try-hovercraft <dim> <px> <py> <pz> <yaw> <pitch>
+            //
+            // Teleports the player to the given location/angles, equips
+            // ItemHovercraft, and invokes onItemRightClick. The production
+            // path ray-traces 5 blocks forward from the player's eye, and
+            // spawns an EntityHoverCraft at the hit position. Returns
+            // result code, EntityHoverCraft count delta (snapshot
+            // before/after), and the held-stack count after — tests
+            // confirm both the spawn and the consumption contract.
+            int dim = parseIntOr(args[1], Integer.MIN_VALUE);
+            double px = parseDoubleOr(args[2], 0);
+            double py = parseDoubleOr(args[3], 0);
+            double pz = parseDoubleOr(args[4], 0);
+            float yaw = (float) parseDoubleOr(args[5], 0);
+            float pitch = (float) parseDoubleOr(args[6], 0);
+            net.minecraft.world.WorldServer world = server.getWorld(dim);
+            if (world == null) {
+                send(sender, "{\"error\":\"world not loaded\",\"dim\":" + dim + "}");
+                return;
+            }
+            // Force survival so the consumption branch fires.
+            player.setGameType(net.minecraft.world.GameType.SURVIVAL);
+            // setLocationAndAngles updates pos + prev{Pos,Rotation} so the
+            // onItemRightClick lerp (prevPosX + (posX - prevPosX)) gives
+            // exactly the target pos / angles instead of a tween from the
+            // previous tick's frame.
+            player.setLocationAndAngles(px, py, pz, yaw, pitch);
+            player.prevPosX = px; player.prevPosY = py; player.prevPosZ = pz;
+            player.lastTickPosX = px; player.lastTickPosY = py; player.lastTickPosZ = pz;
+            player.prevRotationYaw = yaw; player.prevRotationPitch = pitch;
+
+            net.minecraft.item.Item hover =
+                    zmaster587.advancedRocketry.api.AdvancedRocketryItems.itemHovercraft;
+            player.setHeldItem(net.minecraft.util.EnumHand.MAIN_HAND,
+                    new net.minecraft.item.ItemStack(hover));
+
+            com.google.common.base.Predicate<net.minecraft.entity.Entity> alwaysTrue =
+                    com.google.common.base.Predicates.alwaysTrue();
+            int before = world.getEntities(
+                    zmaster587.advancedRocketry.entity.EntityHoverCraft.class, alwaysTrue).size();
+
+            net.minecraft.util.ActionResult<net.minecraft.item.ItemStack> res =
+                    hover.onItemRightClick(world, player, net.minecraft.util.EnumHand.MAIN_HAND);
+
+            int after = world.getEntities(
+                    zmaster587.advancedRocketry.entity.EntityHoverCraft.class, alwaysTrue).size();
+            int heldAfter = player.getHeldItem(net.minecraft.util.EnumHand.MAIN_HAND).getCount();
+            send(sender, "{\"ok\":true,\"player\":\""
+                    + escapeJson(player.getName()) + "\""
+                    + ",\"dim\":" + dim
+                    + ",\"result\":\"" + res.getType().name() + "\""
+                    + ",\"entitiesBefore\":" + before
+                    + ",\"entitiesAfter\":" + after
+                    + ",\"entityDelta\":" + (after - before)
+                    + ",\"heldAfter\":" + heldAfter
+                    + ",\"creative\":" + player.capabilities.isCreativeMode
+                    + "}");
+            return;
+        }
         if ("try-atm-analyze".equals(sub) && args.length >= 2) {
             // /artest player try-atm-analyze <dim>
             //
@@ -7329,7 +7389,7 @@ public class TestProbeCommand extends CommandBase {
                     + "}");
             return;
         }
-        send(sender, "{\"error\":\"unknown player subcommand — try inv-bypass <add|remove|status> | open-container | health | set-health <hp> | held-air | give-suit-chest [air] | advancement <id> | advancement reset <id> | last-chat | chat-clear | try-seal-detect <dim> <x> <y> <z> | try-atm-analyze <dim>\"}");
+        send(sender, "{\"error\":\"unknown player subcommand — try inv-bypass <add|remove|status> | open-container | health | set-health <hp> | held-air | give-suit-chest [air] | advancement <id> | advancement reset <id> | last-chat | chat-clear | try-seal-detect <dim> <x> <y> <z> | try-atm-analyze <dim> | try-hovercraft <dim> <px> <py> <pz> <yaw> <pitch>\"}");
     }
 
     // ── chat-tap (TASK-10b Phase 7) ──────────────────────────────────────
