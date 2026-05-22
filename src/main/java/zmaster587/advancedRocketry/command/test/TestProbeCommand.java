@@ -7261,6 +7261,48 @@ public class TestProbeCommand extends CommandBase {
                     + "}");
             return;
         }
+        if ("try-atm-analyze".equals(sub) && args.length >= 2) {
+            // /artest player try-atm-analyze <dim>
+            //
+            // Equips ItemAtmosphereAnalzer and invokes its server-side
+            // onItemRightClick against the supplied dim. Production sends
+            // TWO messages: a "%s %s %s" wrapping (msg.atmanal.atmtype,
+            // <atm-name>, pressure-string) followed by a "%s %s" wrapping
+            // (msg.atmanal.canbreathe, msg.yes|msg.no). Both are captured
+            // by the chat-tap and returned as a JSON array of joined
+            // translation-key chains (newest first).
+            int dim = parseIntOr(args[1], Integer.MIN_VALUE);
+            net.minecraft.world.WorldServer world = server.getWorld(dim);
+            if (world == null) {
+                send(sender, "{\"error\":\"world not loaded\",\"dim\":" + dim + "}");
+                return;
+            }
+            installChatTap(player);
+            chatLog.clear();
+            net.minecraft.item.Item analyzer =
+                    zmaster587.advancedRocketry.api.AdvancedRocketryItems.itemAtmAnalyser;
+            player.setHeldItem(net.minecraft.util.EnumHand.MAIN_HAND,
+                    new net.minecraft.item.ItemStack(analyzer));
+            net.minecraft.util.ActionResult<net.minecraft.item.ItemStack> res =
+                    analyzer.onItemRightClick(world, player, net.minecraft.util.EnumHand.MAIN_HAND);
+            flushPlayerChannel(player);
+            StringBuilder sb = new StringBuilder("[");
+            boolean first = true;
+            for (String k : chatLog) {
+                if (!first) sb.append(',');
+                sb.append('"').append(escapeJson(k)).append('"');
+                first = false;
+            }
+            sb.append(']');
+            send(sender, "{\"ok\":true,\"player\":\""
+                    + escapeJson(player.getName()) + "\""
+                    + ",\"dim\":" + dim
+                    + ",\"result\":\"" + res.getType().name() + "\""
+                    + ",\"messageCount\":" + chatLog.size()
+                    + ",\"messages\":" + sb.toString()
+                    + "}");
+            return;
+        }
         if ("give-suit-chest".equals(sub)) {
             // Equip a fresh full-air space-suit chestplate into the
             // player's CHEST armor slot. The 6th-arg `air` (optional)
@@ -7287,7 +7329,7 @@ public class TestProbeCommand extends CommandBase {
                     + "}");
             return;
         }
-        send(sender, "{\"error\":\"unknown player subcommand — try inv-bypass <add|remove|status> | open-container | health | set-health <hp> | held-air | give-suit-chest [air] | advancement <id> | advancement reset <id> | last-chat | chat-clear | try-seal-detect <dim> <x> <y> <z>\"}");
+        send(sender, "{\"error\":\"unknown player subcommand — try inv-bypass <add|remove|status> | open-container | health | set-health <hp> | held-air | give-suit-chest [air] | advancement <id> | advancement reset <id> | last-chat | chat-clear | try-seal-detect <dim> <x> <y> <z> | try-atm-analyze <dim>\"}");
     }
 
     // ── chat-tap (TASK-10b Phase 7) ──────────────────────────────────────
@@ -7356,8 +7398,13 @@ public class TestProbeCommand extends CommandBase {
                                 // server command: /artest …"). Every /artest
                                 // call triggers one of these, which would
                                 // otherwise drown the player-visible chat the
-                                // tests want to observe.
-                                if (!"chat.type.announcement".equals(key)) {
+                                // tests want to observe. startsWith because
+                                // componentKey now joins nested translation
+                                // keys with "|" — the announcement carries the
+                                // player name + raw command as nested args, so
+                                // the captured key will be e.g.
+                                // "chat.type.announcement|...".
+                                if (key != null && !key.startsWith("chat.type.announcement")) {
                                     chatLog.offerFirst(key);
                                     while (chatLog.size() > CHAT_LOG_MAX) chatLog.pollLast();
                                 }
@@ -7420,14 +7467,40 @@ public class TestProbeCommand extends CommandBase {
         return null;
     }
 
-    /** Returns the translation key for a TextComponentTranslation, else
-     *  the unformatted text — gives tests a stable handle to match on
-     *  without rendering through the i18n table. */
+    /** Returns a stable handle for a chat component without rendering it
+     *  through the i18n table. For a plain TextComponentTranslation we
+     *  emit just the key (e.g. {@code msg.sealdetector.sealed}). For a
+     *  composite translation whose key has %s placeholders filled by
+     *  child translations (e.g. AtmosphereAnalzer's
+     *  {@code "%s %s %s"} wrapping {@code msg.atmanal.atmtype} + atmType
+     *  name + pressure), we recursively walk the format args + siblings
+     *  and join every nested translation key with {@code |}. Result:
+     *  {@code "%s %s %s|msg.atmanal.atmtype|air"} — tests can pin on
+     *  presence of any inner key without depending on i18n output.
+     *  Falls back to unformatted text when no translations are found. */
     private static String componentKey(net.minecraft.util.text.ITextComponent comp) {
-        if (comp instanceof net.minecraft.util.text.TextComponentTranslation) {
-            return ((net.minecraft.util.text.TextComponentTranslation) comp).getKey();
-        }
+        StringBuilder sb = new StringBuilder();
+        collectTranslationKeys(comp, sb);
+        if (sb.length() > 0) return sb.toString();
         return comp.getUnformattedComponentText();
+    }
+
+    private static void collectTranslationKeys(net.minecraft.util.text.ITextComponent comp, StringBuilder sb) {
+        if (comp == null) return;
+        if (comp instanceof net.minecraft.util.text.TextComponentTranslation) {
+            net.minecraft.util.text.TextComponentTranslation tct =
+                    (net.minecraft.util.text.TextComponentTranslation) comp;
+            if (sb.length() > 0) sb.append('|');
+            sb.append(tct.getKey());
+            for (Object arg : tct.getFormatArgs()) {
+                if (arg instanceof net.minecraft.util.text.ITextComponent) {
+                    collectTranslationKeys((net.minecraft.util.text.ITextComponent) arg, sb);
+                }
+            }
+        }
+        for (net.minecraft.util.text.ITextComponent sib : comp.getSiblings()) {
+            collectTranslationKeys(sib, sb);
+        }
     }
 
     /** Submits a no-op to the player's Netty event-loop and blocks for
