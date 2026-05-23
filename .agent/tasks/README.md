@@ -44,7 +44,7 @@ Bug-ledger history lives in
 | [TASK-14](TASK-14-companion-mod-integration-coverage.md) | Companion-mod integration coverage (JEI / GC / MO) — closed as Obsolete: mod-absent paths already pinned implicitly by 441 boot-the-server tests + TASK-11's JEI null-guard pin | ❌ Obsolete |
 
 ## Backlog
-| [TASK-15](TASK-15-visual-regression.md) | Visual regression infrastructure for Minecraft client | 🟢 Backlog | "Build when there's a reason" — no pre-emptive scope. Worth promoting if a planned GUI refactor lands or modpack reports surface visual regressions. |
+| [TASK-15](TASK-15-visual-regression.md) | Visual regression infrastructure for Minecraft client | 👁 Watching | Re-classified 2026-05-23. 4 explicit promotion triggers documented in the task file (GUI refactor / modpack-report / JEI rework / texture-pipeline bump). Revisit + consider Obsolete if no trigger in 6 months. |
 | [TASK-16](TASK-16-test-stability-flake-watch.md) | Test-stability flake watch (`BeaconMultiblockTest` + `MachineRecipeIntegrationTest` parallel-fork contention) | 👁 Watching | Promote when the flake reoccurs within ~5 testServer runs OR a third test joins. Currently 1 of 1 occurrences. |
 
 No other open work. Future deferrals must land here as TASK files —

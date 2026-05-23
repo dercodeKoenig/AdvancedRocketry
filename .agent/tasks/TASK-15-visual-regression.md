@@ -4,8 +4,41 @@
 
 - Source: TASK-02 Phase 10 deferral (own proposal at the time),
   promoted into a tracked task on 2026-05-23 during the SSOT cleanup.
-- Status: **Backlog**.
+- Status: **👁 Backlog (watching)** — speculative infrastructure;
+  promote on one of the triggers below. Re-classified from plain
+  Backlog on 2026-05-23 after honest cost/benefit review.
 - Created: 2026-05-23.
+
+## Promotion triggers
+
+Promote out of "watching" into `In Progress` when ANY of these
+fires. Until then this task does NOT get scheduled — coverage of
+visual regressions stays implicitly zero (state-tier tests
+continue to catch the functional half of any regression that
+manifests both visually AND functionally).
+
+1. **Planned GUI refactor lands in scope**. Mass before/after
+   coverage of touched GUIs is the canonical reason to invest
+   in visual regression. Trigger fires when a TASK opens that
+   touches `gui/`, `inventory/modules/`, or libVulpes
+   `GuiModular` paths.
+2. **Modpack-side visual regression report**. Player or modpack
+   maintainer files an issue describing a visual-only bug
+   (texture binding, layout shift, HUD overlay misrender,
+   skybox glitch). The new TASK opened in response cites this
+   one as its dependency.
+3. **JEI / GUI rework that breaks the IAdvancedGuiHandler
+   integration**. The `ARPlugin.register` block (lines 101-118)
+   has been silently fragile in modpack contexts before;
+   visual diff would catch the class of "JEI overlay extra
+   areas wrong" regression early.
+4. **Texture-pipeline change in libVulpes or Forge 1.12.2 dep
+   bump**. Texture-binding regressions across a Forge / libVulpes
+   version bump are the worst class of silent break — surface
+   silently, ship without anyone noticing.
+
+If none of these has fired in 6+ months, revisit and consider
+closing as Obsolete during the next SSOT cleanup pass.
 
 ## Context
 
@@ -105,11 +138,9 @@ baseline) or fix the regression.
 
 ## Risk notes
 
-This is the only task in the backlog that introduces a **new
-infrastructure category** (image diffs) and a **new failure mode**
-(false positives from GPU driver drift). Worth doing only if the
-modpack-side reports start surfacing visual regressions, OR if a
-single planned change (e.g. a GUI refactor) would benefit from
-mass before/after coverage. Until then it sits in Backlog with no
-P-tier — it is a "build the thing when we have a reason" task, not
-a "build it preemptively" task.
+This task introduces a **new infrastructure category** (image
+diffs) and a **new failure mode** (false positives from GPU
+driver drift). It is intentionally "watching" not "Backlog" —
+the cost/benefit only works when paired with a specific trigger
+(see Promotion triggers above). Pre-emptive infrastructure that
+nobody is consuming protects nothing and tends to rot.
