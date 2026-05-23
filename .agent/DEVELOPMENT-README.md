@@ -2,11 +2,13 @@
 
 **Project**: Fork of Advanced Rocketry — a Minecraft 1.12.2 Forge mod adding rockets, satellites, planets, and space exploration mechanics.
 **Tech Stack**: Java 8, Minecraft Forge 1.12.2, Kotlin DSL Gradle, FancyGradle, JEI integration, libVulpes
-**Updated**: 2026-05-21
+**Updated**: 2026-05-23
 
 ---
 
-## ⚠️ Required reading before writing or auditing tests
+## ⚠️ Required reading before any non-trivial work
+
+### Before writing or auditing tests
 
 **[SOP: Testing Principles](./sops/development/testing-principles.md)** —
 must be re-read every time you touch the test suite.
@@ -23,6 +25,18 @@ the contract that ____" — if the blank is an impl detail, redesign.
 When auditing test depth, count **contract-coverage**, not pin-count.
 Resist the temptation to "tighten" with magic-number assertions —
 that's the wrong shape of pin.
+
+### Before closing a TASK (status → Completed / Obsolete / Blocked)
+
+**[SOP: Task lifecycle](./sops/development/task-lifecycle.md)** —
+must be followed when changing any task's status.
+
+**TL;DR**: status of a task lives in exactly one place — the
+`TASK-NN-*.md` file header. Everything else (`tasks/README.md`,
+markers, this navigator) is a derived view. The closure checklist
+(steps 1-5, including the mandatory **stale-claim sweep**) prevents
+the drift that caused every prior SSOT incident. Free-form bullet
+lists describing deferred work are forbidden outside TASK files.
 
 ---
 
@@ -103,42 +117,25 @@ that's the wrong shape of pin.
 
 ### Implementation Plans (`tasks/`)
 
-**Active tasks**: see [`tasks/README.md`](./tasks/README.md) for the
-prioritised backlog (TASK-04 through TASK-10) and dependency graph.
+**Single source of truth for task status**:
+[`tasks/README.md`](./tasks/README.md). Do not mirror that list
+here — this navigator only points at it.
 
-**Completed**:
-- TASK-01 — SMART per-scenario depth coverage ✅
-- TASK-02 — Functional coverage expansion ✅
-- TASK-03 — Test depth deepening + harness consolidation ✅
-  (A3 / B3 tail closed via TASK-10 / TASK-10b)
-- TASK-04 — Multiblock machine depth ✅ (12 multiblocks, 55 tests)
-- TASK-07 — Rocket flight cycle beyond launch ✅
-- TASK-08-mixin — ASM coremod → Mixin rewrite ✅
-- TASK-09 — Per-satellite-type behavioural depth ✅
-- TASK-10 — TASK-03 deferred tail (A2 + B3) ✅
-- TASK-10b — testClient e2e player-event coverage ✅ Phases 1-6
-- TASK-05 — Item-behaviour suite ✅ partial (unit-tier surface, 12/21
-  classes). Player-tier remainder moved to TASK-10b Phase 7.
+That file maintains:
+- Done table (all completed + obsolete tasks)
+- Backlog table (with explicit Blocker / trigger column per row)
+- Dependency graph
+- Pyramid + bug-ledger counters at the top
 
-**Obsolete**:
-- TASK-08 — ASM coremod safety net. Premise vanished when TASK-08-mixin
-  removed the legacy `ClassTransformer` + `gloomyfolken/hooklib` repack.
-  A future Mixin-byte-snapshot safety net would be a fresh TASK-08b
-  (not P0 — Mixin is less brittle than ASM).
+**Lifecycle discipline**: see
+[`sops/development/task-lifecycle.md`](./sops/development/task-lifecycle.md)
+for the closure checklist (status transitions, stale-claim sweep,
+commit format). The checklist is mandatory when flipping a task to
+`Completed`, `Obsolete`, or `Blocked`.
 
-**Pending (prioritised)**:
-- TASK-06 follow-ups (P2, ~5-7 h):
-  - Fluid-cargo rocket fixture variant to restore the strong
-    "64000 mB oxygen fill" assertion in gas completion (~1 h)
-  - Multi-boot persistence tests for gas + ore missions (~2-3 h)
-  - Phase 5 infrastructure lifecycle tests (~2-3 h, needs
-    `/artest mission infra-state` verb + fixture infra tile)
-- TASK-10b Phase 7 follow-ups (P2):
-  - SpaceArmor useFluid e2e — needs vacuum-dim fixture +
-    atmosphere-tick driver (~3-4 h)
-  - WeatherController right-click e2e — gated on either production
-    adding NBT pin for `viable_positions` or test framework
-    growing a tick-loop driver
+**Bug ledger**: live tracking is in the test suite (pinned
+assertions). Historical batch lives in
+[`history/known-bugs-ledger.md`](./history/known-bugs-ledger.md).
 
 **Format**: `TASK-XX-feature-slug.md`
 
