@@ -4,8 +4,95 @@
 
 - Source: TASK-02 Phase 9 deferral, promoted into a tracked task on
   2026-05-23 during the SSOT cleanup.
-- Status: **Backlog**.
+- Status: **❌ Obsolete 2026-05-23** — see "Why obsolete" below.
 - Created: 2026-05-23.
+
+## Why obsolete
+
+Reviewed 2026-05-23 same day the task was created. The premise that
+the three integrations have "zero test coverage" turned out to be
+misleading. The actual state:
+
+### File sizes were over-estimated
+
+The original task doc claimed ~800 LoC of "zero coverage". Actual
+file sizes:
+
+| Integration | Doc claim | Actual |
+|---|---|---|
+| `ARPlugin.java` | ~600 | 166 |
+| `GalacticCraftHandler.java` | ~150 | 39 |
+| `MatterOvedriveIntegration.java` | ~50 | 25 |
+
+Plus ~150 LoC of thin JEI category/wrapper classes that are pure
+pass-through to `RecipesMachine` (libVulpes) and JEI API — no
+AR-specific contract to pin.
+
+### All call sites are Loader-gated
+
+Production code is already defensive at every call point:
+
+- `AdvancedRocketry.java:1121` — `GalacticCraftHandler` only
+  instantiated when `Loader.isModLoaded("galacticraftcore")`.
+- `ARConfiguration.java:718` —
+  `MatterOvedriveIntegration.addAndroidsToBypassList` only called
+  when `Loader.isModLoaded("matteroverdrive")`.
+- `AtmosphereNeedsSuit.java:30` —
+  `MatterOvedriveIntegration.isAndroidNeedNoOxygen` only called
+  when `Loader.isModLoaded("matteroverdrive")`.
+- `CompatibilityMgr.java:24` — `ARPlugin.reload()` only called when
+  `Class.forName("mezz.jei.api.BlankModPlugin")` succeeds; the
+  catch block silently swallows `ClassNotFoundException`.
+- `ARPlugin.java:75` — `jeiHelpers.reload()` only called when
+  `jeiHelpers != null` (TASK-12 bug #7 fix).
+
+### Mod-absent paths are implicitly pinned by every existing test
+
+Build state at test time:
+
+- JEI: `implementation` in build script — on runtime classpath, but
+  `@JEIPlugin.registerCategories` is client-only. On testServer
+  (dedicated server harness), `jeiHelpers` stays null → all the
+  null-guarded paths above are exercised by **every** server test
+  that calls `/ar reloadRecipes`. TASK-11's
+  `reloadRecipesEmitsSuccessConfirmationMessage` explicitly pins
+  this contract.
+- GalacticCraft: `compileOnly` only — NOT on runtime classpath.
+  Every testServer/testClient boot hits the
+  `Loader.isModLoaded("galacticraftcore") == false` branch.
+- MatterOverdrive: not in `build.gradle.kts` at all. Every boot
+  hits the absent branch.
+
+Pyramid currently has 441 tests, all of which boot AR with these
+absent paths. If any Loader-guard regressed, the entire pyramid
+would crash on boot. The "explicit pin per integration" Option C
+from the original plan would duplicate this implicit coverage with
+~3 tests of marginal new value.
+
+### Adding present-branch coverage is not blocker-free
+
+The original Option B (shim classes) and Option A (vendor companion
+jars) are the only paths to test the **present** branches of these
+integrations. Both have real cost — Option A blocked on licensing
+for GC 1.12.2; Option B carries shim-drift risk vs the real APIs.
+Neither is justified by current modpack-side signal: no cross-mod
+regression has been reported.
+
+### Decision
+
+Closed as Obsolete because:
+
+1. Mod-absent paths are already pinned (implicitly + explicitly).
+2. Mod-present paths require an infrastructure investment whose
+   value is unclear without a reported regression.
+3. Keeping it in Backlog risks future-me re-litigating the same
+   investigation.
+
+If a cross-mod regression IS reported (e.g. a modpack player files
+an issue about GC + AR interaction), open a fresh task — most
+likely "TASK-NN: GC oxygen-event handler regression pin" with a
+narrow scope tied to the specific regression, NOT a sweep of all
+three integrations.
 
 ## Context
 

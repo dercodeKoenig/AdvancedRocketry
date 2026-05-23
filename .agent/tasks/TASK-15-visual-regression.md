@@ -85,7 +85,11 @@ baseline) or fix the regression.
 - Cross-platform / cross-GPU baseline matrix (start single-platform).
 - Animated state (rocket flight cycle frames) — golden screenshots
   are static states only.
-- Companion-mod GUIs (depends on TASK-14).
+- Companion-mod GUIs — TASK-14 was closed as Obsolete on
+  2026-05-23 (mod-absent paths implicitly pinned, present-branch
+  coverage not justified). Visual regression of companion-mod
+  GUIs would therefore need its own scope decision tied to a
+  specific reported regression, not pre-emptive.
 
 ## Dependencies
 

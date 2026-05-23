@@ -41,12 +41,9 @@ Bug-ledger history lives in
 | [TASK-11](TASK-11-world-command-coverage.md) | `/ar` (WorldCommand) coverage — 23 tests across 4 classes (planet / star / misc / console-sender) | ✅ |
 | [TASK-12](TASK-12-bug-fix-pass.md) | Production bug-fix sweep — 8 ledgered bugs fixed across 4 phases; pins flipped from `_documentsKnownBug` to positive contracts | ✅ |
 | [TASK-13](TASK-13-wireless-transceiver-coverage.md) | Wireless transceiver E2E coverage (pivoted from pipe E2E — upstream deprecated pipes in commit 48610953) — 11 server-tier pins + 4 new probe verbs | ✅ |
+| [TASK-14](TASK-14-companion-mod-integration-coverage.md) | Companion-mod integration coverage (JEI / GC / MO) — closed as Obsolete: mod-absent paths already pinned implicitly by 441 boot-the-server tests + TASK-11's JEI null-guard pin | ❌ Obsolete |
 
 ## Backlog
-
-| ID | Title | Status | Blocker / trigger |
-|---|---|---|---|
-| [TASK-14](TASK-14-companion-mod-integration-coverage.md) | Companion-mod integration coverage (JEI / GalacticCraft / MatterOverdrive) | 🟢 Backlog | Approach choice required at session start (A/B/C — see task file). Recommended starting point: Option C (≈2 h). |
 | [TASK-15](TASK-15-visual-regression.md) | Visual regression infrastructure for Minecraft client | 🟢 Backlog | "Build when there's a reason" — no pre-emptive scope. Worth promoting if a planned GUI refactor lands or modpack reports surface visual regressions. |
 | [TASK-16](TASK-16-test-stability-flake-watch.md) | Test-stability flake watch (`BeaconMultiblockTest` + `MachineRecipeIntegrationTest` parallel-fork contention) | 👁 Watching | Promote when the flake reoccurs within ~5 testServer runs OR a third test joins. Currently 1 of 1 occurrences. |
 
