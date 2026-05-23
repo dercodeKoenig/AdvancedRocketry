@@ -14,9 +14,10 @@ Bug-ledger history lives in
 
 ## Current state
 
-- **Pyramid**: 441 / 0 / 3 (testUnit 162 / testIntegration 80 /
-  testServer 190 / testClient 9). TASK-13 added 11 server-tier
-  pins.
+- **Pyramid**: 677 / 0 / 3 (testUnit 237 / testIntegration 80 /
+  testServer 319 / testClient 41). Counter verified 2026-05-23 via
+  `grep -rc '@Test$' src/test/java/.../{unit,integration,server,client}/`.
+  Earlier README claim of 441 was stale by 236 tests — see TASK-17.
 - **testServer wall time**: 8m 27s (50 % faster than pre-B2).
 - **Bug ledger**: drained (8 of 8 fixed in TASK-12 on 2026-05-23).
   See `.agent/history/known-bugs-ledger.md` for the historical
@@ -44,8 +45,40 @@ Bug-ledger history lives in
 | [TASK-14](TASK-14-companion-mod-integration-coverage.md) | Companion-mod integration coverage (JEI / GC / MO) — closed as Obsolete: mod-absent paths already pinned implicitly by 441 boot-the-server tests + TASK-11's JEI null-guard pin | ❌ Obsolete |
 
 ## Backlog
-| [TASK-15](TASK-15-visual-regression.md) | Visual regression infrastructure for Minecraft client | 👁 Watching | Re-classified 2026-05-23. 4 explicit promotion triggers documented in the task file (GUI refactor / modpack-report / JEI rework / texture-pipeline bump). Revisit + consider Obsolete if no trigger in 6 months. |
+
+Backlog promoted 2026-05-23 from full-repo audit findings. Each
+entry is an actionable TASK with a defined plan + acceptance.
+
+| ID | Title | Status | Blocker / trigger |
+|---|---|---|---|
+| [TASK-15](TASK-15-visual-regression.md) | Visual regression infrastructure for Minecraft client | 👁 Watching | 4 explicit promotion triggers in task file (GUI refactor / modpack-report / JEI rework / texture-pipeline bump). Revisit + consider Obsolete if no trigger in 6 months. |
 | [TASK-16](TASK-16-test-stability-flake-watch.md) | Test-stability flake watch (`BeaconMultiblockTest` + `MachineRecipeIntegrationTest` parallel-fork contention) | 👁 Watching | Promote when the flake reoccurs within ~5 testServer runs OR a third test joins. Currently 1 of 1 occurrences. |
+| [TASK-17](TASK-17-ssot-integrity-followups.md) | SSOT integrity follow-ups (SOP counter-regen step + 2 satellite impl-pin loosens) | 🟢 Backlog | Small batched task (~1 h). Direct follow-up of the 2026-05-23 audit. Highest confidence + lowest cost in the backlog. |
+| [TASK-18](TASK-18-industrial-machine-powered-cycle.md) | Industrial machine powered-cycle depth (×10 machines) | 🟢 Backlog | Highest player-impact gap (#1). Pattern source: `MachineRecipeIntegrationTest`. ~6 h. |
+| [TASK-19](TASK-19-multiblock-powered-cycle-trio.md) | Multiblock powered-cycle (Terraformer / BHG / Beacon enable) | 🟢 Backlog | Three independent multiblocks, shared shape. ~9-10 h. |
+| [TASK-20](TASK-20-hovercraft-ride-coverage.md) | Hovercraft ride / throttle / fuel-drain coverage (testClient) | 🟢 Backlog | testClient territory; player-input simulation. ~9 h. Largest single testClient task in backlog. |
+| [TASK-21](TASK-21-ar-player-equipped-positives.md) | `/ar` player-equipped subcommand positive paths (testClient) | 🟢 Backlog | Completes `/ar` surface that TASK-11 started — guard side already deep, this is the positive side. ~6 h. |
+| [TASK-22](TASK-22-uv-assembler-full-delta.md) | UV-assembler full behavioural delta from rocket assembler | 🟢 Backlog | Bounds / output entity class / mount eligibility. Class-identity pin replaced by real contracts. ~4 h. |
+| [TASK-23](TASK-23-sealdetector-remaining-branches.md) | SealDetector remaining branches (`notsealblock` / `notfullblock` / `fluid`) | 🟢 Backlog | Three branches deferred from `SealDetectorDispatchTest`. ~4 h. |
+| [TASK-24](TASK-24-spacearmor-chest-route.md) | SpaceArmor CHEST sub-inventory drain route | 🟢 Backlog | Phase 7 (TASK-10b) closed the cheaper enchanted-armor route; this finishes the suit-family chest route. ~2.5 h. |
+
+## Conscious non-goals
+
+Two audit findings are explicit **non-goals**, not gaps. They do
+NOT get TASK files because they're deliberate decisions, not
+deferred work:
+
+- **Cross-session worldgen determinism** — same-seed-across-reboot
+  histogram pins. Within-session determinism is covered by
+  `WorldgenDeterminismAndSamplingTest`; cross-session adds
+  significant fixture cost for a contract that's already
+  implicitly preserved by Forge's chunk cache. Reopen only if a
+  chunkgen change introduces a real cross-session divergence.
+- **Rocket out-of-fuel mid-flight auto-explosion** —
+  `RocketFlightFailureModesTest` deliberately pins the **current
+  contract** ("no auto-explosion"). If production adds an
+  explosion branch, the test flips polarity — no new task needed
+  until then.
 
 No other open work. Future deferrals must land here as TASK files —
 free-form bullet lists in this README are forbidden (see
@@ -62,10 +95,20 @@ TASK-03 ──┬─► TASK-04  (multiblock)
           ├─► TASK-09  (satellite types)
           └─► TASK-10  (A2 tail + B3 grouping)
 
-TASK-13 — independent of all current work (closed 2026-05-23)
-TASK-14 — independent of all current work
-TASK-15 — independent of all current work
-TASK-16 — independent (watches a flake pattern from TASK-12 close-out)
+TASK-13 ✅ — independent (closed 2026-05-23)
+TASK-14 ❌ — independent (closed Obsolete 2026-05-23)
+TASK-15 👁 — independent, watching for 4 triggers
+TASK-16 👁 — independent, watches flake pattern from TASK-12 close-out
+
+Audit-2026-05-23 backlog (all independent of each other):
+TASK-17 — SSOT integrity (touches TASK-09 satellite tests)
+TASK-18 — industrial machine powered-cycle (touches TASK-04 multiblocks)
+TASK-19 — multiblock trio (touches TASK-04 + TASK-06 surfaces)
+TASK-20 — hovercraft testClient (touches TASK-10b layer)
+TASK-21 — /ar positives (extends TASK-11)
+TASK-22 — UV-assembler depth (extends TASK-07 / TASK-06)
+TASK-23 — sealdetector branches (extends TASK-10b Phase 7)
+TASK-24 — SpaceArmor chest route (extends TASK-10b Phase 7)
 ```
 
 ## Conventions
