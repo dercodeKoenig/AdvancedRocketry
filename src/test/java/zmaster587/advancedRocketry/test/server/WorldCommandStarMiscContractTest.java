@@ -99,4 +99,50 @@ public class WorldCommandStarMiscContractTest extends AbstractSharedServerTest {
         assertTrue("must NOT emit the catch-branch error envelope — got: " + resp,
                 !resp.contains("Serious error has occurred"));
     }
+
+    private static final Pattern CUTTING_COUNT =
+            Pattern.compile("\"TileCuttingMachine\":(\\d+)");
+
+    private int cuttingMachineRecipeCount() throws Exception {
+        String summary = exec("artest machine recipes-summary");
+        Matcher m = CUTTING_COUNT.matcher(summary);
+        assertTrue("recipes-summary must include TileCuttingMachine count: "
+                + summary, m.find());
+        return Integer.parseInt(m.group(1));
+    }
+
+    /** Stronger pin for bug #7: not just "chat envelope says success" but
+     *  "the recipe registry actually has recipes afterwards". The reload
+     *  pipeline is {@code clearAllMachineRecipes} →
+     *  {@code registerAllMachineRecipes} (re-adds programmatic recipes)
+     *  → {@code registerXMLRecipes} (re-loads XML from
+     *  {@code config/<machine>.xml}). The {@code TileCuttingMachine} has
+     *  several recipes registered at init via both paths; if reload
+     *  silently drops them (e.g. clear without successful re-register),
+     *  this assertion fires.
+     *
+     *  <p>Pin shape: post-reload count must be {@code >= pre-reload count}
+     *  AND {@code > 0}. The "==" form would be stricter but is fragile
+     *  against future additions that register recipes lazily before the
+     *  reload but not after — the "no recipes lost" semantic is the
+     *  actual contract.</p> */
+    @Test
+    public void reloadRecipesPreservesProgrammaticAndXmlRecipesForCuttingMachine()
+            throws Exception {
+        int before = cuttingMachineRecipeCount();
+        assertTrue("pre-condition: TileCuttingMachine must have recipes "
+                + "registered at init (got " + before + ")", before > 0);
+
+        String resp = exec("ar reloadRecipes");
+        assertTrue("reload must succeed: " + resp,
+                resp.contains("Recipes reloaded"));
+
+        int after = cuttingMachineRecipeCount();
+        assertTrue("post-reload count " + after + " must be >= pre-reload "
+                        + "count " + before + " — no recipes silently dropped",
+                after >= before);
+        assertTrue("post-reload count must remain > 0 (reload must actually "
+                        + "re-register, not just clear)",
+                after > 0);
+    }
 }
