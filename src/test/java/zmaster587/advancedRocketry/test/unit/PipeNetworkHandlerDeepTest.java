@@ -26,20 +26,27 @@ import static org.junit.Assert.assertTrue;
  * SMART §7 — TASK-02 Phase 7 deep — handler-level merge / consolidate
  * semantics for the cable network family.
  *
- * Why unit-tier and not server-tier: the only three pipe blocks AR ships
+ * Why unit-tier and not server-tier: the three pipe blocks
  * ({@code blockEnergyPipe}, {@code blockFluidPipe}, {@code blockDataPipe})
- * are currently <strong>commented out</strong> at
- * {@code AdvancedRocketry.java:782-787}, so no scenario can place a real
- * pipe and exercise placement + merge / split via the world. The
- * <em>handler-level</em> contract that those pipes route through —
+ * were deprecated upstream (commit {@code 48610953} — "deprecating pipes,
+ * added wireless transciever") and the block registrations at
+ * {@code AdvancedRocketry.java:782-787} stay commented out by design. No
+ * scenario can place a fresh pipe and exercise placement + merge / split
+ * via the world. The tile-entities ({@code TileLiquidPipe},
+ * {@code TileDataPipe}, {@code TileEnergyPipe} at
+ * {@code AdvancedRocketry.java:401-403}) remain registered for
+ * save-compatibility — already-placed pipe networks in legacy worlds
+ * still tick. The handler-level contract those legacy networks (and the
+ * live {@code TileWirelessTransciever}) route through —
  * {@link HandlerCableNetwork#mergeNetworks}, {@link CableNetwork#merge},
- * the per-network battery / fluid bookkeeping — IS exercisable without a
+ * per-network battery / fluid bookkeeping — IS exercisable without a
  * world; it's pure Java on plain Hashtables / sets.
  *
- * This file pins the invariants that future end-to-end pipe tests will
- * depend on, so when someone reinstates the pipe blocks they get
- * regression-net coverage of the handler the moment the registry call
- * comes back.
+ * This file pins the save-compat invariants the already-placed pipe
+ * networks depend on, plus the merge contracts the wireless transceiver
+ * exercises via {@link zmaster587.advancedRocketry.cable.NetworkRegistry#dataNetwork}.
+ * Player-visible transceiver behaviour is pinned end-to-end in
+ * {@code WirelessTransceiverContractTest}.
  *
  * Specifically covered:
  * <ul>
@@ -230,18 +237,12 @@ public class PipeNetworkHandlerDeepTest {
     }
 
     /**
-     * <em>DOCUMENTS KNOWN PRODUCTION BUG</em> — the bug above propagates
-     * into {@link EnergyNetwork#merge}, which checks
-     * {@code super.merge(...)} and conditionally migrates the battery. So
-     * the battery NEVER migrates today, even for valid merges. A future
-     * fix to the parent {@code CableNetwork.merge} body would re-enable
-     * the battery migration, at which point this test flips to assert
-     * "battery DID migrate".
+     * {@link EnergyNetwork#merge} cascades through {@code super.merge(...)}
+     * — bug #3 from TASK-12 (battery never migrated on merge) cascaded
+     * from bug #2 in the parent {@code CableNetwork.merge}. Both fixed in
+     * TASK-12; this test pins that valid merges now perform the battery
+     * migration as intended.
      */
-    /** Fixed in TASK-12 (bug #3, cascaded from #2). With the parent
-     *  {@code CableNetwork.merge} body now correctly returning true
-     *  for valid merges, {@code EnergyNetwork.merge} performs the
-     *  battery migration as intended. */
     @Test
     public void energyNetworkMergeMigratesBatteryFromMergedSource() {
         HandlerEnergyNetwork handler = new HandlerEnergyNetwork();

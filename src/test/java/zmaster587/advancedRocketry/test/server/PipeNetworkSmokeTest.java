@@ -175,19 +175,21 @@ public class PipeNetworkSmokeTest extends AbstractSharedServerTest {
 
     /**
      * §7.17 SMART placeholder — data pipe routing. The
-     * {@code advancedrocketry:dataPipe} block is currently NOT registered
-     * (see AdvancedRocketry.java:783 — TODO "add back after fixing the
-     * cable network"). Without the block, no headless test can exercise
-     * the routing logic. Marker stays here so the SMART §16 report
-     * reflects an honest "intentionally pending" rather than missing
-     * coverage.
+     * {@code advancedrocketry:dataPipe} block is deprecated upstream
+     * (commit {@code 48610953} — "deprecating pipes, added wireless
+     * transciever, closes #1075 #1034 #771 #757") and intentionally NOT
+     * re-registered. Player-facing data networks are pinned by
+     * {@link WirelessTransceiverContractTest} via the
+     * {@code TileWirelessTransciever} replacement. Marker stays here so
+     * the SMART §16 report reflects an honest "intentionally retired"
+     * rather than missing coverage.
      */
-    @org.junit.Ignore("blockDataPipe registration disabled in AR — see AdvancedRocketry.java:783")
+    @org.junit.Ignore("blockDataPipe deprecated upstream (48610953) — replaced by wireless transceiver; see WirelessTransceiverContractTest")
     @Test
     public void dataPipeRoutesPacketsBetweenEndpoints() {}
 
     /** §7.17 — see {@link #dataPipeRoutesPacketsBetweenEndpoints}. */
-    @org.junit.Ignore("blockFluidPipe registration disabled in AR — see AdvancedRocketry.java:782")
+    @org.junit.Ignore("blockFluidPipe deprecated upstream (48610953) — replaced by wireless transceiver; see WirelessTransceiverContractTest")
     @Test
     public void liquidPipeTransfersFluidAcrossChunkBoundary() {}
 

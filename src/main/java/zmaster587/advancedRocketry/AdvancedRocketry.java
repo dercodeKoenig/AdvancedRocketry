@@ -777,8 +777,13 @@ public class AdvancedRocketry {
         FluidRegistry.addBucketForFluid(AdvancedRocketryFluids.fluidRocketFuel);
         FluidRegistry.addBucketForFluid(AdvancedRocketryFluids.fluidEnrichedLava);
 
-        //Cables
-        //TODO: add back after fixing the cable network
+        // Pipe blocks deprecated upstream in commit 48610953 (closes
+        // #1075 #1034 #771 #757) — replaced by the wireless transceiver
+        // (blockTransciever, registered above). The tile entities for
+        // the legacy pipes (TileLiquidPipe / TileDataPipe / TileEnergyPipe,
+        // registered ~lines 401-403) remain so already-placed networks in
+        // legacy worlds still load. Do NOT uncomment without an explicit
+        // product decision to revert the deprecation.
         //AdvancedRocketryBlocks.blockFluidPipe = new BlockLiquidPipe(Material.IRON).setUnlocalizedName("liquidPipe").setCreativeTab(tabAdvRocketry).setHardness(1f);
         //AdvancedRocketryBlocks.blockDataPipe = new BlockDataCable(Material.IRON).setUnlocalizedName("dataPipe").setCreativeTab(tabAdvRocketry).setHardness(1f);
         //AdvancedRocketryBlocks.blockEnergyPipe = new BlockEnergyCable(Material.IRON).setUnlocalizedName("energyPipe").setCreativeTab(tabAdvRocketry).setHardness(1f);

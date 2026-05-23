@@ -2453,7 +2453,7 @@ public class TestProbeCommand extends CommandBase {
     }
 
     /**
-     * §7.17 — wireless transceiver pairing.
+     * §7.17 — wireless transceiver probes.
      *
      * <p>{@code /artest pipe wireless-pair <dim> <x1> <y1> <z1> <x2> <y2> <z2>}
      * — drives the same network-merge logic
@@ -2464,7 +2464,22 @@ public class TestProbeCommand extends CommandBase {
      * tiles end up on the same dataNetwork.</p>
      *
      * <p>{@code /artest pipe wireless-info <dim> <x> <y> <z>} — reads the
-     * tile's current {@code networkID} (read-only).</p>
+     * tile's current {@code networkID}, {@code mode}
+     * (extract/inject), {@code enabled}.</p>
+     *
+     * <p>{@code /artest pipe wireless-set-mode <dim> <x> <y> <z> <extract|inject>}
+     * — mirrors the GUI toggle: writes {@code extractMode}, calls
+     * {@code removeFromAll} on the network, re-registers as source or
+     * sink.</p>
+     *
+     * <p>{@code /artest pipe wireless-set-enabled <dim> <x> <y> <z> <true|false>}
+     * — writes the {@code enabled} field + {@code markDirty}.</p>
+     *
+     * <p>{@code /artest pipe wireless-role-on-network <dim> <x> <y> <z>}
+     * — reads back the observed role of this tile in its
+     * {@code dataNetwork}: {@code "isSource"} / {@code "isSink"}. The
+     * tile's {@code extractMode} field is one thing; its actual
+     * registration is the contract.</p>
      */
     private void handlePipe(MinecraftServer server, ICommandSender sender, String[] args) {
         if (args.length >= 8 && "wireless-pair".equalsIgnoreCase(args[0])) {
@@ -2559,18 +2574,165 @@ public class TestProbeCommand extends CommandBase {
                 return;
             }
             try {
-                java.lang.reflect.Field f = zmaster587.advancedRocketry.tile.cables
-                        .TileWirelessTransciever.class.getDeclaredField("networkID");
-                f.setAccessible(true);
-                int id = f.getInt(tile);
-                send(sender, "{\"ok\":true,\"networkID\":" + id + "}");
+                Class<?> cls = zmaster587.advancedRocketry.tile.cables.TileWirelessTransciever.class;
+                java.lang.reflect.Field fId = cls.getDeclaredField("networkID");
+                java.lang.reflect.Field fMode = cls.getDeclaredField("extractMode");
+                java.lang.reflect.Field fEnabled = cls.getDeclaredField("enabled");
+                fId.setAccessible(true);
+                fMode.setAccessible(true);
+                fEnabled.setAccessible(true);
+                int id = fId.getInt(tile);
+                boolean extractMode = fMode.getBoolean(tile);
+                boolean enabled = fEnabled.getBoolean(tile);
+                send(sender, "{\"ok\":true,\"networkID\":" + id
+                        + ",\"mode\":\"" + (extractMode ? "extract" : "inject") + "\""
+                        + ",\"enabled\":" + enabled + "}");
             } catch (ReflectiveOperationException e) {
                 send(sender, "{\"error\":\"reflection failed\",\"msg\":\""
                         + escapeJson(e.getMessage()) + "\"}");
             }
             return;
         }
-        send(sender, "{\"error\":\"unknown pipe subcommand — try wireless-pair <dim> <x1> <y1> <z1> <x2> <y2> <z2> | wireless-info <dim> <x> <y> <z>\"}");
+        if (args.length >= 6 && "wireless-set-mode".equalsIgnoreCase(args[0])) {
+            int dim = parseIntOr(args[1], Integer.MIN_VALUE);
+            int x = parseIntOr(args[2], 0);
+            int y = parseIntOr(args[3], 0);
+            int z = parseIntOr(args[4], 0);
+            String modeArg = args[5];
+            boolean extract;
+            if ("extract".equalsIgnoreCase(modeArg)) {
+                extract = true;
+            } else if ("inject".equalsIgnoreCase(modeArg)) {
+                extract = false;
+            } else {
+                send(sender, "{\"error\":\"mode must be extract|inject\",\"got\":\""
+                        + escapeJson(modeArg) + "\"}");
+                return;
+            }
+            net.minecraft.world.WorldServer world = server.getWorld(dim);
+            if (world == null) {
+                send(sender, "{\"error\":\"world not loaded\",\"dim\":" + dim + "}");
+                return;
+            }
+            TileEntity tile = world.getTileEntity(new BlockPos(x, y, z));
+            if (!(tile instanceof zmaster587.advancedRocketry.tile.cables.TileWirelessTransciever)) {
+                send(sender, "{\"error\":\"tile not TileWirelessTransciever\",\"tile\":\""
+                        + (tile == null ? "null" : tile.getClass().getName()) + "\"}");
+                return;
+            }
+            try {
+                Class<?> cls = zmaster587.advancedRocketry.tile.cables.TileWirelessTransciever.class;
+                java.lang.reflect.Field fMode = cls.getDeclaredField("extractMode");
+                java.lang.reflect.Field fId = cls.getDeclaredField("networkID");
+                fMode.setAccessible(true);
+                fId.setAccessible(true);
+                fMode.setBoolean(tile, extract);
+                int netId = fId.getInt(tile);
+                // Mirror useNetworkData's role-update side: remove + re-add
+                // under the new mode, only if the network actually exists.
+                zmaster587.advancedRocketry.cable.HandlerDataNetwork handler =
+                        zmaster587.advancedRocketry.cable.NetworkRegistry.dataNetwork;
+                if (handler.doesNetworkExist(netId)) {
+                    zmaster587.advancedRocketry.cable.CableNetwork cableNet = handler.getNetwork(netId);
+                    cableNet.removeFromAll(tile);
+                    if (extract) {
+                        cableNet.addSource(tile, net.minecraft.util.EnumFacing.UP);
+                    } else {
+                        cableNet.addSink(tile, net.minecraft.util.EnumFacing.UP);
+                    }
+                }
+                tile.markDirty();
+                send(sender, "{\"ok\":true,\"mode\":\""
+                        + (extract ? "extract" : "inject") + "\"}");
+            } catch (ReflectiveOperationException e) {
+                send(sender, "{\"error\":\"reflection failed\",\"msg\":\""
+                        + escapeJson(e.getMessage()) + "\"}");
+            }
+            return;
+        }
+        if (args.length >= 6 && "wireless-set-enabled".equalsIgnoreCase(args[0])) {
+            int dim = parseIntOr(args[1], Integer.MIN_VALUE);
+            int x = parseIntOr(args[2], 0);
+            int y = parseIntOr(args[3], 0);
+            int z = parseIntOr(args[4], 0);
+            boolean enabled = Boolean.parseBoolean(args[5]);
+            net.minecraft.world.WorldServer world = server.getWorld(dim);
+            if (world == null) {
+                send(sender, "{\"error\":\"world not loaded\",\"dim\":" + dim + "}");
+                return;
+            }
+            TileEntity tile = world.getTileEntity(new BlockPos(x, y, z));
+            if (!(tile instanceof zmaster587.advancedRocketry.tile.cables.TileWirelessTransciever)) {
+                send(sender, "{\"error\":\"tile not TileWirelessTransciever\",\"tile\":\""
+                        + (tile == null ? "null" : tile.getClass().getName()) + "\"}");
+                return;
+            }
+            try {
+                java.lang.reflect.Field fEnabled = zmaster587.advancedRocketry.tile.cables
+                        .TileWirelessTransciever.class.getDeclaredField("enabled");
+                fEnabled.setAccessible(true);
+                fEnabled.setBoolean(tile, enabled);
+                tile.markDirty();
+                send(sender, "{\"ok\":true,\"enabled\":" + enabled + "}");
+            } catch (ReflectiveOperationException e) {
+                send(sender, "{\"error\":\"reflection failed\",\"msg\":\""
+                        + escapeJson(e.getMessage()) + "\"}");
+            }
+            return;
+        }
+        if (args.length >= 5 && "wireless-role-on-network".equalsIgnoreCase(args[0])) {
+            int dim = parseIntOr(args[1], Integer.MIN_VALUE);
+            int x = parseIntOr(args[2], 0);
+            int y = parseIntOr(args[3], 0);
+            int z = parseIntOr(args[4], 0);
+            net.minecraft.world.WorldServer world = server.getWorld(dim);
+            if (world == null) {
+                send(sender, "{\"error\":\"world not loaded\",\"dim\":" + dim + "}");
+                return;
+            }
+            TileEntity tile = world.getTileEntity(new BlockPos(x, y, z));
+            if (!(tile instanceof zmaster587.advancedRocketry.tile.cables.TileWirelessTransciever)) {
+                send(sender, "{\"error\":\"tile not TileWirelessTransciever\",\"tile\":\""
+                        + (tile == null ? "null" : tile.getClass().getName()) + "\"}");
+                return;
+            }
+            try {
+                java.lang.reflect.Field fId = zmaster587.advancedRocketry.tile.cables
+                        .TileWirelessTransciever.class.getDeclaredField("networkID");
+                fId.setAccessible(true);
+                int netId = fId.getInt(tile);
+                zmaster587.advancedRocketry.cable.HandlerDataNetwork handler =
+                        zmaster587.advancedRocketry.cable.NetworkRegistry.dataNetwork;
+                boolean isSource = false;
+                boolean isSink = false;
+                boolean networkExists = handler.doesNetworkExist(netId);
+                if (networkExists) {
+                    zmaster587.advancedRocketry.cable.CableNetwork cableNet = handler.getNetwork(netId);
+                    BlockPos selfPos = tile.getPos();
+                    for (java.util.Map.Entry<TileEntity, net.minecraft.util.EnumFacing> e : cableNet.getSources()) {
+                        if (e.getKey() != null && selfPos.equals(e.getKey().getPos())) {
+                            isSource = true;
+                            break;
+                        }
+                    }
+                    for (java.util.Map.Entry<TileEntity, net.minecraft.util.EnumFacing> e : cableNet.getSinks()) {
+                        if (e.getKey() != null && selfPos.equals(e.getKey().getPos())) {
+                            isSink = true;
+                            break;
+                        }
+                    }
+                }
+                send(sender, "{\"ok\":true,\"networkID\":" + netId
+                        + ",\"networkExists\":" + networkExists
+                        + ",\"isSource\":" + isSource
+                        + ",\"isSink\":" + isSink + "}");
+            } catch (ReflectiveOperationException e) {
+                send(sender, "{\"error\":\"reflection failed\",\"msg\":\""
+                        + escapeJson(e.getMessage()) + "\"}");
+            }
+            return;
+        }
+        send(sender, "{\"error\":\"unknown pipe subcommand — try wireless-pair <dim> <x1> <y1> <z1> <x2> <y2> <z2> | wireless-info <dim> <x> <y> <z> | wireless-set-mode <dim> <x> <y> <z> <extract|inject> | wireless-set-enabled <dim> <x> <y> <z> <true|false> | wireless-role-on-network <dim> <x> <y> <z>\"}");
     }
 
     // §5.7 Atmosphere probe ---------------------------------------------------

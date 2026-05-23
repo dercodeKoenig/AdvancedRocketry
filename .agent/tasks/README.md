@@ -14,8 +14,9 @@ Bug-ledger history lives in
 
 ## Current state
 
-- **Pyramid**: 430 / 0 / 3 (testUnit 162 / testIntegration 80 /
-  testServer 179 / testClient 9).
+- **Pyramid**: 441 / 0 / 3 (testUnit 162 / testIntegration 80 /
+  testServer 190 / testClient 9). TASK-13 added 11 server-tier
+  pins.
 - **testServer wall time**: 8m 27s (50 % faster than pre-B2).
 - **Bug ledger**: drained (8 of 8 fixed in TASK-12 on 2026-05-23).
   See `.agent/history/known-bugs-ledger.md` for the historical
@@ -39,12 +40,12 @@ Bug-ledger history lives in
 | [TASK-10b](TASK-10b-testclient-player-events.md) | testClient e2e player-event coverage — Phases 1-7 (5 suites + 15 pins + 9 probe verbs + Phase 7 player-tier item closures) | ✅ |
 | [TASK-11](TASK-11-world-command-coverage.md) | `/ar` (WorldCommand) coverage — 23 tests across 4 classes (planet / star / misc / console-sender) | ✅ |
 | [TASK-12](TASK-12-bug-fix-pass.md) | Production bug-fix sweep — 8 ledgered bugs fixed across 4 phases; pins flipped from `_documentsKnownBug` to positive contracts | ✅ |
+| [TASK-13](TASK-13-wireless-transceiver-coverage.md) | Wireless transceiver E2E coverage (pivoted from pipe E2E — upstream deprecated pipes in commit 48610953) — 11 server-tier pins + 4 new probe verbs | ✅ |
 
 ## Backlog
 
 | ID | Title | Status | Blocker / trigger |
 |---|---|---|---|
-| [TASK-13](TASK-13-pipe-end-to-end-coverage.md) | Pipe end-to-end coverage (placed-block pipes) | 🔒 Blocked | `AdvancedRocketry.java:782-787` pipe-block registrations are commented out (`//TODO: add back after fixing the cable network`). Production-side reinstatement required. |
 | [TASK-14](TASK-14-companion-mod-integration-coverage.md) | Companion-mod integration coverage (JEI / GalacticCraft / MatterOverdrive) | 🟢 Backlog | Approach choice required at session start (A/B/C — see task file). Recommended starting point: Option C (≈2 h). |
 | [TASK-15](TASK-15-visual-regression.md) | Visual regression infrastructure for Minecraft client | 🟢 Backlog | "Build when there's a reason" — no pre-emptive scope. Worth promoting if a planned GUI refactor lands or modpack reports surface visual regressions. |
 | [TASK-16](TASK-16-test-stability-flake-watch.md) | Test-stability flake watch (`BeaconMultiblockTest` + `MachineRecipeIntegrationTest` parallel-fork contention) | 👁 Watching | Promote when the flake reoccurs within ~5 testServer runs OR a third test joins. Currently 1 of 1 occurrences. |
@@ -64,7 +65,7 @@ TASK-03 ──┬─► TASK-04  (multiblock)
           ├─► TASK-09  (satellite types)
           └─► TASK-10  (A2 tail + B3 grouping)
 
-TASK-13 (Blocked) — independent, awaits production-side unblock
+TASK-13 — independent of all current work (closed 2026-05-23)
 TASK-14 — independent of all current work
 TASK-15 — independent of all current work
 TASK-16 — independent (watches a flake pattern from TASK-12 close-out)
