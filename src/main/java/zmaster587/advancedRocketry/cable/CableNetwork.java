@@ -152,34 +152,34 @@ public class CableNetwork {
      * @param cableNetwork
      */
     public boolean merge(CableNetwork cableNetwork) {
-        sinks.addAll(cableNetwork.getSinks());
-
+        // Fixed in TASK-12 (bug #2, cascading into bug #3). Previously
+        // this body did `sinks.addAll(cableNetwork.getSinks())` BEFORE
+        // the de-dupe loop, then iterated b's sinks against a.sinks
+        // (which now contained those same b entries) and returned false
+        // on the self-collision — making the merge a guaranteed no-op
+        // for any non-empty b. Restored to the per-entry dedupe shape
+        // the commented-out `canMerge` blocks suggested was intended.
         for (Entry<TileEntity, EnumFacing> obj : cableNetwork.getSinks()) {
-            //boolean canMerge = true;
+            boolean canMerge = true;
             for (Entry<TileEntity, EnumFacing> obj2 : sinks) {
-                if (obj.getKey().getPos().compareTo(obj2.getKey().getPos()) == 0 && obj.getValue() == obj2.getValue()) {
-                    //canMerge = false;
-                    return false;
+                if (obj.getKey().getPos().compareTo(obj2.getKey().getPos()) == 0
+                        && obj.getValue() == obj2.getValue()) {
+                    canMerge = false;
+                    break;
                 }
             }
-
-            //if(canMerge) {
-            sinks.add(obj);
-            //}
+            if (canMerge) sinks.add(obj);
         }
-
         for (Entry<TileEntity, EnumFacing> obj : cableNetwork.getSources()) {
-            //boolean canMerge = true;
+            boolean canMerge = true;
             for (Entry<TileEntity, EnumFacing> obj2 : sources) {
-                if (obj.getKey().getPos().compareTo(obj2.getKey().getPos()) == 0 && obj.getValue() == obj2.getValue()) {
-                    //canMerge = false;
-                    return false;
+                if (obj.getKey().getPos().compareTo(obj2.getKey().getPos()) == 0
+                        && obj.getValue() == obj2.getValue()) {
+                    canMerge = false;
+                    break;
                 }
             }
-
-            //if(canMerge) {
-            sources.add(obj);
-            //}
+            if (canMerge) sources.add(obj);
         }
         return true;
     }

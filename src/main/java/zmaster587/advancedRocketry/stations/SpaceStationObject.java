@@ -798,7 +798,13 @@ public class SpaceStationObject implements ISpaceObject, IPlanetDefiner {
             StationLandingLocation loc = new StationLandingLocation(pos, tag.getString("name"));
             spawnLocations.add(loc);
             loc.setOccupied(tag.getBoolean("occupied"));
-            loc.setAllowedForAutoLand(!tag.hasKey("occupied") || tag.getBoolean("occupied"));
+            // Fixed in TASK-12 (bug #4). Previously this read from "occupied",
+            // collapsing allowAutoLand into the docked-state flag and losing
+            // any pad that was opted-in to auto-land without being docked
+            // across server restart. Default-true preserves prior semantics
+            // for legacy saves whose pads pre-date the "autoLand" key —
+            // those silently get auto-land enabled on first load.
+            loc.setAllowedForAutoLand(!tag.hasKey("autoLand") || tag.getBoolean("autoLand"));
         }
 
         list = nbt.getTagList("warpCorePositions", NBT.TAG_COMPOUND);

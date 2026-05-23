@@ -61,6 +61,7 @@ public class ItemSatelliteIdentificationChip extends Item implements ISatelliteI
         nbt.setString("satelliteName", satellite.getName());
         nbt.setInteger("dimId", satellite.getDimensionId());
         nbt.setLong("satelliteId", satellite.getId());
+        stack.setTagCompound(nbt);
     }
 
     /**

@@ -255,7 +255,17 @@ public class WorldCommand implements ICommand {
         try {
             AdvancedRocketry.machineRecipes.clearAllMachineRecipes();
             AdvancedRocketry.machineRecipes.registerAllMachineRecipes();
-            AdvancedRocketry.machineRecipes.createAutoGennedRecipes(AdvancedRocketry.modProducts);
+            // Fixed in TASK-12 (bug #7). The createAutoGennedRecipes call
+            // used to live here; it calls GameData.register_impl on
+            // Forge's recipe registry, which is frozen post-init —
+            // re-running at runtime threw IllegalStateException("is being
+            // added too late") and crashed the whole command. The
+            // auto-genned recipes are static (driven by modProducts, set
+            // at init) so the init-time call at AdvancedRocketry.java:1044
+            // is sufficient — they don't need re-registration on XML
+            // hot-reload. clearAllMachineRecipes + registerAllMachineRecipes
+            // + registerXMLRecipes touch only AR's internal recipe maps
+            // and remain safe at runtime.
             AdvancedRocketry.machineRecipes.registerXMLRecipes();
 
             sender.sendMessage(new TextComponentString("Recipes reloaded"));

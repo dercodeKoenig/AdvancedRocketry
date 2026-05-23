@@ -199,17 +199,12 @@ public class SpaceStationPadPersistenceTest {
      *     !tag.hasKey("occupied") || tag.getBoolean("occupied"));  // read
      * </pre>
      *
-     * Write writes to {@code "autoLand"}; read reads from {@code "occupied"}.
-     * The read collapses allowAutoLand to "is the pad occupied?" — meaning
-     * any pad that was opted-in to auto-land BUT not currently docked
-     * silently loses its auto-land flag across server restart.
-     *
-     * <p>This test isolates the bug: pre-restart, set padA auto-land=true
-     * WITHOUT docking. Post-restart, padA's allowAutoLand reads as false.
-     * </p>
+     * Fixed in TASK-12 (bug #4): the read now uses the "autoLand" key
+     * that the write side writes. allowAutoLand survives restart even
+     * for pads that weren't docked at save time.
      */
     @Test
-    public void autoLandFlagWithoutDockDoesNotSurviveRestart_documentsKnownBug() throws Exception {
+    public void autoLandFlagWithoutDockSurvivesRestart() throws Exception {
         firstBoot = RealDedicatedServerHarness.startWith(workDir, /*cleanupOnClose=*/false);
         String createStation = String.join("\n",
                 firstBoot.client().execute("artest station create 0"));
@@ -237,16 +232,11 @@ public class SpaceStationPadPersistenceTest {
         secondBoot = RealDedicatedServerHarness.startWith(workDir, /*cleanupOnClose=*/true);
         String padsAfter = String.join("\n",
                 secondBoot.client().execute("artest station pads " + stationId));
-        // The bug: allowAutoLand reads as false after restart even though
-        // we set it to true. This assertion documents the current behaviour;
-        // a future fix to SpaceStationObject:801 must flip this to true
-        // and re-author this test as the happy-path assertion.
-        assertTrue("padA allowAutoLand should be true after restart but the "
-                        + "SpaceStationObject:801 wrong-key bug forces it to "
-                        + "false. If THIS assertion ever fails, the prod bug "
-                        + "was fixed — invert the assertion. pads dump: "
+        assertTrue("padA allowAutoLand must be true after restart — "
+                        + "SpaceStationObject:801 now reads from the same "
+                        + "\"autoLand\" key the write side writes. pads dump: "
                         + padsAfter,
-                padsAfter.contains("\"allowAutoLand\":false"));
+                padsAfter.contains("\"allowAutoLand\":true"));
     }
 
     /**

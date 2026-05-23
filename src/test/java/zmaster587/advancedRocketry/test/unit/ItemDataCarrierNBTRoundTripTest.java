@@ -115,15 +115,13 @@ public class ItemDataCarrierNBTRoundTripTest {
                 out.get(0));
     }
 
+    /** Fixed in TASK-12 (bug #5). The empty-input clear branch
+     *  previously called {@code removeTag("positions")} but the data
+     *  lived under {@code "list"} per
+     *  {@code NBTStorableListList.writeToNBT}, so the clear was a no-op.
+     *  Now the key matches and the list is actually cleared. */
     @Test
-    public void elevatorChipSetEmptyAfterNonEmptyDoesNotClearList_documentsKnownBug() {
-        // Production bug: setBlockPositions writes via NBTStorableListList
-        // which stores entries under the NBT key "list" (see
-        // NBTStorableListList.writeToNBT/readFromNBT). But the empty-input
-        // branch at ItemSpaceElevatorChip.java:42 removes the tag "positions"
-        // — wrong key. So calling setBlockPositions(stack, []) on a stack
-        // that already has positions does NOT actually clear them: the next
-        // getBlockPositions still returns the old data.
+    public void elevatorChipSetEmptyAfterNonEmptyClearsList() {
         ItemSpaceElevatorChip chip = new ItemSpaceElevatorChip();
         ItemStack s = new ItemStack(chip, 1);
         chip.setBlockPositions(s, Arrays.asList(
@@ -133,14 +131,9 @@ public class ItemDataCarrierNBTRoundTripTest {
 
         chip.setBlockPositions(s, new ArrayList<DimensionBlockPosition>());
 
-        assertEquals("known bug: removeTag(\"positions\") at line 42 targets "
-                + "the wrong key — the actual list lives under \"list\" "
-                + "(per NBTStorableListList). Setting an empty list does "
-                + "NOT clear stored positions. If this fires (size == 0), "
-                + "the bug has been fixed — change line 42 to "
-                + "removeTag(\"list\") and flip this assertion to "
-                + "assertEquals(0, ...).",
-                1, chip.getBlockPositions(s).size());
+        assertEquals("setBlockPositions with an empty list must clear the "
+                        + "stored list (NBT key \"list\" removed)",
+                0, chip.getBlockPositions(s).size());
     }
 
     // ────────────────────── ItemData ────────────────────────────────────

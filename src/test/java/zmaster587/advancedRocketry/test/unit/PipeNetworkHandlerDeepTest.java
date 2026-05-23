@@ -170,12 +170,20 @@ public class PipeNetworkHandlerDeepTest {
      * fix is forced to update this test, AND a future regression that
      * silently passes the bug forward is caught.
      */
-    @Test(expected = AssertionError.class)
-    public void mergeNetworksAssertionPolarityIsInverted_documentsKnownBug() {
+    /** Fixed in TASK-12 (bug #1). Previously the assertion at
+     *  HandlerCableNetwork:67 fired whenever EITHER side was non-null
+     *  yet the next line dereferenced BOTH, so a stock merge under
+     *  -ea always threw AssertionError. Now the assertion correctly
+     *  requires both networks to be present and merge proceeds. */
+    @Test
+    public void mergeNetworksProducesLowerIdSurvivor() {
         HandlerCableNetwork handler = new HandlerCableNetwork();
         int idA = handler.getNewNetworkID();
         int idB = handler.getNewNetworkID();
-        handler.mergeNetworks(idA, idB); // throws AssertionError under -ea
+        int survivor = handler.mergeNetworks(idA, idB);
+        assertEquals("merge must return min(a,b)", Math.min(idA, idB), survivor);
+        assertNotNull("survivor network must still be registered",
+                handler.getNetwork(survivor));
     }
 
     // mergeNetworksProducesLowerIdSurvivor_assertionsDisabled removed
@@ -206,18 +214,19 @@ public class PipeNetworkHandlerDeepTest {
      * delete this test and replace it with the merge-allows-different-
      * direction assertion that intuition predicts.
      */
+    /** Fixed in TASK-12 (bug #2). The previous body did
+     *  {@code sinks.addAll(b.getSinks())} BEFORE the de-dupe loop,
+     *  causing self-collision and a guaranteed {@code false} return for
+     *  any non-empty b. Now per-entry dedupe runs as intended and a
+     *  simple disjoint merge succeeds. */
     @Test
-    public void cableNetworkMergeReturnsFalseWheneverBHasAnySinks_documentsKnownBug() {
+    public void cableNetworkMergeReturnsTrueAndAbsorbsDisjointSinks() {
         CableNetwork a = CableNetwork.initNetwork();
         CableNetwork b = CableNetwork.initNetwork();
-        // b has a single sink, a is empty — intuition: merge succeeds.
-        // Reality (current bug): the addAll seeds a.sinks with b's entry,
-        // then the de-dupe loop sees the just-added copy and returns false.
         b.addSink(new StubTile(0, 0, 0), EnumFacing.UP);
         boolean ok = a.merge(b);
-        assertFalse("CableNetwork.merge currently returns false even for the "
-                + "simplest valid merge — this is a known production bug "
-                + "in the de-dupe-loop ordering", ok);
+        assertTrue("disjoint merge must succeed", ok);
+        assertEquals("a must absorb b's sink", 1, a.getSinks().size());
     }
 
     /**
@@ -229,31 +238,30 @@ public class PipeNetworkHandlerDeepTest {
      * the battery migration, at which point this test flips to assert
      * "battery DID migrate".
      */
+    /** Fixed in TASK-12 (bug #3, cascaded from #2). With the parent
+     *  {@code CableNetwork.merge} body now correctly returning true
+     *  for valid merges, {@code EnergyNetwork.merge} performs the
+     *  battery migration as intended. */
     @Test
-    public void energyNetworkMergeNeverMigratesBatteryToday_documentsKnownBug() {
+    public void energyNetworkMergeMigratesBatteryFromMergedSource() {
         HandlerEnergyNetwork handler = new HandlerEnergyNetwork();
         int idA = handler.getNewNetworkID();
         int idB = handler.getNewNetworkID();
         EnergyNetwork netA = (EnergyNetwork) handler.getNetwork(idA);
         EnergyNetwork netB = (EnergyNetwork) handler.getNetwork(idB);
         netB.acceptEnergy(200, false);
-        // Seed BOTH with at least one sink so merge() body actually exercises
-        // the de-dupe loop (otherwise it returns true via the empty path).
         netA.addSink(new StubTile(1, 1, 1), EnumFacing.NORTH);
         netB.addSink(new StubTile(2, 2, 2), EnumFacing.SOUTH);
 
-        // Call merge() directly (not handler.mergeNetworks — that one hits
-        // the assertion-polarity bug). EnergyNetwork.merge returns whatever
-        // super.merge returns, which (per the documented bug above) is
-        // false when b has any sinks.
         boolean migrated = netA.merge(netB);
-        assertFalse("EnergyNetwork.merge today refuses to migrate the battery "
-                + "due to the parent merge() de-dupe-ordering bug", migrated);
+        assertTrue("EnergyNetwork.merge must succeed for a disjoint merge",
+                migrated);
 
-        // Sanity: netA's battery stays at zero (no migration happened).
+        // 500 capacity - 200 migrated = 300 remaining room.
         int roomLeftInA = netA.acceptEnergy(1_000_000, true);
-        assertEquals("netA battery must still be empty after refused merge — "
-                + "all 500 RF of capacity available", 500, roomLeftInA);
+        assertEquals("netA battery must hold the migrated 200 RF; capacity "
+                        + "remaining is 500 - 200 = 300",
+                300, roomLeftInA);
     }
 
     @Test
@@ -314,18 +322,24 @@ public class PipeNetworkHandlerDeepTest {
                 0, net.getSinks().size());
     }
 
+    /** Updated in TASK-12 (cascades from bug #2 fix). The old merge body
+     *  returned false on any overlap — a side-effect of the addAll-
+     *  before-dedupe bug that pinned this whole network as a no-op.
+     *  With the per-entry dedupe now correct, an overlap is just
+     *  skipped: the merge succeeds and the result is a single entry
+     *  (no duplicates), not a rejected merge. */
     @Test
-    public void mergeRejectsExactPositionPlusDirectionOverlap() {
-        // The merge() body has an early `return false` if it finds an
-        // overlapping (pos, dir) pair across the two networks. Pin that
-        // polarity: a merge with exact overlap must NOT proceed.
+    public void mergeOfExactPositionPlusDirectionOverlapDedupesWithoutDuplicate() {
         CableNetwork a = CableNetwork.initNetwork();
         CableNetwork b = CableNetwork.initNetwork();
         a.addSink(new StubTile(0, 0, 0), EnumFacing.UP);
         b.addSink(new StubTile(0, 0, 0), EnumFacing.UP); // same pos + same dir
 
         boolean ok = a.merge(b);
-        assertFalse("merge must reject overlap (same pos AND same direction)", ok);
+        assertTrue("merge succeeds even with full overlap (dedupe, not reject)",
+                ok);
+        assertEquals("the overlap must be deduped — no duplicate entry",
+                1, a.getSinks().size());
     }
 
     @Test

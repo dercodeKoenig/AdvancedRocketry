@@ -73,6 +73,7 @@ public class ItemPlanetIdentificationChip extends ItemIdWithName {
         if (dimensionId == Constants.INVALID_PLANET) {
             nbt = new NBTTagCompound();
             nbt.setInteger(dimensionIdIdentifier, dimensionId);
+            stack.setTagCompound(nbt);
             return;
         }
 

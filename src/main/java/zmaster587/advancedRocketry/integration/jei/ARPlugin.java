@@ -66,7 +66,15 @@ public class ARPlugin implements IModPlugin {
     //AR machines can reload recipes. We still need this for JEI to be up-to-date
     @SuppressWarnings("deprecation")
     public static void reload() {
-        jeiHelpers.reload();
+        // Fixed in TASK-12 (bug #7 cascade). jeiHelpers is set in
+        // registerCategories, which only runs on the client. On a
+        // dedicated server (or before JEI's plugin init) the field is
+        // null — the unguarded reload here used to NPE and force the
+        // /ar reloadRecipes catch envelope. JEI itself is client-side
+        // only, so skipping when null is correct for both modes.
+        if (jeiHelpers != null) {
+            jeiHelpers.reload();
+        }
     }
 
     @Override

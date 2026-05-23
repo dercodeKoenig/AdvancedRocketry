@@ -80,22 +80,20 @@ public class ChipNBTRoundTripTest {
         assertEquals(7, chip.getDimensionId(s));
     }
 
+    /** Fixed in TASK-12 (bug #8). The INVALID_PLANET branch of
+     *  {@code setDimensionId} previously built a fresh NBT but never
+     *  called {@code stack.setTagCompound(nbt)} before returning — so
+     *  the sentinel was silently dropped. Now it attaches the NBT so
+     *  callers can observe the "explicitly invalid" state. */
     @Test
-    public void planetChipSetDimensionIdWithInvalidPlanetDoesNotAttachNbt_documentsKnownBug() {
-        // Production bug: setDimensionId(stack, INVALID_PLANET) at lines
-        // 73-77 creates a fresh NBTTagCompound, writes dimId, then RETURNS
-        // without calling stack.setTagCompound(nbt). So the "erase to
-        // sentinel" intent is silently dropped: the stack still has no NBT
-        // afterwards. Any production caller that relies on "INVALID_PLANET
-        // is persistable" is bugged.
+    public void planetChipSetDimensionIdWithInvalidPlanetAttachesNbtSentinel() {
         ItemPlanetIdentificationChip chip = new ItemPlanetIdentificationChip();
         ItemStack s = freshStack();
         chip.setDimensionId(s, Constants.INVALID_PLANET);
-        assertFalse("known bug: setDimensionId(INVALID_PLANET) doesn't attach "
-                        + "the NBT compound to the stack. If this fires (stack now "
-                        + "has NBT), the production bug has been fixed — flip the "
-                        + "assertion to assertTrue and update the documenting test.",
+        assertTrue("setDimensionId(INVALID_PLANET) must attach the NBT",
                 s.hasTagCompound());
+        assertEquals("the stored sentinel must equal INVALID_PLANET",
+                Constants.INVALID_PLANET, s.getTagCompound().getInteger("dimId"));
     }
 
     @Test
@@ -226,6 +224,36 @@ public class ChipNBTRoundTripTest {
         assertEquals(42L, s.getTagCompound().getLong("satelliteId"));
         assertEquals(0, s.getTagCompound().getInteger("dimId"));
         assertEquals("test-comsat", s.getTagCompound().getString("satelliteName"));
+    }
+
+    /** TASK-12 (bug #6) — {@code setSatellite(SatelliteBase)} must
+     *  attach the freshly built NBT to the stack. Previously the
+     *  else-branch (no pre-existing tag compound) silently dropped
+     *  the NBT because {@code stack.setTagCompound(nbt)} was missing
+     *  — the sibling overload {@code setSatellite(SatelliteProperties)}
+     *  at line 87 did attach it, confirming the omission was an
+     *  oversight. */
+    @Test
+    public void satelliteChipSetSatelliteAttachesNbtToFreshStack() {
+        zmaster587.advancedRocketry.item.ItemSatelliteIdentificationChip chip =
+                new zmaster587.advancedRocketry.item.ItemSatelliteIdentificationChip();
+        ItemStack s = freshStack();
+        zmaster587.advancedRocketry.api.satellite.SatelliteBase fake =
+                new zmaster587.advancedRocketry.api.satellite.SatelliteBase() {
+                    @Override public String getName() { return "test-comsat"; }
+                    @Override public int getDimensionId() { return 17; }
+                    @Override public long getId() { return 4242L; }
+                    @Override public String getInfo(net.minecraft.world.World w) { return ""; }
+                    @Override public boolean performAction(net.minecraft.entity.player.EntityPlayer p,
+                            net.minecraft.world.World w, net.minecraft.util.math.BlockPos b) { return false; }
+                    @Override public double failureChance() { return 0; }
+                };
+        chip.setSatellite(s, fake);
+        assertTrue("setSatellite must attach the NBT to a fresh stack",
+                s.hasTagCompound());
+        assertEquals("test-comsat", s.getTagCompound().getString("satelliteName"));
+        assertEquals(17, s.getTagCompound().getInteger("dimId"));
+        assertEquals(4242L, s.getTagCompound().getLong("satelliteId"));
     }
 
     @Test

@@ -9,7 +9,7 @@
   current (wrong) behaviour as expected. Plus 1 ledger-only (#6) and
   1 surplus pin (`planetChipSetDimensionIdWithInvalidPlanetDoesNotAttachNbt`)
   not yet ledgered.
-- Status: Planning (not started).
+- Status: ✅ Completed 2026-05-23.
 - Created: 2026-05-23.
 
 ## Context
@@ -150,19 +150,39 @@ Decide in the ticket discussion before implementing.
 
 ## Completion Checklist
 
-- [ ] Phase 1: #6 + #8 fixed, both pins flipped to positive
-- [ ] Phase 2: #4 + #5 fixed, both pins flipped, save-migration
-      shim in place for #4
-- [ ] Phase 3: #1 + #2 + #3 fixed, all three pins flipped
-- [ ] Phase 4: #7 decision made + implemented (event handler OR
-      removal); pin flipped or test deleted
-- [ ] Bug ledger updated — all flipped entries marked "fixed";
-      #8 retroactively added
-- [ ] Full pyramid PASS (testUnit + testIntegration + testServer
-      + testClient)
-- [ ] EOD marker
+- [x] Phase 1: #6 + #8 fixed (one-line `setTagCompound(nbt)` adds);
+      pin #8 flipped to positive; pin #6 added (new positive test
+      `satelliteChipSetSatelliteAttachesNbtToFreshStack`).
+- [x] Phase 2: #4 (autoLand/occupied) read-side key matches write +
+      legacy-NBT default-true fallback; #5 (elevator chip)
+      removeTag key changed `"positions"` → `"list"`. Both pins
+      flipped.
+- [x] Phase 3: #1 assertion polarity flipped; #2 CableNetwork.merge
+      restored to per-entry dedupe (no premature addAll); #3
+      cascaded automatically; updated existing
+      `mergeRejectsExactPositionPlusDirectionOverlap` to reflect
+      new merge contract (dedupe vs reject).
+- [x] Phase 4: #7 fixed by (a) dropping the runtime
+      `createAutoGennedRecipes` call (init-time call at
+      `AdvancedRocketry.java:1044` is the sole site) AND (b) null-
+      guard on `jeiHelpers` in `ARPlugin.reload` for dedicated-server
+      mode. Pin flipped to
+      `reloadRecipesEmitsSuccessConfirmationMessage`.
+- [x] Bug ledger updated — all 8 entries marked fixed; entry #8
+      retroactively added to the historical list.
+- [x] Full pyramid PASS:
+      - `testUnit + testIntegration + testServer` BUILD SUCCESSFUL
+        in 16m 17s on retry (first run had 2 flaky failures —
+        `beaconMultiblockValidatesWhenFixtureIsBuilt` and
+        `cuttingMachineRunsFirstRegisteredRecipe` — that both
+        passed in isolation AND on the rerun; pre-existing
+        parallel-forks flakiness, not regression from these
+        fixes).
+      - `testClient` BUILD SUCCESSFUL in 29m 31s under
+        `DISPLAY=:77`.
+- [x] EOD marker
+      `.agent/.context-markers/2026-05-23_task12-bugs-drained.md`.
 
-**Outcome**: bug ledger empty (or down to "verified safe — was #6,
-no test needed" if we deleted #6's pin instead of writing one).
-Production correctness sweep complete; the test suite no longer
-documents broken behaviour as expected.
+**Outcome**: bug ledger fully drained. The `_documentsKnownBug`
+suffix is no longer in use anywhere in the test suite — every former
+"document the bug" pin now asserts the corrected contract.

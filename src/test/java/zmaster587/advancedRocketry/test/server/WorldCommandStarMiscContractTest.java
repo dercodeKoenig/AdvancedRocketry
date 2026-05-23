@@ -87,32 +87,16 @@ public class WorldCommandStarMiscContractTest extends AbstractSharedServerTest {
                 body.contains("minecraft:plains"));
     }
 
-    /** {@code /ar reloadRecipes} is broken post-init in Forge 1.12.2:
-     *  Forge locks recipe registries after init, and the production path
-     *  ({@code WorldCommand.java:258} → {@code RecipeHandler
-     *  .createAutoGennedRecipes:122}) calls
-     *  {@code ForgeRegistry.add(...)} which throws
-     *  {@code IllegalStateException("The object ... is being added too
-     *  late")}. The catch branch at {@code WorldCommand.java:264} fires
-     *  the user-visible "Serious error has occurred! Possible recipe
-     *  corruption" message.
-     *
-     *  <p>This test pins the CURRENT (broken) post-condition. The day
-     *  production grows a pre-unfreeze step (or moves the reload to
-     *  an event handler that runs while the registry is still mutable),
-     *  this assertion flips and the test must be updated.</p>
-     *
-     *  <p>Logged in {@code .agent/tasks/README.md} bug ledger as the
-     *  {@code reloadRecipes} freezing bug.</p> */
+    /** Fixed in TASK-12 (bug #7). The {@code createAutoGennedRecipes}
+     *  call that hit Forge's frozen recipe registry was removed from
+     *  the runtime reload path; init-time registration handles it
+     *  once. XML hot-reload now succeeds. */
     @Test
-    public void reloadRecipesEmitsErrorEnvelopeDueToFrozenRegistry_documentsKnownBug()
-            throws Exception {
+    public void reloadRecipesEmitsSuccessConfirmationMessage() throws Exception {
         String resp = exec("ar reloadRecipes");
-        assertTrue("reloadRecipes currently fails post-init — expected the "
-                        + "catch-branch error envelope — got: " + resp,
-                resp.contains("Serious error has occurred"));
-        assertTrue("must NOT emit the success confirmation while the bug "
-                        + "stands — got: " + resp,
-                !resp.contains("Recipes reloaded"));
+        assertTrue("reloadRecipes must emit success confirmation — got: " + resp,
+                resp.contains("Recipes reloaded"));
+        assertTrue("must NOT emit the catch-branch error envelope — got: " + resp,
+                !resp.contains("Serious error has occurred"));
     }
 }

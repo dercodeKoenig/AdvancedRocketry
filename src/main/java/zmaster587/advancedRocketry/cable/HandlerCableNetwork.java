@@ -63,8 +63,11 @@ public class HandlerCableNetwork {
 
 
     public int mergeNetworks(int a, int b) {
-
-        assert (networks.get(Math.max(a, b)) == null || networks.get(Math.min(a, b)) == null);
+        // Fixed in TASK-12 (bug #1). The polarity of this assertion was
+        // inverted: the previous form fired whenever EITHER side was
+        // non-null, yet the next line dereferences BOTH. Now we assert
+        // both networks are present, which is the actual precondition.
+        assert (networks.get(Math.max(a, b)) != null && networks.get(Math.min(a, b)) != null);
 
         networks.get(Math.min(a, b)).merge(networks.get(Math.max(a, b)));
         networks.get(Math.min(a, b)).numCables += networks.get(Math.max(a, b)).numCables;

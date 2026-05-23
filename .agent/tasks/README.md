@@ -5,8 +5,9 @@
 Pyramid: **430 / 0 / 3** (testUnit 162 / testIntegration 80 /
 testServer 179 / testClient 9).
 testServer wall time: **8m 27s** (50 % faster than pre-B2).
-Bug ledger: **7** real production bugs recorded (6 pinned by
-`_documentsKnownBug` tests, 1 ledger-only — see bottom of file).
+Bug ledger: **8 bugs found, all 8 fixed in TASK-12** (2026-05-23).
+Pins flipped from `_documentsKnownBug` to positive contract
+assertions. See bottom of file for the history.
 
 ## Done
 
@@ -21,6 +22,7 @@ Bug ledger: **7** real production bugs recorded (6 pinned by
 | TASK-10 | TASK-03 deferred tail — A2 remainder (4 deep-tile tests: FluidTank NBT round-trip, UV-vs-Rocket assembler class identity, SuitWorkStation assembly, FuelingStation matched accounting) + B3 single-method-smoke suite-grouping (MachineDomainSmokeSuite, ServerBootSmokeSuite) | ✅ |
 | TASK-10b | testClient e2e player-event coverage — Phases 1-7 ✅. Phases 1-6: 5 e2e suites, 15 pins, 9 new `/artest` verbs. Phase 7 (TASK-05 player-tier remainder): 5 suites / 19 pins (`ItemSealDetectorPlayerMessagesE2ETest` 8, `ItemAtmosphereAnalzerPlayerReadoutE2ETest` 3, `ItemHovercraftSpawnE2ETest` 3, `ItemBiomeChangerActionE2ETest` 2, `ItemSpaceArmorUseFluidE2ETest` 3) — drain-via-enchant fixture closed the originally-3-4h deferral. WeatherController + SpaceChest + ItemBlock\* trio rescoped/dropped per SOP litmus. | ✅ |
 | TASK-11 | `/ar` (WorldCommand) coverage — 23 server-tier tests across 4 classes (planet set/get/list, planet generate/delete/reset lifecycle, star + dumpBiomes + reloadRecipes, console-sender guard contracts). Result-focused pins (registry state, JSON probe readback, file existence, chat envelope). Found + ledgered production bug #7 (`commandReloadRecipes` frozen-registry crash, pinned via `_documentsKnownBug`). | ✅ |
+| TASK-12 | Production bug-fix sweep — 8 ledgered bugs fixed across 4 phases (NBT-attach pair, wrong-key bugs, cable/energy network merge, recipe reload). All `_documentsKnownBug` pins flipped to positive contract assertions; the suffix no longer in use anywhere. Full pyramid PASS post-fix. | ✅ |
 | TASK-09 | Per-satellite-type behavioural depth — 3 suites / 14 pins (`SatelliteTickBehaviourTest` 4: base power + cap + SatelliteData accumulation/cap; `SatelliteTypeBehaviourTest` 3: IUniversalEnergyTransmitter marker + BiomeChanger terraform + WeatherController mode-0; `SatelliteCoverageGapsTest` 7: weather modes 1/2 + mode-change clear + biome batch-10 + biome null-guard + canTick gating + isDead removal) + 15 new `/artest` verbs | ✅ |
 | TASK-05 | Item-behaviour suite — unit-tier surface for 12 of 21 item classes (5 chips, 2 data-carriers, BeaconFinder, OreScanner, Thermite, BiomeChanger / WeatherController metadata+wire, JackHammer pure-fn) via `ChipNBTRoundTripTest`, `ItemDataCarrierNBTRoundTripTest`, `ScannerDetectorItemContractTest`, `SpecialPurposeItemContractTest`, `JackHammerContractTest`, plus SealDetector dispatch via new `/artest seal-detector check` probe (`SealDetectorDispatchTest` 8 server tests). ~48 contract pins, +1 production bug (`ItemSpaceElevatorChip` wrong removeTag key). Player-tier surface moved to TASK-10b Phase 7. | ✅ partial |
 | TASK-06 | Mission-system depth — 20 tests (3 unit + 17 server) covering lifecycle progress/completion/registry-prune, gas + ore completion, gas fluid-fill (strong 64000 mB pin via new `with-fluid-cargo` fixture), 3 NBT round-trips, infra-tile link/unlink lifecycle with rocket-side relink, and gas+ore multi-boot persistence. 9 `/artest mission` probe verbs (incl. link-infra, infra-state, rocket-relink-state). | ✅ |
@@ -103,62 +105,73 @@ All TASK-NN docs share a structure:
   short slug. The `.active` file points at the most recent marker
   for `/nav:start` to pick up.
 
-## Notes on `_documentsKnownBug`
+## Notes on `_documentsKnownBug` — historical ledger
 
-Recorded as we found them across TASK-02 / TASK-03 / TASK-05 /
-TASK-10b audits. Entries 1-5 are pinned by `_documentsKnownBug`
-tests that assert the **current (wrong) behaviour** as expected —
-the day someone fixes production, the test fails and forces an
-update. Entry 6 is ledgered-only (see "Pin status" notes).
+All 8 bugs surfaced during the test-coverage build-up (TASK-02 /
+TASK-03 / TASK-05 / TASK-10b / TASK-11). The original ledger
+recorded the bug shape; tests pinned the wrong behaviour as
+expected. **TASK-12 (2026-05-23) fixed all 8 in production and
+flipped every pin to assert the corrected contract.**
 
 1. `HandlerCableNetwork:67` — assertion polarity inverted.
-   **Pin**: `_documentsKnownBug` in CableNetworkSuite (TASK-02).
+   **Fixed**: assertion now requires both networks non-null
+   (was: requires either side null). Pin flipped to
+   `mergeNetworksProducesLowerIdSurvivor`.
 2. `CableNetwork.merge` — addAll-before-dedupe ordering causes
    duplicate node retention.
-   **Pin**: `_documentsKnownBug` in CableNetworkSuite (TASK-02).
+   **Fixed**: per-entry dedupe restored (matches the commented-out
+   `canMerge` blocks that suggested original intent). Pin flipped
+   to `cableNetworkMergeReturnsTrueAndAbsorbsDisjointSinks`.
 3. `EnergyNetwork.merge` — battery-migration cascade from (2).
-   **Pin**: `_documentsKnownBug` in EnergyNetworkSuite (TASK-02).
+   **Fixed**: cascades naturally from #2. Pin flipped to
+   `energyNetworkMergeMigratesBatteryFromMergedSource`.
 4. `SpaceStationObject:801` — writes NBT key `"autoLand"`, reads
    key `"occupied"`. The autoLand flag is silently dropped across
    save/load.
-   **Pin**: `_documentsKnownBug` in SpaceObjectPersistenceTest (TASK-03).
+   **Fixed**: read now uses the `"autoLand"` key on both sides;
+   default-true fallback preserves legacy-save compatibility. Pin
+   flipped to `autoLandFlagWithoutDockSurvivesRestart`.
 5. `ItemSpaceElevatorChip:42` — calls `removeTag("positions")` to
    clear the chip's stored positions, but `NBTStorableListList`
    actually stores entries under the key `"list"`. Setting an empty
    position list is a no-op; clearing the chip from the GUI doesn't
    work.
-   **Pin**: `_documentsKnownBug` in ItemDataCarrierNBTRoundTripTest (TASK-05).
+   **Fixed**: changed `removeTag` key to `"list"`. Pin flipped to
+   `elevatorChipSetEmptyAfterNonEmptyClearsList`.
 6. `ItemSatelliteIdentificationChip.setSatellite(stack, SatelliteBase)`
-   (lines 54-64) — in the `else`-branch (stack has no existing
-   NBTTagCompound) the method constructs a new local NBT, writes
-   `satelliteName`/`dimId`/`satelliteId` into it, but never calls
-   `stack.setTagCompound(nbt)`. Result: the NBT is silently dropped
-   for any item that didn't already have a tag. Cross-reference:
-   the sibling overload `setSatellite(stack, SatelliteProperties)`
-   (line 72-89) DOES call `stack.setTagCompound(nbt)` at line 87 —
-   confirming the omission in the SatelliteBase overload is an
-   oversight, not deliberate. Player-visible consequence: programming
-   a fresh blank chip with a satellite reference via this code path
-   produces a still-blank chip; right-clicking it does nothing.
-   **Pin**: **none yet — ledger only.** Discovered during TASK-10b
-   Phase 7 BiomeChanger probe work where we worked around it by
-   writing the NBT directly in the probe. Worth a `_documentsKnownBug`
-   when a future test exercises the chip-programming path; for now,
-   the ledger entry is enough to ensure a bug-fix ticket sweeps it in.
-7. `WorldCommand.commandReloadRecipes` (line 256-258) — calls
-   `machineRecipes.registerAllMachineRecipes()` →
-   `createAutoGennedRecipes()` → `ForgeRegistry.register(...)`. Forge
-   freezes the recipe registry after init, so post-init invocation
-   of `/ar reloadRecipes` always throws
-   `IllegalStateException("The object ... is being added too late")`.
-   The catch branch at line 264 fires the user-visible
-   `"Serious error has occurred! Possible recipe corruption"` message.
-   Player-visible consequence: the entire command is broken at
-   runtime — admins cannot reload XML recipes via the in-game console.
-   **Pin**: `_documentsKnownBug` in
-   `WorldCommandStarMiscContractTest.reloadRecipesEmitsErrorEnvelopeDueToFrozenRegistry`
-   (TASK-11). Discovered 2026-05-23.
+   (lines 54-64) — else-branch built fresh NBT but never called
+   `stack.setTagCompound(nbt)`. Player-visible: programming a fresh
+   blank chip produced a still-blank chip.
+   **Fixed**: added the missing `stack.setTagCompound(nbt);` mirroring
+   the sibling overload at line 87. **Pin added in TASK-12**:
+   `satelliteChipSetSatelliteAttachesNbtToFreshStack` (was originally
+   ledger-only).
+7. `WorldCommand.commandReloadRecipes` (line 256-258) — included
+   `createAutoGennedRecipes` which calls `ForgeRegistry.register_impl`
+   on the frozen recipe registry. Crashed with
+   `IllegalStateException("is being added too late")` and emitted the
+   `"Serious error has occurred"` message. Cascading bug: the
+   JEI-integration call (`CompatibilityMgr.reloadRecipes` →
+   `ARPlugin.reload` → `jeiHelpers.reload()`) NPE-d on a dedicated
+   server because `jeiHelpers` is null off the client.
+   **Fixed (compound)**:
+   (a) removed `createAutoGennedRecipes` from the runtime reload —
+       it's an init-only registration (the init-time call at
+       `AdvancedRocketry.java:1044` is sufficient; auto-genned
+       recipes are static once `modProducts` is set);
+   (b) added null-guard on `jeiHelpers` in `ARPlugin.reload` so the
+       JEI cascade is a no-op when JEI isn't initialised (correct
+       for dedicated server). Pin flipped to
+       `reloadRecipesEmitsSuccessConfirmationMessage`.
+8. `ItemPlanetIdentificationChip.setDimensionId(stack, INVALID_PLANET)`
+   (lines 73-77) — same shape as #6 but in a different class. The
+   INVALID_PLANET branch built fresh NBT, wrote `dimId`, and returned
+   without `stack.setTagCompound(nbt);`. The sentinel was silently
+   dropped.
+   **Fixed**: added the missing `stack.setTagCompound(nbt);`. Pin
+   flipped to
+   `planetChipSetDimensionIdWithInvalidPlanetAttachesNbtSentinel`.
 
-A separate **bug-fix ticket** should address all seven; once fixed,
-the pinned tests (#1-5, #7) flip to expected-passing semantics and #6
-becomes "verified safe" (no test to flip).
+Status as of 2026-05-23: ledger drained. The `_documentsKnownBug`
+suffix is no longer in use in this repo — if a future bug is found,
+add it here and pin the wrong behaviour as before.
