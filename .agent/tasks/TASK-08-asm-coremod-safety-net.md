@@ -6,7 +6,7 @@
   files (`ClassTransformer` 835 LoC, `AdvancedRocketryPlugin`,
   helpers) and 0 test coverage. This is the **highest-risk gap** in
   the mod: a bad transformer = full game crash at boot.
-- Status: Pending
+- Status: ❌ Obsolete — superseded by TASK-08-mixin (the ASM coremod was rewritten to Mixin, so a safety net for the now-deleted code is moot). Kept for historical context only.
 - Created: 2026-05-19
 - Predecessor: `.agent/.context-markers/2026-05-19-1230_task03-A-and-B-mostly-done-eod.md`
 

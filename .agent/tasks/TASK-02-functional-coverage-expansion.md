@@ -4,7 +4,7 @@
 
 - Source: continuation of TASK-01 SMART pyramid; user ask 2026-05-18 —
   "I need to be sure all the core mod functionality is tested"
-- Status: Pending
+- Status: ✅ Completed (Phases 0-8, 11) — see `.agent/tasks/README.md` Done table. Phase 9 (companion-mod integration) + Phase 10 (visual regression) deferred without a successor ticket.
 - Created: 2026-05-18
 - Predecessor markers:
   - `.agent/.context-markers/2026-05-18-1530_task01-phase4-pyramid-complete.md`

@@ -6,7 +6,7 @@
   classes, ~0 isolated test files (only `ItemAirUtilsTest` for a static
   utility). `SpaceArmorProtectionContractTest` covers part of suit
   armor logic at unit tier but nothing else.
-- Status: Pending
+- Status: ✅ Completed partial — unit-tier surface for 12 of 21 classes shipped; player-tier remainder absorbed by TASK-10b Phase 7. See `.agent/tasks/README.md` Done table.
 - Created: 2026-05-19
 - Predecessor: `.agent/.context-markers/2026-05-19-1230_task03-A-and-B-mostly-done-eod.md`
 

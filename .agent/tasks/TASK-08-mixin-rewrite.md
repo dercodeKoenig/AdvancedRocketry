@@ -9,7 +9,7 @@
   with 3 active mixins). Rewriting the 5 active ASM transformations to
   Mixin is cheaper than building bytecode-level tests and gives us
   compile-time target validation + fail-loud apply errors for free.
-- Status: Pending
+- Status: ✅ Completed — see `.agent/tasks/README.md` Done table.
 - Created: 2026-05-20
 - Predecessor: `.agent/.context-markers/2026-05-20-2330_task07-fully-closed.md`
 

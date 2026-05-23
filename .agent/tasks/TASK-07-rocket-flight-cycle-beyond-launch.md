@@ -7,7 +7,7 @@
   happens AFTER the rocket is in flight — entering orbit, transitioning
   to destination dim, descent, landing-pad collision, dismantle — has
   ~0 isolated test coverage.
-- Status: Pending
+- Status: ✅ Completed — see `.agent/tasks/README.md` Done table.
 - Created: 2026-05-19
 - Predecessor: `.agent/.context-markers/2026-05-19-1230_task03-A-and-B-mostly-done-eod.md`
 

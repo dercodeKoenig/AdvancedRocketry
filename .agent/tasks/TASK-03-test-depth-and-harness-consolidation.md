@@ -4,7 +4,7 @@
 
 - Source: user ask 2026-05-19 — "проанализируем глубину всех наших тестов" + "какие
   real-тесты можно объединить, чтобы не запускать отдельные инстансы".
-- Status: Pending
+- Status: ✅ Completed partial — A1/A2/A4/A5/A6/A7 + B1/B2/B4/C shipped; A2 tail + B3 absorbed by TASK-10; A3 reframed as testClient e2e in TASK-10b. See `.agent/tasks/README.md` Done table.
 - Created: 2026-05-19 11:30
 - Predecessor markers:
   - `.agent/.context-markers/2026-05-19-1100_task02-phase4r2-phase1-phase7-phase8-eod.md`
