@@ -5,7 +5,7 @@
 - Source: TASK-12 close-out marker 2026-05-23 ("flag these two for a
   future test-stability ticket if pattern recurs"), promoted into a
   tracked task on 2026-05-23 during the SSOT cleanup.
-- Status: **Backlog (watching)**.
+- Status: **Backlog (promotion trigger fired 2026-05-23 — see Recurrence log)**.
 - Created: 2026-05-23.
 
 ## Context
@@ -80,10 +80,18 @@ pin real contracts. Per
 
 | Date | Test | Trigger | Run number that day | Resolution |
 |---|---|---|---|---|
-| 2026-05-23 | both | `./gradlew testServer` post-TASK-12 | run 1 of 1 | passed on rerun, no investigation yet |
+| 2026-05-23 | both (BeaconMultiblock + MachineRecipeIntegration) | `./gradlew testServer` post-TASK-12 | run 1 of 1 | passed on rerun, no investigation yet |
+| 2026-05-23 | `WarpControllerDepthTest` (classMethod) | TASK-18 close-out testServer run | run 2 | passed in isolation; **port contention**: `BindException: Address already in use` — classic parallel-fork harness collision. Directly matches this task's diagnostic hypothesis. |
+| 2026-05-23 | `MissionLifecyclePyramidTest.completionPrunesMissionFromSatelliteRegistry` | TASK-18 close-out testServer run | run 2 | passed in isolation; **timing race**: mission reached `progress=1.0` + `isDead=true` but had not been pruned from registry yet. Within-fork ordering, distinct from port contention. |
 
-When promoted, add subsequent occurrences here before opening an
-implementation phase.
+**Promotion trigger fired**: a third (and fourth) test joined the
+flake list, both during the TASK-18 close-out. Two distinct
+flake shapes are now visible — port contention (Beacon, Warp) and
+a tick-timing race (MachineRecipeIntegration, MissionLifecycle).
+Investigation should treat them as related-but-separable.
+
+When opening an implementation phase, add subsequent occurrences
+here.
 
 ## Dependencies
 

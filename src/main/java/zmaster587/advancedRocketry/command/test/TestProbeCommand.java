@@ -3227,6 +3227,18 @@ public class TestProbeCommand extends CommandBase {
                 java.util.List<?> outputs = (java.util.List<?>) recipeClass.getMethod("getOutput").invoke(recipe);
                 int time = (Integer) recipeClass.getMethod("getTime").invoke(recipe);
                 int power = (Integer) recipeClass.getMethod("getPower").invoke(recipe);
+                java.util.List<?> fluidIngredients;
+                java.util.List<?> fluidOutputs;
+                try {
+                    fluidIngredients = (java.util.List<?>) recipeClass.getMethod("getFluidIngredients").invoke(recipe);
+                } catch (NoSuchMethodException ne) {
+                    fluidIngredients = java.util.Collections.emptyList();
+                }
+                try {
+                    fluidOutputs = (java.util.List<?>) recipeClass.getMethod("getFluidOutputs").invoke(recipe);
+                } catch (NoSuchMethodException ne) {
+                    fluidOutputs = java.util.Collections.emptyList();
+                }
 
                 StringBuilder builder = new StringBuilder("{\"machine\":\"")
                         .append(escapeJson(shortName))
@@ -3255,6 +3267,32 @@ public class TestProbeCommand extends CommandBase {
                     net.minecraft.item.ItemStack stack = (net.minecraft.item.ItemStack) out;
                     if (i > 0) builder.append(',');
                     appendItemStackJson(builder, stack, i);
+                }
+                builder.append("],\"fluidIngredients\":[");
+                {
+                    int emitted = 0;
+                    for (Object fObj : fluidIngredients) {
+                        if (!(fObj instanceof net.minecraftforge.fluids.FluidStack)) continue;
+                        net.minecraftforge.fluids.FluidStack fs = (net.minecraftforge.fluids.FluidStack) fObj;
+                        if (emitted > 0) builder.append(',');
+                        builder.append("{\"fluid\":\"")
+                                .append(escapeJson(fs.getFluid().getName()))
+                                .append("\",\"amount\":").append(fs.amount).append('}');
+                        emitted++;
+                    }
+                }
+                builder.append("],\"fluidOutputs\":[");
+                {
+                    int emitted = 0;
+                    for (Object fObj : fluidOutputs) {
+                        if (!(fObj instanceof net.minecraftforge.fluids.FluidStack)) continue;
+                        net.minecraftforge.fluids.FluidStack fs = (net.minecraftforge.fluids.FluidStack) fObj;
+                        if (emitted > 0) builder.append(',');
+                        builder.append("{\"fluid\":\"")
+                                .append(escapeJson(fs.getFluid().getName()))
+                                .append("\",\"amount\":").append(fs.amount).append('}');
+                        emitted++;
+                    }
                 }
                 builder.append("]}");
                 send(sender, builder.toString());
@@ -4733,7 +4771,26 @@ public class TestProbeCommand extends CommandBase {
                     "structure");
             return;
         }
-        send(sender, "{\"error\":\"unknown fixture subcommand — try rocket <dim> <x> <y> <z> | machine cutting <dim> <x> <y> <z> | multiblock blackhole-gen|beacon|observatory|railgun|warp-core|gravity-controller|planet-analyser|space-elevator|microwave-receiver|solar-array|terraformer|orbital-laser-drill <dim> <x> <y> <z>\"}");
+        // TASK-18 — multiblock industrial machines via generic structure
+        // helper. Keys are kebab-case short names; lookup table resolves to
+        // controller registry name + tile-class FQN.
+        if (args.length >= 6 && "machine".equalsIgnoreCase(args[0])
+                && !"cutting".equalsIgnoreCase(args[1])) {
+            String[] spec = lookupMultiblockMachineSpec(args[1]);
+            if (spec == null) {
+                send(sender, "{\"error\":\"unknown machine type\",\"name\":\""
+                        + escapeJson(args[1]) + "\"}");
+                return;
+            }
+            handleFixtureGenericFromStructure(server, sender,
+                    parseIntOr(args[2], Integer.MIN_VALUE),
+                    parseIntOr(args[3], 0),
+                    parseIntOr(args[4], 64),
+                    parseIntOr(args[5], 0),
+                    spec[0], spec[1], spec[2], "structure");
+            return;
+        }
+        send(sender, "{\"error\":\"unknown fixture subcommand — try rocket <dim> <x> <y> <z> | machine cutting|rolling-machine|lathe|precision-assembler|electrolyser|chemical-reactor|crystallizer|arc-furnace|centrifuge|precision-laser-etcher <dim> <x> <y> <z> | multiblock blackhole-gen|beacon|observatory|railgun|warp-core|gravity-controller|planet-analyser|space-elevator|microwave-receiver|solar-array|terraformer|orbital-laser-drill <dim> <x> <y> <z>\"}");
     }
 
     /**
@@ -6045,6 +6102,50 @@ public class TestProbeCommand extends CommandBase {
      * </ul>
      */
     @SuppressWarnings("deprecation")
+    /**
+     * Lookup table: kebab-case machine key → {controller namespace,
+     * controller registry path, tile-class FQN}. Used by
+     * {@code /artest fixture machine <key>} dispatch. All 9 multiblock
+     * industrial machines use the libVulpes character mappings
+     * 'c'/'I'/'O'/'P'/'L'/'l' in their {@code structure} arrays, so the
+     * shared {@link #handleFixtureGenericFromStructure} helper can
+     * build the fixture for all of them — only the per-machine
+     * controller block and tile-class identity differ.
+     */
+    private static String[] lookupMultiblockMachineSpec(String key) {
+        switch (key.toLowerCase()) {
+            case "rolling-machine":
+                return new String[]{"advancedrocketry", "rollingMachine",
+                        "zmaster587.advancedRocketry.tile.multiblock.machine.TileRollingMachine"};
+            case "lathe":
+                return new String[]{"advancedrocketry", "lathe",
+                        "zmaster587.advancedRocketry.tile.multiblock.machine.TileLathe"};
+            case "precision-assembler":
+                return new String[]{"advancedrocketry", "precisionassemblingmachine",
+                        "zmaster587.advancedRocketry.tile.multiblock.machine.TilePrecisionAssembler"};
+            case "electrolyser":
+                return new String[]{"advancedrocketry", "electrolyser",
+                        "zmaster587.advancedRocketry.tile.multiblock.machine.TileElectrolyser"};
+            case "chemical-reactor":
+                return new String[]{"advancedrocketry", "chemicalReactor",
+                        "zmaster587.advancedRocketry.tile.multiblock.machine.TileChemicalReactor"};
+            case "crystallizer":
+                return new String[]{"advancedrocketry", "crystallizer",
+                        "zmaster587.advancedRocketry.tile.multiblock.machine.TileCrystallizer"};
+            case "arc-furnace":
+                return new String[]{"advancedrocketry", "arcfurnace",
+                        "zmaster587.advancedRocketry.tile.multiblock.machine.TileElectricArcFurnace"};
+            case "centrifuge":
+                return new String[]{"advancedrocketry", "centrifuge",
+                        "zmaster587.advancedRocketry.tile.multiblock.machine.TileCentrifuge"};
+            case "precision-laser-etcher":
+                return new String[]{"advancedrocketry", "precisionlaseretcher",
+                        "zmaster587.advancedRocketry.tile.multiblock.machine.TilePrecisionLaserEtcher"};
+            default:
+                return null;
+        }
+    }
+
     private static net.minecraft.block.state.IBlockState resolveStructureCell(Object cell,
             net.minecraft.block.state.IBlockState controllerState) {
         if (cell == null) return null;
@@ -6233,16 +6334,70 @@ public class TestProbeCommand extends CommandBase {
             }
         }
 
-        Map<String, Object> info = new LinkedHashMap<>();
-        info.put("ok", true);
-        info.put("controllerPos", new int[]{cx, cy, cz});
-        info.put("dimensions",    new int[]{dimX, dimY, dimZ});
-        info.put("offset",        new int[]{ox, oy, oz});
-        info.put("boundingBox",   new int[]{minX, minY, minZ, maxX, maxY, maxZ});
-        info.put("placed",        placed);
-        info.put("skipped",       skipped);
-        info.put("unresolved",    unresolved);
-        send(sender, jsonMap(info));
+        // Scan structure for libVulpes hatch chars and report ALL world
+        // positions (some machines have multiple of the same hatch — e.g.
+        // ChemicalReactor has two 'L' liquid inputs, ArcFurnace has three
+        // 'P' power inputs). Same coord formula as the placement loop above.
+        Map<Character, java.util.List<int[]>> hatchPositions = new LinkedHashMap<>();
+        for (int y = 0; y < dimY; y++) {
+            for (int z = 0; z < dimZ; z++) {
+                for (int x = 0; x < dimX; x++) {
+                    Object cell = structure[y][z][x];
+                    if (!(cell instanceof Character)) continue;
+                    char c = (Character) cell;
+                    if (c != 'I' && c != 'O' && c != 'P' && c != 'p'
+                            && c != 'L' && c != 'l') continue;
+                    int gx = cx + (ox - x);
+                    int gy = cy - y + oy;
+                    int gz = cz + (z - oz);
+                    hatchPositions.computeIfAbsent(c, k -> new java.util.ArrayList<>())
+                            .add(new int[]{gx, gy, gz});
+                }
+            }
+        }
+
+        StringBuilder out = new StringBuilder("{");
+        out.append("\"ok\":true");
+        out.append(",\"controllerPos\":").append(jsonArray(new int[]{cx, cy, cz}));
+        out.append(",\"dimensions\":").append(jsonArray(new int[]{dimX, dimY, dimZ}));
+        out.append(",\"offset\":").append(jsonArray(new int[]{ox, oy, oz}));
+        out.append(",\"boundingBox\":").append(jsonArray(new int[]{minX, minY, minZ, maxX, maxY, maxZ}));
+        out.append(",\"placed\":").append(placed);
+        out.append(",\"skipped\":").append(skipped);
+        out.append(",\"unresolved\":").append(unresolved);
+        // Emit first-position aliases (back-compat) AND full position lists.
+        appendHatchPositions(out, hatchPositions, 'I', "inputPos",        "inputPositions");
+        appendHatchPositions(out, hatchPositions, 'O', "outputPos",       "outputPositions");
+        appendHatchPositions(out, hatchPositions, 'P', "powerPos",        "powerPositions");
+        appendHatchPositions(out, hatchPositions, 'p', "powerOutputPos",  "powerOutputPositions");
+        appendHatchPositions(out, hatchPositions, 'L', "liquidInputPos",  "liquidInputPositions");
+        appendHatchPositions(out, hatchPositions, 'l', "liquidOutputPos", "liquidOutputPositions");
+        out.append('}');
+        send(sender, out.toString());
+    }
+
+    private static void appendHatchPositions(StringBuilder out,
+            Map<Character, java.util.List<int[]>> positions,
+            char c, String firstKey, String listKey) {
+        java.util.List<int[]> list = positions.get(c);
+        if (list == null || list.isEmpty()) return;
+        out.append(",\"").append(firstKey).append("\":").append(jsonArray(list.get(0)));
+        out.append(",\"").append(listKey).append("\":[");
+        for (int i = 0; i < list.size(); i++) {
+            if (i > 0) out.append(',');
+            out.append(jsonArray(list.get(i)));
+        }
+        out.append(']');
+    }
+
+    private static String jsonArray(int[] arr) {
+        StringBuilder sb = new StringBuilder("[");
+        for (int i = 0; i < arr.length; i++) {
+            if (i > 0) sb.append(',');
+            sb.append(arr[i]);
+        }
+        sb.append(']');
+        return sb.toString();
     }
 
     /**
