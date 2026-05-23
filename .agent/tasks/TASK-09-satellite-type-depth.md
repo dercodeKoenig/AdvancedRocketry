@@ -148,9 +148,11 @@ and never re-synced.
 
 `SatelliteTickBehaviourTest` (4 pins, AbstractSharedServerTest):
 
-- `baseSatelliteTickAccruesPowerGenMinusOnePerTick` —
-  `oreScanner` (pure `SatelliteBase`) accrues exactly
-  `powerGen - 1` per tick.
+- `baseSatelliteTickAccruesAtApproximatelyPowerGenRate` —
+  `oreScanner` (pure `SatelliteBase`) accrues at approximately
+  `powerGen` per tick; pin uses a range
+  `[ticks*powerGen/2 .. ticks*powerGen]`. (Originally pinned exact
+  `powerGen - 1`; loosened to contract shape in `b97ddf0b`.)
 - `baseSatelliteBatteryCapsAtPowerStorage` — `acceptEnergy` clamps
   at the configured powerStorage even when each tick would
   overshoot.

@@ -61,6 +61,34 @@ order. Each item is a hard gate — do not move on until done.
 - Top-of-file pyramid counter and bug-ledger counter updated if
   this task changed them.
 
+### 2.5. Regenerate pyramid counter — REQUIRED if the closed TASK added or removed any test methods
+
+The free-form stale-claim sweep in step 3 has historically **missed**
+the pyramid counter line in `tasks/README.md` — it reads like a
+labelled fact, not a free-form claim, so agents (and humans) skip it.
+The 2026-05-23 audit found the counter stale by 236 tests because
+every recent TASK closure trusted "+N added" arithmetic from commit
+messages, and drafts have been off by 5+ per session. Regenerate
+from the source of truth instead:
+
+```
+for tier in unit integration server client; do
+  echo -n "$tier: "
+  grep -rc '^    @Test$\|^	@Test$' \
+    src/test/java/zmaster587/advancedRocketry/test/$tier/ \
+    2>/dev/null | awk -F: '{s+=$2} END {print s}'
+done
+```
+
+Sum the four tier counts and update the **Pyramid** line in the
+`## Current state` section of `tasks/README.md` (format
+`testUnit X / testIntegration Y / testServer Z / testClient W`).
+Bump the "Counter verified <YYYY-MM-DD>" date on the same line.
+
+Skip this step only if you can certify zero `@Test` methods were
+added or removed by the closed TASK (rare — most closures move the
+counter).
+
 ### 3. Stale-claim sweep — REQUIRED, NOT OPTIONAL
 
 This is the step that has historically been skipped. Skipping it

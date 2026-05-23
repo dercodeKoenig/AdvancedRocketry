@@ -24,9 +24,10 @@ import static org.junit.Assert.assertTrue;
  *       down energy; a regression that drops the interface would break
  *       silent energy routing for the whole "solar farm in orbit" loop.</li>
  *   <li><b>biomeChanger / {@code SatelliteBiomeChanger}</b> — one tick
- *       with a queued position, configured biome and ≥120 battery must
- *       both (a) terraform that block's biome to the configured one and
- *       (b) drain the queue + battery by exactly one entry / 120 RF.</li>
+ *       with a queued position, configured biome and sufficient battery
+ *       must both (a) terraform that block's biome to the configured one
+ *       and (b) drain the queue by one entry. Per-entry RF cost is an
+ *       implementation detail and intentionally not pinned.</li>
  *   <li><b>weatherController / {@code SatelliteWeatherController}</b> —
  *       mode 0 (rain) ticks must convert an AIR block in
  *       {@code viable_positions} to WATER and consume the entry.</li>
@@ -41,8 +42,6 @@ public class SatelliteTypeBehaviourTest extends AbstractSharedServerTest {
             Pattern.compile("\"canTick\":(true|false)");
     private static final Pattern LIST_SIZE =
             Pattern.compile("\"listSize\":(\\d+)");
-    private static final Pattern STORED =
-            Pattern.compile("\"stored\":(-?\\d+)");
     private static final Pattern BIOME_NAME =
             Pattern.compile("\"biome\":\"([^\"]*)\"");
     private static final Pattern BLOCK_NAME =
@@ -70,11 +69,13 @@ public class SatelliteTypeBehaviourTest extends AbstractSharedServerTest {
     }
 
     /** Pin: BiomeChanger consumes the queue and mutates the world's
-     *  biome at the queued position when battery ≥ 120 and biomeId is
-     *  set. Asserts only the end-state (queue drained + biome
-     *  changed) — intermediate snapshots are unreliable because the
-     *  shared-harness background {@code DimensionManager.tickDimensions}
-     *  fires every ~50 ms and races with successive probe calls. */
+     *  biome at the queued position when battery is sufficient and
+     *  biomeId is set. Asserts only the end-state (queue drained +
+     *  biome changed) — intermediate snapshots are unreliable because
+     *  the shared-harness background {@code DimensionManager.tickDimensions}
+     *  fires every ~50 ms and races with successive probe calls.
+     *  Per-entry RF cost is implementation detail; we pre-charge well
+     *  above any plausible threshold via {@code force-charge}. */
     @Test
     public void biomeChangerTickTerraformBlockBiomeAndDrainsQueue() throws Exception {
         long satId = createSat("biomeChanger", 100, 10_000, 1000);
@@ -106,7 +107,7 @@ public class SatelliteTypeBehaviourTest extends AbstractSharedServerTest {
 
         // Add one position to the change queue.
         client().execute("artest satellite biome-add-pos 0 " + satId + " " + x + " " + y + " " + z);
-        // Pre-charge battery well above the 120-per-block threshold.
+        // Pre-charge battery well above any plausible per-block drain.
         client().execute("artest satellite force-charge 0 " + satId + " 5000");
         // Force a tick — either we drain the queue, or a background
         // tick already did before this call. Either way the same

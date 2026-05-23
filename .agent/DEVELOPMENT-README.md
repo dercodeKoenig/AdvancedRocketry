@@ -34,8 +34,9 @@ must be followed when changing any task's status.
 **TL;DR**: status of a task lives in exactly one place — the
 `TASK-NN-*.md` file header. Everything else (`tasks/README.md`,
 markers, this navigator) is a derived view. The closure checklist
-(steps 1-5, including the mandatory **stale-claim sweep**) prevents
-the drift that caused every prior SSOT incident. Free-form bullet
+(steps 1-5, including the mandatory **pyramid counter regen
+(step 2.5)** and **stale-claim sweep (step 3)**) prevents the
+drift that caused every prior SSOT incident. Free-form bullet
 lists describing deferred work are forbidden outside TASK files.
 
 ---
