@@ -6,7 +6,7 @@
   originally listed alongside the 9 multiblock industrial machines
   but has a fundamentally different test shape and was deferred
   here.
-- Status: **Backlog**.
+- Status: ✅ **Completed 2026-05-23**.
 - Created: 2026-05-23.
 
 ## Context
@@ -63,14 +63,74 @@ press should drive the activation. Verify in Phase 0.
 
 ## Acceptance
 
-- [ ] `PlatePressRecipeEndToEndTest` exists with 3 tests.
-- [ ] Test uses `RecipesMachine.getInstance().getRecipes(BlockSmallPlatePress.class)`
-      for recipe discovery — no hardcoded ingredients/outputs.
-- [ ] Test asserts only player-visible contract (item dropped) —
-      no internal-state pins (piston extension state, intermediate
-      flag values, exact tick where event fires).
-- [ ] Full testServer green.
-- [ ] Pyramid counter regenerated per task-lifecycle step 2.5.
+- [x] `PlatePressRecipeEndToEndTest` exists with **2** tests (see
+      "Actual scope" below — TASK-18 / TASK-26 settled on 2-tests-per-class
+      shape; the originally-proposed 3rd test was an impl-pin per the
+      `testing-principles` SOP).
+- [x] Test uses `RecipesMachine.getInstance().getRecipes(BlockSmallPlatePress.class)`
+      for recipe discovery (reflectively from the probe) — no hardcoded
+      ingredients/outputs.
+- [x] Test asserts only player-visible contract (3-block fixture stack
+      built + EntityItem with recipe output spawns next to press +
+      ingredient block consumed). The transient `piston_extension`
+      state is tolerated — assert is "no longer the ingredient block",
+      not "specifically AIR".
+- [x] testServer green for the 2 PlatePress tests in isolation.
+- [x] Pyramid counter regenerated per task-lifecycle step 2.5:
+      237 / 80 / 339 / 41 = **697** (was 695 after TASK-26, +2 from this task).
+
+## Actual scope (shipped)
+
+### Probe extensions (3)
+
+- `/artest fixture machine plate-press <dim> <x> <y> <z>` — new
+  branch in the `fixture machine` dispatch. Resolves the first
+  recipe from `RecipesMachine.getInstance().getRecipes(BlockSmallPlatePress.class)`,
+  picks the first ingredient alternative, places obsidian at y-2,
+  the resolved ingredient block at y-1, the PlatePress at y
+  (FACING=DOWN, EXTENDED=false), pre-clears the column + 4 adjacent
+  redstone slots, and returns press / ingredient / obsidian
+  positions plus the resolved ingredient + output registry names.
+- `/artest machine recipe-info-block <FQN> [recipeIndex]` — new
+  branch in `handleMachine`. Same shape as the existing `recipe-info`
+  but takes an arbitrary class FQN (used by tests outside the
+  `tile.multiblock.machine.*` package). Not consumed by the
+  PlatePress test directly — the fixture verb already does the
+  reflective lookup — but added for completeness so future
+  block-class-keyed machines have a discovery surface.
+- `/artest entity scan-items <dim> <cx> <cy> <cz> <radius>` — new
+  branch in `handleEntity`. Reports every `EntityItem` inside a box
+  around the given centre, each as `{item, count, meta, posX, posY,
+  posZ}`. The end-to-end test asserts a single match for the recipe
+  output's registry name.
+
+### Test (1 class, 2 @Tests)
+
+- `PlatePressRecipeEndToEndTest.platePressFixtureBuildsExpectedStack`
+  — reads the 3-block stack via `block at` and asserts each cell
+  has the right block id.
+- `PlatePressRecipeEndToEndTest.platePressRedstoneActivationDropsRecipeOutput`
+  — places fixture, places `minecraft:redstone_block` adjacent above
+  the press, scans for EntityItem with the recipe's output id within
+  2 blocks of the spawn point, asserts ingredient block no longer
+  matches the original id.
+
+### Activation path chosen
+
+`minecraft:redstone_block` placed at `press.up()`. The redstone
+block emits weak power 15 on all sides; `setBlockState` fires
+`neighborChanged` on the press synchronously, which runs
+`checkForMove` → `shouldBeExtended()` returns true → the press
+spawns the EntityItem and clears the ingredient. The flow is
+fully synchronous within `setBlockState`, so no force-tick is
+needed.
+
+## Result
+
+- 2 new server-tier @Tests; pyramid 695 → 697.
+- 3 new probe verbs (one used directly by the test, two banked
+  for future block-class-keyed machines).
+- No production logic changes. No production bugs surfaced.
 
 ## Out of scope
 

@@ -14,8 +14,8 @@ Bug-ledger history lives in
 
 ## Current state
 
-- **Pyramid**: 691 / 0 / 3 (testUnit 237 / testIntegration 80 /
-  testServer 333 / testClient 41). Counter verified 2026-05-23 via
+- **Pyramid**: 697 / 0 / 3 (testUnit 237 / testIntegration 80 /
+  testServer 339 / testClient 41). Counter verified 2026-05-23 via
   `grep -rc '@Test$' src/test/java/.../{unit,integration,server,client}/`.
   Earlier README claim of 441 was stale by 236 tests — see TASK-17.
 - **testServer wall time**: 8m 27s (50 % faster than pre-B2).
@@ -45,6 +45,8 @@ Bug-ledger history lives in
 | [TASK-14](TASK-14-companion-mod-integration-coverage.md) | Companion-mod integration coverage (JEI / GC / MO) — closed as Obsolete: mod-absent paths already pinned implicitly by 441 boot-the-server tests + TASK-11's JEI null-guard pin | ❌ Obsolete |
 | [TASK-17](TASK-17-ssot-integrity-followups.md) | SSOT integrity follow-ups — `task-lifecycle.md` step 2.5 (counter regen) shipped; Phase 2a already done in `b97ddf0b`; Phase 2b premise wrong (no exact-120-RF assertion existed) → doc-comment cleanup only | ✅ |
 | [TASK-18](TASK-18-industrial-machine-powered-cycle.md) | Industrial machine powered-cycle coverage — 7 of 9 multiblock machines shipped (14 server-tier tests + 3 probe extensions + shared `MachineRecipeEndToEndKit` with input-drain pin); ArcFurnace + PrecisionAssembler → TASK-26 (wildcard structure shape) | ✅ partial |
+| [TASK-25](TASK-25-plate-press-coverage.md) | PlatePress (single-block redstone-triggered) recipe coverage — 1 class × 2 tests + 3 probe verbs (`fixture machine plate-press`, `recipe-info-block`, `entity scan-items`) | ✅ |
+| [TASK-26](TASK-26-wildcard-based-machine-coverage.md) | Wildcard-structure machine coverage — ArcFurnace + PrecisionAssembler (2 classes × 2 tests = 4 server-tier tests + 1 generic-helper refactor with hatch-overlay + structure-block-filler for `'*'` cells + 1 kit hook for adaptive force-tick budget) | ✅ |
 
 ## Backlog
 
@@ -54,15 +56,14 @@ entry is an actionable TASK with a defined plan + acceptance.
 | ID | Title | Status | Blocker / trigger |
 |---|---|---|---|
 | [TASK-15](TASK-15-visual-regression.md) | Visual regression infrastructure for Minecraft client | 👁 Watching | 4 explicit promotion triggers in task file (GUI refactor / modpack-report / JEI rework / texture-pipeline bump). Revisit + consider Obsolete if no trigger in 6 months. |
-| [TASK-16](TASK-16-test-stability-flake-watch.md) | Test-stability flake watch — parallel-fork port contention + tick-timing race (4 tests in 2 distinct shapes) | 🟢 Backlog | Promotion trigger fired 2026-05-23: WarpControllerDepthTest + MissionLifecyclePyramidTest joined the flake list during TASK-18 close-out. ~3-4 h. |
+| [TASK-16](TASK-16-test-stability-flake-watch.md) | Test-stability flake watch — investigation deliverable. Three flake shapes root-caused; shape #3 mitigated in TASK-26 via kit retry; #1+#2 split into TASK-27. | 🟡 Investigation complete | Investigation done 2026-05-23. |
+| [TASK-27](TASK-27-flake-fix-port-and-tick-races.md) | Port-bind retry in `RealDedicatedServerHarness` (shape #1) + per-test `tick-until` polling for shape #2 | 🟢 Backlog | Touches sibling `ForgeTestFramework` repo (composite build). ~4 h. |
 | [TASK-19](TASK-19-multiblock-powered-cycle-trio.md) | Multiblock powered-cycle (Terraformer / BHG / Beacon enable) | 🟢 Backlog | Three independent multiblocks, shared shape. ~9-10 h. |
 | [TASK-20](TASK-20-hovercraft-ride-coverage.md) | Hovercraft ride / throttle / fuel-drain coverage (testClient) | 🟢 Backlog | testClient territory; player-input simulation. ~9 h. Largest single testClient task in backlog. |
 | [TASK-21](TASK-21-ar-player-equipped-positives.md) | `/ar` player-equipped subcommand positive paths (testClient) | 🟢 Backlog | Completes `/ar` surface that TASK-11 started — guard side already deep, this is the positive side. ~6 h. |
 | [TASK-22](TASK-22-uv-assembler-full-delta.md) | UV-assembler full behavioural delta from rocket assembler | 🟢 Backlog | Bounds / output entity class / mount eligibility. Class-identity pin replaced by real contracts. ~4 h. |
 | [TASK-23](TASK-23-sealdetector-remaining-branches.md) | SealDetector remaining branches (`notsealblock` / `notfullblock` / `fluid`) | 🟢 Backlog | Three branches deferred from `SealDetectorDispatchTest`. ~4 h. |
 | [TASK-24](TASK-24-spacearmor-chest-route.md) | SpaceArmor CHEST sub-inventory drain route | 🟢 Backlog | Phase 7 (TASK-10b) closed the cheaper enchanted-armor route; this finishes the suit-family chest route. ~2.5 h. |
-| [TASK-25](TASK-25-plate-press-coverage.md) | PlatePress recipe coverage (single-block, redstone-triggered) — split out of TASK-18 | 🟢 Backlog | Different shape from TASK-18 multiblocks: no hatches, no RF, redstone-pulse activation, output as `EntityItem`. Needs bespoke probe verbs. ~2 h. |
-| [TASK-26](TASK-26-wildcard-based-machine-coverage.md) | ArcFurnace + PrecisionAssembler recipe coverage — split out of TASK-18 | 🟢 Backlog | Wildcard `'*'` structure cells — generic fixture helper can't compute hatch positions. Needs bespoke handlers that overwrite chosen wildcard cells with hatches. ~2 h. |
 
 ## Conscious non-goals
 

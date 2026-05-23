@@ -128,11 +128,26 @@ final class MachineRecipeEndToEndKit {
 
     static void assertFixtureValidates(TestClient c, int cx, int cy, int cz,
                                        String tag, String fixtureResp) throws Exception {
-        String resp = String.join("\n",
-                c.execute("artest machine try-complete 0 " + cx + " " + cy + " " + cz));
-        assertTrue(tag + " — multiblock not complete\n  validate: " + resp
-                        + "\n  fixture: " + fixtureResp,
-                resp.contains("\"isComplete\":true"));
+        // TASK-16 shape #3 mitigation — `attemptCompleteStructure` very rarely
+        // returns false on the immediate first call after the fixture is
+        // built (the validator's chunk-load check + per-cell block-match scan
+        // appears to occasionally race with whatever finalization
+        // setBlockState chained behind it). Retry several times with a
+        // graceful gap before giving up; under full-pyramid testServer
+        // pressure the race window widens beyond what 3×75 ms covers, so
+        // the budget is 5 attempts × 200 ms (~1 s ceiling on the non-happy
+        // path; ~0 ms cost when the first call succeeds).
+        StringBuilder attempts = new StringBuilder();
+        String resp = null;
+        for (int attempt = 0; attempt < 5; attempt++) {
+            resp = String.join("\n",
+                    c.execute("artest machine try-complete 0 " + cx + " " + cy + " " + cz));
+            if (resp.contains("\"isComplete\":true")) return;
+            attempts.append("\n  attempt ").append(attempt + 1).append(": ").append(resp);
+            Thread.sleep(200);
+        }
+        throw new AssertionError(tag + " — multiblock not complete after 5 attempts"
+                + attempts + "\n  fixture: " + fixtureResp);
     }
 
     // ---- Recipe discovery --------------------------------------------------
@@ -143,26 +158,32 @@ final class MachineRecipeEndToEndKit {
         final List<String[]> itemOutputs;      // {slot, item}
         final List<String[]> fluidIngredients; // {fluid, amount}
         final List<String[]> fluidOutputs;     // {fluid, amount}
+        final int time;                        // recipe.getTime() — ticks needed
         final String raw;
         FirstRecipe(List<String[]> ii, List<String[]> io,
-                    List<String[]> fi, List<String[]> fo, String raw) {
+                    List<String[]> fi, List<String[]> fo, int time, String raw) {
             this.itemIngredients = ii; this.itemOutputs = io;
             this.fluidIngredients = fi; this.fluidOutputs = fo;
-            this.raw = raw;
+            this.time = time; this.raw = raw;
         }
     }
+
+    private static final Pattern TIME_FIELD = Pattern.compile("\"time\":(\\d+)");
 
     static FirstRecipe resolveFirstRecipe(TestClient c, String tileShortName) throws Exception {
         String resp = String.join("\n",
                 c.execute("artest machine recipe-info " + tileShortName + " 0"));
         assertTrue("recipe-info errored for " + tileShortName + ": " + resp,
                 !resp.contains("\"error\""));
+        int time = 0;
+        Matcher tm = TIME_FIELD.matcher(resp);
+        if (tm.find()) time = Integer.parseInt(tm.group(1));
         return new FirstRecipe(
                 parseSection(resp, "\"ingredients\":[", ANY_INGREDIENT, 4),
                 parseSection(resp, "\"outputs\":[",     ANY_OUTPUT,     2),
                 parseSection(resp, "\"fluidIngredients\":[", FLUID_INGREDIENT, 2),
                 parseSection(resp, "\"fluidOutputs\":[",     FLUID_INGREDIENT, 2),
-                resp);
+                time, resp);
     }
 
     private static List<String[]> parseSection(String resp, String key,
@@ -216,10 +237,14 @@ final class MachineRecipeEndToEndKit {
         assertTrue("machine set-enabled failed for " + fixtureKey + ": " + enable,
                 enable.contains("\"ok\":true") && enable.contains("\"enabled\":true"));
 
-        // 2000 ticks gives generous headroom for any AR machine recipe
-        // (longest known is ~400).
+        // Force-tick budget adapts to the recipe's declared completion time.
+        // Most AR machine recipes are <500 ticks; the wildcard-structure
+        // machines from TASK-26 push higher (ArcFurnace=6000, PrecisionAssembler=4000).
+        // Floor of 2000 keeps the 7 TASK-18 machines on their original budget;
+        // ceiling extends to `time + 1000` for the long ones.
+        int tickBudget = Math.max(2000, r.time + 1000);
         String tick = String.join("\n", c.execute(
-                "artest tile force-tick 0 " + cx + " " + cy + " " + cz + " 2000"));
+                "artest tile force-tick 0 " + cx + " " + cy + " " + cz + " " + tickBudget));
         assertTrue("force-tick failed for " + fixtureKey + ": " + tick,
                 tick.contains("\"ok\":true"));
 

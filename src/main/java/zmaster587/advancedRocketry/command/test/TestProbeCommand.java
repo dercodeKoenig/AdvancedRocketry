@@ -3305,6 +3305,73 @@ public class TestProbeCommand extends CommandBase {
             }
             return;
         }
+        // TASK-25 — same shape as `recipe-info` above but takes an arbitrary
+        // class FQN. Used by classes outside `tile.multiblock.machine.*`
+        // (notably `BlockSmallPlatePress`, whose recipes are registered
+        // against its block class).
+        if (args.length >= 2 && "recipe-info-block".equalsIgnoreCase(args[0])) {
+            String fqn = args[1];
+            int recipeIndex = args.length >= 3 ? parseIntOr(args[2], 0) : 0;
+            try {
+                Class<?> recipesMachineClass = Class.forName("zmaster587.libVulpes.recipe.RecipesMachine");
+                Object instance = recipesMachineClass.getMethod("getInstance").invoke(null);
+                java.lang.reflect.Method getRecipes = recipesMachineClass.getMethod("getRecipes", Class.class);
+                Class<?> machineClass = Class.forName(fqn);
+                java.util.List<?> recipes = (java.util.List<?>) getRecipes.invoke(instance, machineClass);
+                if (recipes == null || recipes.isEmpty()) {
+                    send(sender, "{\"error\":\"no recipes registered\",\"class\":\""
+                            + escapeJson(fqn) + "\"}");
+                    return;
+                }
+                if (recipeIndex < 0 || recipeIndex >= recipes.size()) {
+                    send(sender, "{\"error\":\"recipeIndex out of range\",\"index\":" + recipeIndex
+                            + ",\"size\":" + recipes.size() + "}");
+                    return;
+                }
+                Object recipe = recipes.get(recipeIndex);
+                Class<?> recipeClass = recipe.getClass();
+                java.util.List<?> ingredients = (java.util.List<?>) recipeClass.getMethod("getIngredients").invoke(recipe);
+                java.util.List<?> outputs = (java.util.List<?>) recipeClass.getMethod("getOutput").invoke(recipe);
+                int time = (Integer) recipeClass.getMethod("getTime").invoke(recipe);
+                int power = (Integer) recipeClass.getMethod("getPower").invoke(recipe);
+
+                StringBuilder builder = new StringBuilder("{\"class\":\"")
+                        .append(escapeJson(fqn))
+                        .append("\",\"recipeIndex\":").append(recipeIndex)
+                        .append(",\"totalRecipes\":").append(recipes.size())
+                        .append(",\"time\":").append(time)
+                        .append(",\"power\":").append(power)
+                        .append(",\"ingredients\":[");
+                for (int i = 0; i < ingredients.size(); i++) {
+                    Object slot = ingredients.get(i);
+                    if (!(slot instanceof java.util.List)) continue;
+                    java.util.List<?> alts = (java.util.List<?>) slot;
+                    if (alts.isEmpty()) continue;
+                    Object first = alts.get(0);
+                    if (!(first instanceof net.minecraft.item.ItemStack)) continue;
+                    net.minecraft.item.ItemStack stack = (net.minecraft.item.ItemStack) first;
+                    if (i > 0) builder.append(',');
+                    appendItemStackJson(builder, stack, i);
+                }
+                builder.append("],\"outputs\":[");
+                for (int i = 0; i < outputs.size(); i++) {
+                    Object out = outputs.get(i);
+                    if (!(out instanceof net.minecraft.item.ItemStack)) continue;
+                    net.minecraft.item.ItemStack stack = (net.minecraft.item.ItemStack) out;
+                    if (i > 0) builder.append(',');
+                    appendItemStackJson(builder, stack, i);
+                }
+                builder.append("]}");
+                send(sender, builder.toString());
+            } catch (ClassNotFoundException missing) {
+                send(sender, "{\"error\":\"class not found\",\"fqn\":\""
+                        + escapeJson(fqn) + "\"}");
+            } catch (ReflectiveOperationException re) {
+                send(sender, "{\"error\":\"reflection failed\",\"msg\":\""
+                        + escapeJson(re.getMessage()) + "\"}");
+            }
+            return;
+        }
         if (args.length >= 1 && "recipes-summary".equalsIgnoreCase(args[0])) {
             // Report recipe counts for every canonical AR multiblock recipe machine
             // (SMART §7.7). Uses libVulpes' RecipesMachine singleton.
@@ -4756,7 +4823,7 @@ public class TestProbeCommand extends CommandBase {
                     parseIntOr(args[5], 0),
                     "advancedrocketry", "terraformer",
                     "zmaster587.advancedRocketry.tile.multiblock.TileAtmosphereTerraformer",
-                    "structure");
+                    "structure", null);
             return;
         }
         if (args.length >= 6 && "multiblock".equalsIgnoreCase(args[0])
@@ -4768,12 +4835,28 @@ public class TestProbeCommand extends CommandBase {
                     parseIntOr(args[5], 0),
                     "advancedrocketry", "spaceLaser",
                     "zmaster587.advancedRocketry.tile.multiblock.orbitallaserdrill.TileOrbitalLaserDrill",
-                    "structure");
+                    "structure", null);
+            return;
+        }
+        // TASK-25 — PlatePress fixture. Different shape from the multiblock
+        // industrial machines: a 3-block vertical stack (obsidian / ingredient
+        // / press) with no hatches, no RF, redstone-triggered. The ingredient
+        // block is resolved at fixture-build time from
+        // RecipesMachine.getInstance().getRecipes(BlockSmallPlatePress.class)
+        // — first recipe, first ingredient alternative.
+        if (args.length >= 6 && "machine".equalsIgnoreCase(args[0])
+                && "plate-press".equalsIgnoreCase(args[1])) {
+            handleFixturePlatePress(server, sender,
+                    parseIntOr(args[2], Integer.MIN_VALUE),
+                    parseIntOr(args[3], 0),
+                    parseIntOr(args[4], 64),
+                    parseIntOr(args[5], 0));
             return;
         }
         // TASK-18 — multiblock industrial machines via generic structure
         // helper. Keys are kebab-case short names; lookup table resolves to
-        // controller registry name + tile-class FQN.
+        // controller registry name + tile-class FQN. TASK-26 adds optional
+        // hatch overlays for wildcard-structure machines.
         if (args.length >= 6 && "machine".equalsIgnoreCase(args[0])
                 && !"cutting".equalsIgnoreCase(args[1])) {
             String[] spec = lookupMultiblockMachineSpec(args[1]);
@@ -4782,12 +4865,13 @@ public class TestProbeCommand extends CommandBase {
                         + escapeJson(args[1]) + "\"}");
                 return;
             }
+            WildcardConfig wildcardConfig = lookupWildcardMachineOverrides(args[1]);
             handleFixtureGenericFromStructure(server, sender,
                     parseIntOr(args[2], Integer.MIN_VALUE),
                     parseIntOr(args[3], 0),
                     parseIntOr(args[4], 64),
                     parseIntOr(args[5], 0),
-                    spec[0], spec[1], spec[2], "structure");
+                    spec[0], spec[1], spec[2], "structure", wildcardConfig);
             return;
         }
         send(sender, "{\"error\":\"unknown fixture subcommand — try rocket <dim> <x> <y> <z> | machine cutting|rolling-machine|lathe|precision-assembler|electrolyser|chemical-reactor|crystallizer|arc-furnace|centrifuge|precision-laser-etcher <dim> <x> <y> <z> | multiblock blackhole-gen|beacon|observatory|railgun|warp-core|gravity-controller|planet-analyser|space-elevator|microwave-receiver|solar-array|terraformer|orbital-laser-drill <dim> <x> <y> <z>\"}");
@@ -6146,6 +6230,202 @@ public class TestProbeCommand extends CommandBase {
         }
     }
 
+    /**
+     * TASK-26 — per-machine hatch overlay for wildcard-structure machines.
+     *
+     * <p>{@link TileElectricArcFurnace} and {@link TilePrecisionAssembler}
+     * declare their hatch slots via {@code '*'} wildcards instead of explicit
+     * {@code 'I'}/{@code 'O'}/{@code 'P'} chars, so the generic fixture
+     * helper's structure scan can't compute hatch positions.</p>
+     *
+     * <p>The returned {@link WildcardConfig} carries (a) the chosen hatch
+     * overlays — each overlays a wildcard cell with a libVulpes hatch via
+     * the {@link #resolveStructureCell} char mapping; and (b) a "filler"
+     * block to place at any remaining wildcard cell that the machine's
+     * {@code getAllowableWildCardBlocks()} accepts but which isn't a hatch
+     * (otherwise the wildcard cell stays AIR and validation fails because
+     * AIR is not in the allowable list).</p>
+     *
+     * <p>Returns {@code null} for machines whose structure has explicit
+     * hatch chars — those go through the regular scan-based path.</p>
+     */
+    private static WildcardConfig lookupWildcardMachineOverrides(String key) {
+        switch (key.toLowerCase()) {
+            case "arc-furnace":
+                // Structure has three explicit 'P' chars at y=0 already, so
+                // only 'I' and 'O' need overlay. Both placed on the base
+                // wildcard ring at y=3 z=4 (back row opposite controller).
+                // Controller 'c' is at structure[3][0][2]. Filler =
+                // blockBlastBrick (the structure block listed in
+                // TileElectricArcFurnace.getAllowableWildCardBlocks).
+                return new WildcardConfig(
+                        zmaster587.advancedRocketry.api.AdvancedRocketryBlocks.blockBlastBrick,
+                        new HatchOverride('I', 3, 4, 1),
+                        new HatchOverride('O', 3, 4, 3));
+            case "precision-assembler":
+                // Structure has NO explicit hatch chars; overlay 'I'/'O'/'P'
+                // onto the three front-row wildcards on the bottom layer
+                // (structure[2][0][1..3]). Controller 'c' is at
+                // structure[2][0][0]. Filler = libVulpes blockStructureBlock
+                // (added with WILDCARD meta in
+                // TilePrecisionAssembler.getAllowableWildCardBlocks).
+                return new WildcardConfig(
+                        zmaster587.libVulpes.api.LibVulpesBlocks.blockStructureBlock,
+                        new HatchOverride('I', 2, 0, 1),
+                        new HatchOverride('O', 2, 0, 2),
+                        new HatchOverride('P', 2, 0, 3));
+            default:
+                return null;
+        }
+    }
+
+    /** Override entry — pins a libVulpes hatch char
+     *  ({@code 'I'}/{@code 'O'}/{@code 'P'}/...) to a specific structure-space
+     *  cell ({@code y}, {@code z}, {@code x}). Block placement is via
+     *  {@link #resolveStructureCell} on the char. */
+    private static final class HatchOverride {
+        final char role;
+        final int y, z, x;
+        HatchOverride(char role, int y, int z, int x) {
+            this.role = role; this.y = y; this.z = z; this.x = x;
+        }
+    }
+
+    /** Wildcard machine configuration — hatch overrides plus the structure-
+     *  block to use as filler for every other {@code '*'} cell. */
+    private static final class WildcardConfig {
+        final HatchOverride[] hatches;
+        final net.minecraft.block.Block filler;
+        WildcardConfig(net.minecraft.block.Block filler, HatchOverride... hatches) {
+            this.filler = filler;
+            this.hatches = hatches;
+        }
+    }
+
+    /** Pack a structure-space (y, z, x) cell into a 64-bit key for
+     *  {@link java.util.HashMap}-based lookup. Each axis fits in 20 bits
+     *  (max structure dim observed in this repo is ~30). */
+    private static long packCell(int y, int z, int x) {
+        return ((long)(y & 0xFFFFF) << 40) | ((long)(z & 0xFFFFF) << 20) | (x & 0xFFFFF);
+    }
+
+    /**
+     * TASK-25 — builds the 3-block PlatePress stack at the requested press
+     * position: obsidian at y-2, the first registered recipe's ingredient
+     * block at y-1, PlatePress at y (FACING=DOWN, EXTENDED=false).
+     *
+     * <p>The press's activation contract requires obsidian as the BASE and
+     * a recognised recipe-ingredient block in the MIDDLE
+     * (see {@link zmaster587.advancedRocketry.block.BlockSmallPlatePress#getRecipe}).
+     * If the first recipe's ingredient alternatives aren't a placeable
+     * block, the response includes an error.</p>
+     */
+    private void handleFixturePlatePress(MinecraftServer server, ICommandSender sender,
+            int dim, int cx, int cy, int cz) {
+        net.minecraft.world.WorldServer world = server.getWorld(dim);
+        if (world == null) {
+            send(sender, "{\"error\":\"world not loaded\",\"dim\":" + dim + "}");
+            return;
+        }
+        net.minecraft.block.Block pressBlock = ForgeRegistries.BLOCKS.getValue(
+                new ResourceLocation("advancedrocketry", "platepress"));
+        if (pressBlock == null) {
+            send(sender, "{\"error\":\"missing block 'advancedrocketry:platepress'\"}");
+            return;
+        }
+
+        // Resolve first recipe + first ingredient block.
+        net.minecraft.item.ItemStack ingredientStack;
+        net.minecraft.item.ItemStack outputStack;
+        net.minecraft.block.Block ingredientBlock;
+        try {
+            Class<?> pressClass = Class.forName(
+                    "zmaster587.advancedRocketry.block.BlockSmallPlatePress");
+            Class<?> recipesMachineClass = Class.forName("zmaster587.libVulpes.recipe.RecipesMachine");
+            Object instance = recipesMachineClass.getMethod("getInstance").invoke(null);
+            java.util.List<?> recipes = (java.util.List<?>) recipesMachineClass
+                    .getMethod("getRecipes", Class.class).invoke(instance, pressClass);
+            if (recipes == null || recipes.isEmpty()) {
+                send(sender, "{\"error\":\"no recipes registered for BlockSmallPlatePress\"}");
+                return;
+            }
+            Object recipe = recipes.get(0);
+            Class<?> recipeClass = recipe.getClass();
+            java.util.List<?> ingredients = (java.util.List<?>) recipeClass.getMethod("getIngredients").invoke(recipe);
+            java.util.List<?> outputs = (java.util.List<?>) recipeClass.getMethod("getOutput").invoke(recipe);
+            if (ingredients.isEmpty()) {
+                send(sender, "{\"error\":\"first recipe has no ingredients\"}");
+                return;
+            }
+            java.util.List<?> alts = (java.util.List<?>) ingredients.get(0);
+            if (alts == null || alts.isEmpty()) {
+                send(sender, "{\"error\":\"first recipe ingredient has no alternatives\"}");
+                return;
+            }
+            ingredientStack = (net.minecraft.item.ItemStack) alts.get(0);
+            outputStack = outputs.isEmpty()
+                    ? net.minecraft.item.ItemStack.EMPTY
+                    : (net.minecraft.item.ItemStack) outputs.get(0);
+            ingredientBlock = net.minecraft.block.Block.getBlockFromItem(ingredientStack.getItem());
+            if (ingredientBlock == net.minecraft.init.Blocks.AIR) {
+                send(sender, "{\"error\":\"first ingredient is not a placeable block\",\"item\":\""
+                        + escapeJson(ingredientStack.getItem().getRegistryName().toString()) + "\"}");
+                return;
+            }
+        } catch (ReflectiveOperationException re) {
+            send(sender, "{\"error\":\"reflection failed loading PlatePress recipe\",\"msg\":\""
+                    + escapeJson(re.getMessage()) + "\"}");
+            return;
+        }
+
+        BlockPos pressPos      = new BlockPos(cx, cy, cz);
+        BlockPos ingredientPos = new BlockPos(cx, cy - 1, cz);
+        BlockPos obsidianPos   = new BlockPos(cx, cy - 2, cz);
+        // Pre-clear a 3-block-tall column + a 1-block redstone slot around
+        // the press so neighbouring leftovers from prior tests don't
+        // pre-power the press or block the ingredient placement.
+        for (int dy = -2; dy <= 1; dy++) {
+            world.setBlockToAir(new BlockPos(cx, cy + dy, cz));
+        }
+        for (net.minecraft.util.EnumFacing dir : net.minecraft.util.EnumFacing.HORIZONTALS) {
+            world.setBlockToAir(pressPos.offset(dir));
+        }
+
+        world.setBlockState(obsidianPos, net.minecraft.init.Blocks.OBSIDIAN.getDefaultState());
+        @SuppressWarnings("deprecation")
+        net.minecraft.block.state.IBlockState ingredientState =
+                ingredientBlock.getStateFromMeta(ingredientStack.getMetadata());
+        world.setBlockState(ingredientPos, ingredientState);
+        net.minecraft.block.state.IBlockState pressState = pressBlock.getDefaultState();
+        try {
+            pressState = pressState
+                    .withProperty(net.minecraft.block.BlockPistonBase.FACING,
+                            net.minecraft.util.EnumFacing.DOWN)
+                    .withProperty(net.minecraft.block.BlockPistonBase.EXTENDED,
+                            Boolean.FALSE);
+        } catch (IllegalArgumentException ignored) {
+            // Unexpected — but if FACING/EXTENDED aren't on the state, fall
+            // back to default. PlatePress declares both.
+        }
+        world.setBlockState(pressPos, pressState);
+
+        net.minecraft.util.ResourceLocation outputId = outputStack.isEmpty()
+                ? null : outputStack.getItem().getRegistryName();
+        net.minecraft.util.ResourceLocation ingredientItemId = ingredientStack.getItem().getRegistryName();
+        net.minecraft.util.ResourceLocation ingredientBlockId = ingredientBlock.getRegistryName();
+        send(sender, "{\"ok\":true"
+                + ",\"pressPos\":[" + cx + "," + cy + "," + cz + "]"
+                + ",\"ingredientPos\":[" + cx + "," + (cy - 1) + "," + cz + "]"
+                + ",\"obsidianPos\":[" + cx + "," + (cy - 2) + "," + cz + "]"
+                + ",\"ingredientItem\":\"" + (ingredientItemId == null ? "null" : ingredientItemId.toString()) + "\""
+                + ",\"ingredientBlock\":\"" + (ingredientBlockId == null ? "null" : ingredientBlockId.toString()) + "\""
+                + ",\"ingredientMeta\":" + ingredientStack.getMetadata()
+                + ",\"outputItem\":\"" + (outputId == null ? "null" : outputId.toString()) + "\""
+                + ",\"outputCount\":" + outputStack.getCount()
+                + ",\"outputMeta\":" + outputStack.getMetadata()
+                + "}");
+    }
+
     private static net.minecraft.block.state.IBlockState resolveStructureCell(Object cell,
             net.minecraft.block.state.IBlockState controllerState) {
         if (cell == null) return null;
@@ -6203,12 +6483,18 @@ public class TestProbeCommand extends CommandBase {
      *       {@link #resolveStructureCell}. Wildcards ({@code '*'}) are left
      *       at air — fixtures using this helper must either have empty
      *       wildcards or accept AIR.</li>
+     *   <li>If {@code overrides} is non-null, each entry overwrites a
+     *       chosen wildcard cell with a concrete libVulpes hatch block
+     *       and the resulting world position is added to the response's
+     *       hatch-position lists. Used by wildcard-structure machines
+     *       (TASK-26) — see {@link #lookupWildcardMachineOverrides}.</li>
      * </ol>
      */
     private void handleFixtureGenericFromStructure(MinecraftServer server, ICommandSender sender,
             int dim, int cx, int cy, int cz,
             String controllerNamespace, String controllerPath,
-            String tileClassName, String structureFieldName) {
+            String tileClassName, String structureFieldName,
+            WildcardConfig wildcardConfig) {
         net.minecraft.world.WorldServer world = server.getWorld(dim);
         if (world == null) {
             send(sender, "{\"error\":\"world not loaded\",\"dim\":" + dim + "}");
@@ -6334,6 +6620,53 @@ public class TestProbeCommand extends CommandBase {
             }
         }
 
+        // TASK-26 — for wildcard-structure machines, overlay each '*' cell
+        // with either a libVulpes hatch (where the test needs one) or the
+        // machine's structure-block (filler) so the validator's
+        // getAllowableWildCardBlocks list matches the world state. The
+        // placement loop above leaves '*' cells as AIR, which the validator
+        // rejects for these machines.
+        Map<Character, java.util.List<int[]>> overrideHatchPositions = new LinkedHashMap<>();
+        if (wildcardConfig != null) {
+            // Build a quick lookup: structure-space cell → hatch role.
+            Map<Long, Character> hatchByCell = new java.util.HashMap<>();
+            for (HatchOverride ov : wildcardConfig.hatches) {
+                hatchByCell.put(packCell(ov.y, ov.z, ov.x), ov.role);
+            }
+
+            for (int y = 0; y < dimY; y++) {
+                for (int z = 0; z < dimZ; z++) {
+                    for (int x = 0; x < dimX; x++) {
+                        Object cell = structure[y][z][x];
+                        if (!(cell instanceof Character) || (Character) cell != '*') continue;
+
+                        int gx = cx + (ox - x);
+                        int gy = cy - y + oy;
+                        int gz = cz + (z - oz);
+                        BlockPos cellPos = new BlockPos(gx, gy, gz);
+
+                        Character role = hatchByCell.get(packCell(y, z, x));
+                        if (role != null) {
+                            net.minecraft.block.state.IBlockState hatchState =
+                                    resolveStructureCell(role, controllerState);
+                            if (hatchState == null) { unresolved++; continue; }
+                            world.setBlockState(cellPos, hatchState);
+                            overrideHatchPositions
+                                    .computeIfAbsent(role, k -> new java.util.ArrayList<>())
+                                    .add(new int[]{gx, gy, gz});
+                        } else if (wildcardConfig.filler != null) {
+                            world.setBlockState(cellPos, wildcardConfig.filler.getDefaultState());
+                        } else {
+                            // No filler — leave AIR. Validation will likely
+                            // fail for this machine, but the caller asked.
+                            continue;
+                        }
+                        placed++;
+                    }
+                }
+            }
+        }
+
         // Scan structure for libVulpes hatch chars and report ALL world
         // positions (some machines have multiple of the same hatch — e.g.
         // ChemicalReactor has two 'L' liquid inputs, ArcFurnace has three
@@ -6354,6 +6687,16 @@ public class TestProbeCommand extends CommandBase {
                             .add(new int[]{gx, gy, gz});
                 }
             }
+        }
+
+        // Fold override positions into the response's hatch lists. The scan
+        // above won't find these (wildcard cells aren't hatch chars in the
+        // structure array), so the override placements have to be merged in
+        // explicitly.
+        for (Map.Entry<Character, java.util.List<int[]>> entry : overrideHatchPositions.entrySet()) {
+            hatchPositions
+                    .computeIfAbsent(entry.getKey(), k -> new java.util.ArrayList<>())
+                    .addAll(entry.getValue());
         }
 
         StringBuilder out = new StringBuilder("{");
@@ -7234,7 +7577,46 @@ public class TestProbeCommand extends CommandBase {
                     + ",\"posY\":" + entity.posY + "}");
             return;
         }
-        send(sender, "{\"error\":\"unknown entity subcommand — try spawn <dim> <x> <y> <z> <name> [block-id] | info <dim> <entityId> | tick <dim> <entityId> [count]\"}");
+        // TASK-25 — scan a box around (cx,cy,cz) for EntityItem instances
+        // and emit each one's registry name + count + position. Used to
+        // pin recipe outputs that spawn as world entities (e.g. PlatePress
+        // drops its output as an EntityItem next to the press).
+        if (args.length >= 6 && "scan-items".equalsIgnoreCase(args[0])) {
+            int dim = parseIntOr(args[1], Integer.MIN_VALUE);
+            double cx = parseDoubleOr(args[2], 0);
+            double cy = parseDoubleOr(args[3], 0);
+            double cz = parseDoubleOr(args[4], 0);
+            double radius = parseDoubleOr(args[5], 1);
+            net.minecraft.world.WorldServer world = server.getWorld(dim);
+            if (world == null) {
+                send(sender, "{\"error\":\"world not loaded\",\"dim\":" + dim + "}");
+                return;
+            }
+            net.minecraft.util.math.AxisAlignedBB bb = new net.minecraft.util.math.AxisAlignedBB(
+                    cx - radius, cy - radius, cz - radius,
+                    cx + radius, cy + radius, cz + radius);
+            java.util.List<net.minecraft.entity.item.EntityItem> items =
+                    world.getEntitiesWithinAABB(net.minecraft.entity.item.EntityItem.class, bb);
+            StringBuilder b = new StringBuilder("{\"ok\":true,\"count\":")
+                    .append(items.size()).append(",\"items\":[");
+            for (int i = 0; i < items.size(); i++) {
+                if (i > 0) b.append(',');
+                net.minecraft.entity.item.EntityItem ei = items.get(i);
+                net.minecraft.item.ItemStack stack = ei.getItem();
+                ResourceLocation rn = stack.getItem().getRegistryName();
+                b.append("{\"item\":\"").append(rn == null ? "null" : rn.toString())
+                        .append("\",\"count\":").append(stack.getCount())
+                        .append(",\"meta\":").append(stack.getMetadata())
+                        .append(",\"posX\":").append(ei.posX)
+                        .append(",\"posY\":").append(ei.posY)
+                        .append(",\"posZ\":").append(ei.posZ)
+                        .append('}');
+            }
+            b.append("]}");
+            send(sender, b.toString());
+            return;
+        }
+        send(sender, "{\"error\":\"unknown entity subcommand — try spawn <dim> <x> <y> <z> <name> [block-id] | info <dim> <entityId> | tick <dim> <entityId> [count] | scan-items <dim> <cx> <cy> <cz> <radius>\"}");
     }
 
     /**
