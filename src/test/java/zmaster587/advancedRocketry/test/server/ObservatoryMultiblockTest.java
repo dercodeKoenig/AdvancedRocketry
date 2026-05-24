@@ -49,8 +49,8 @@ public class ObservatoryMultiblockTest extends AbstractSharedServerTest {
         assertTrue("expected TileObservatory tile at controller pos: " + info,
                 info.contains("TileObservatory"));
 
-        String tryComplete = join(client().execute(
-                "artest machine try-complete 0 " + CX + " " + CY + " " + CZ));
+        String tryComplete = MachineRecipeEndToEndKit.tryCompleteWithRetry(
+                client(), 0, CX, CY, CZ);
         assertTrue("try-complete probe errored: " + tryComplete,
                 tryComplete.contains("\"ok\":true"));
         assertTrue("observatory multiblock didn't validate (isComplete=false): " + tryComplete,
@@ -64,8 +64,7 @@ public class ObservatoryMultiblockTest extends AbstractSharedServerTest {
                 "artest fixture multiblock observatory 0 " + cx + " " + cy + " " + cz));
         assertTrue("fixture failed: " + fixture, fixture.contains("\"ok\":true"));
 
-        String first = join(client().execute(
-                "artest machine try-complete 0 " + cx + " " + cy + " " + cz));
+        String first = MachineRecipeEndToEndKit.tryCompleteWithRetry(client(), 0, cx, cy, cz);
         assertTrue("baseline must validate: " + first,
                 first.contains("\"isComplete\":true"));
 
@@ -76,8 +75,7 @@ public class ObservatoryMultiblockTest extends AbstractSharedServerTest {
         assertTrue("could not replace lens: " + breakLens,
                 breakLens.contains("\"ok\":true"));
 
-        String broken = join(client().execute(
-                "artest machine try-complete 0 " + cx + " " + cy + " " + cz));
+        String broken = MachineRecipeEndToEndKit.tryCompleteWithRetry(client(), 0, cx, cy, cz);
         assertTrue("structure stayed complete after central lens removal — "
                         + "validator broken: " + broken,
                 broken.contains("\"isComplete\":false"));
@@ -90,8 +88,7 @@ public class ObservatoryMultiblockTest extends AbstractSharedServerTest {
                 "artest fixture multiblock observatory 0 " + cx + " " + cy + " " + cz));
         assertTrue("fixture failed: " + fixture, fixture.contains("\"ok\":true"));
 
-        String first = join(client().execute(
-                "artest machine try-complete 0 " + cx + " " + cy + " " + cz));
+        String first = MachineRecipeEndToEndKit.tryCompleteWithRetry(client(), 0, cx, cy, cz);
         assertTrue("baseline must validate: " + first,
                 first.contains("\"isComplete\":true"));
 
@@ -102,8 +99,7 @@ public class ObservatoryMultiblockTest extends AbstractSharedServerTest {
         assertTrue("could not replace motor: " + breakMotor,
                 breakMotor.contains("\"ok\":true"));
 
-        String broken = join(client().execute(
-                "artest machine try-complete 0 " + cx + " " + cy + " " + cz));
+        String broken = MachineRecipeEndToEndKit.tryCompleteWithRetry(client(), 0, cx, cy, cz);
         assertTrue("structure stayed complete after motor removal — "
                         + "validator broken: " + broken,
                 broken.contains("\"isComplete\":false"));
@@ -116,8 +112,7 @@ public class ObservatoryMultiblockTest extends AbstractSharedServerTest {
                 "artest fixture multiblock observatory 0 " + cx + " " + cy + " " + cz));
         assertTrue("fixture failed: " + fixture, fixture.contains("\"ok\":true"));
 
-        String first = join(client().execute(
-                "artest machine try-complete 0 " + cx + " " + cy + " " + cz));
+        String first = MachineRecipeEndToEndKit.tryCompleteWithRetry(client(), 0, cx, cy, cz);
         assertTrue("baseline must validate: " + first,
                 first.contains("\"isComplete\":true"));
 
@@ -129,8 +124,7 @@ public class ObservatoryMultiblockTest extends AbstractSharedServerTest {
         assertTrue("could not fill air chamber: " + fillAir,
                 fillAir.contains("\"ok\":true"));
 
-        String broken = join(client().execute(
-                "artest machine try-complete 0 " + cx + " " + cy + " " + cz));
+        String broken = MachineRecipeEndToEndKit.tryCompleteWithRetry(client(), 0, cx, cy, cz);
         assertTrue("structure stayed complete after air-chamber fill — "
                         + "Blocks.AIR-cell validator broken: " + broken,
                 broken.contains("\"isComplete\":false"));

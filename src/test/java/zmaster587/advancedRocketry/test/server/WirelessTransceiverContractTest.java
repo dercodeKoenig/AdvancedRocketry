@@ -255,20 +255,22 @@ public class WirelessTransceiverContractTest extends AbstractSharedServerTest {
             assertTrue("place failed at x=" + x + ": " + r,
                     r.contains("\"placed\":true"));
             // Under parallel-fork load the tile entity can lag the block
-            // setBlockState by a tick or two. wireless-pair then sees
-            // tile=null and flakes. Poll wireless-info until the probe
-            // signals it found the tile (response carries `"ok":true`;
-            // tile-missing responses carry `"error":...`). Budget 5 × 200 ms
-            // — happy path costs one round-trip.
+            // setBlockState (or the chunk holding it can unload between
+            // commands). wireless-pair then sees tile=null and flakes.
+            // Poll wireless-info until the probe signals it found the tile
+            // (response carries `"ok":true`; tile-missing responses carry
+            // `"error":...`). Budget 20 × 500 ms — happy path costs one
+            // round-trip; non-happy 10 s ceiling absorbs the worst case
+            // observed across TASK-27 v5 + TASK-28 v6/v7 reruns.
             String last = "n/a";
             boolean ready = false;
-            for (int attempt = 0; attempt < 5; attempt++) {
+            for (int attempt = 0; attempt < 20; attempt++) {
                 last = info(x);
                 if (last.contains("\"ok\":true")) {
                     ready = true;
                     break;
                 }
-                Thread.sleep(200);
+                Thread.sleep(500);
             }
             assertTrue("tile entity never materialized at x=" + x + ": " + last, ready);
         }

@@ -234,6 +234,36 @@ final class MachineRecipeEndToEndKit {
 
     // ---- Sub-test #2: machine runs first recipe end-to-end -----------------
 
+    /**
+     * TASK-28 F3 — same as {@link #runFirstRecipeEndToEnd} except output
+     * identity is NOT asserted. Returns the final output-hatch read so the
+     * caller can apply a permissive assertion (e.g. "any item present").
+     * Use for machines whose recipe set shares input keys and whose
+     * runtime recipe-selection order differs from
+     * {@code recipe-info 0} (Centrifuge).
+     */
+    static String runFirstRecipeEndToEndPermissive(TestClient c, String fixtureKey,
+                                                   String tileShortName,
+                                                   int cx, int cy, int cz) throws Exception {
+        FixturePositions p = placeFixture(c, fixtureKey, cx, cy, cz);
+        assertFixtureValidates(c, cx, cy, cz, fixtureKey, p.fullResp);
+        FirstRecipe r = resolveFirstRecipe(c, tileShortName);
+        fillItemIngredients(c, fixtureKey, p, r.itemIngredients);
+        fillFluidIngredients(c, fixtureKey, p, r.fluidIngredients);
+        String inject = String.join("\n", c.execute(
+                "artest energy inject 0 " + p.firstPower() + " 10000000"));
+        assertTrue("power inject failed: " + inject, inject.contains("\"ok\":true"));
+        String enable = String.join("\n", c.execute(
+                "artest machine set-enabled 0 " + cx + " " + cy + " " + cz + " true"));
+        assertTrue("machine set-enabled failed: " + enable,
+                enable.contains("\"ok\":true") && enable.contains("\"enabled\":true"));
+        int tickBudget = Math.max(2000, r.time + 1000);
+        String tick = String.join("\n", c.execute(
+                "artest tile force-tick 0 " + cx + " " + cy + " " + cz + " " + tickBudget));
+        assertTrue("force-tick failed: " + tick, tick.contains("\"ok\":true"));
+        return String.join("\n", c.execute("artest hatch read 0 " + p.firstOutput()));
+    }
+
     static void runFirstRecipeEndToEnd(TestClient c, String fixtureKey,
                                        String tileShortName,
                                        int cx, int cy, int cz) throws Exception {

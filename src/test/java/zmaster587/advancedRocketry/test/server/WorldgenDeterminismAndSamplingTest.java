@@ -120,12 +120,17 @@ public class WorldgenDeterminismAndSamplingTest extends AbstractSharedServerTest
         int dim = firstNonOverworldArDimOrSkip();
         client().execute("artest dim load " + dim);
 
+        // Use wider chunk spread (0/64/128 in X) so adjacent biome boundaries
+        // are crossed even on AR's flat moon-style planets. With (0,4,8)
+        // every sample landed in the same 16×16 biome cell on `moondark`,
+        // legitimately collapsing topY+biome to identical and flaking the
+        // assertion (TASK-28 F7).
         String a = String.join("\n",
                 client().execute("artest worldgen sample " + dim + " 0 0"));
         String b = String.join("\n",
-                client().execute("artest worldgen sample " + dim + " 4 4"));
+                client().execute("artest worldgen sample " + dim + " 64 64"));
         String c = String.join("\n",
-                client().execute("artest worldgen sample " + dim + " 8 0"));
+                client().execute("artest worldgen sample " + dim + " 128 0"));
 
         String topAandBandC =
                 group(TOP_Y_PATTERN, a, "topY") + "/"

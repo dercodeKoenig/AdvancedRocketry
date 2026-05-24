@@ -3609,10 +3609,28 @@ public class TestProbeCommand extends CommandBase {
                 send(sender, "{\"error\":\"world not loaded\",\"dim\":" + dim + "}");
                 return;
             }
-            // getChunk(int, int) force-loads + populates if needed.
+            // getChunk(int, int) force-loads + populates if needed. Under
+            // parallel-fork pressure the populate step occasionally lags so
+            // adjacent-chunk decorations (trees, ores) haven't run yet,
+            // collapsing the (topY, biome) signature of spaced chunks —
+            // TASK-28 F7 (worldgen sampling race, promoted from TASK-16
+            // shape #4 after 3 sightings). Poll up to 1 s for
+            // {@code isTerrainPopulated()} before sampling, also pre-load
+            // neighbour chunks so cross-chunk decorations finalize on this
+            // chunk's column.
+            ensureChunkAreaLoaded(world, (chunkX << 4) + 8, (chunkZ << 4) + 8, 1);
             Chunk chunk = world.getChunkProvider().provideChunk(chunkX, chunkZ);
             if (chunk == null || !chunk.isLoaded()) {
                 send(sender, "{\"error\":\"chunk failed to load\",\"chunk\":[" + chunkX + "," + chunkZ + "]}");
+                return;
+            }
+            for (int attempt = 0; attempt < 20 && !chunk.isTerrainPopulated(); attempt++) {
+                try { Thread.sleep(50L); } catch (InterruptedException ie) { Thread.currentThread().interrupt(); break; }
+                chunk = world.getChunkProvider().provideChunk(chunkX, chunkZ);
+                if (chunk == null) break;
+            }
+            if (chunk == null) {
+                send(sender, "{\"error\":\"chunk became null during populate wait\",\"chunk\":[" + chunkX + "," + chunkZ + "]}");
                 return;
             }
 
@@ -4480,6 +4498,38 @@ public class TestProbeCommand extends CommandBase {
 
     // §9.2 Fixture-building primitives -----------------------------------------
 
+    /**
+     * TASK-28 F1/F6/F7 — force chunk load before block-state mutation or
+     * sampling. Under parallel-fork load the chunk containing the test
+     * position can be unloaded between probe round-trips; subsequent
+     * {@code setBlockState} / {@code attemptCompleteStructure} /
+     * {@code getBiome} calls then race with the chunk reload.
+     * {@code provideChunk} loads from disk OR generates if missing —
+     * synchronous and cheap on the happy path (single map lookup).
+     */
+    private static void ensureChunkLoaded(net.minecraft.world.WorldServer world, int blockX, int blockZ) {
+        if (world == null) return;
+        world.getChunkProvider().provideChunk(blockX >> 4, blockZ >> 4);
+    }
+
+    /**
+     * TASK-28 F1 — force chunk load for a square area centred at the
+     * given block position. {@code radiusChunks=2} covers a 5×5 chunk
+     * (80×80 block) area, sufficient for every existing fixture footprint.
+     */
+    private static void ensureChunkAreaLoaded(net.minecraft.world.WorldServer world,
+                                              int centerBlockX, int centerBlockZ,
+                                              int radiusChunks) {
+        if (world == null) return;
+        int ccx = centerBlockX >> 4;
+        int ccz = centerBlockZ >> 4;
+        for (int dx = -radiusChunks; dx <= radiusChunks; dx++) {
+            for (int dz = -radiusChunks; dz <= radiusChunks; dz++) {
+                world.getChunkProvider().provideChunk(ccx + dx, ccz + dz);
+            }
+        }
+    }
+
     private void handlePlace(MinecraftServer server, ICommandSender sender, String[] args) {
         // place <dim> <x> <y> <z> <block-id> [meta]
         if (args.length < 5) {
@@ -4506,6 +4556,9 @@ public class TestProbeCommand extends CommandBase {
 
         @SuppressWarnings("deprecation")
         IBlockState state = block.getStateFromMeta(meta);
+        // Force chunk load before setBlockState — mitigates TASK-28 F6
+        // (Wireless tile=null race after place).
+        ensureChunkLoaded(world, x, z);
         boolean placed = world.setBlockState(new BlockPos(x, y, z), state);
         send(sender, "{\"ok\":true,\"placed\":" + placed + ",\"block\":\"" + escapeJson(blockId)
                 + "\",\"pos\":[" + x + "," + y + "," + z + "]}");
@@ -4546,6 +4599,17 @@ public class TestProbeCommand extends CommandBase {
             return;
         }
 
+        // Force every chunk in the fill rectangle to be loaded — mitigates
+        // TASK-28 F1 chunk-load race for fill operations that cross chunk
+        // boundaries (e.g. clearing airspace around a fixture).
+        int cxMin = minX >> 4, cxMax = maxX >> 4;
+        int czMin = minZ >> 4, czMax = maxZ >> 4;
+        for (int cx = cxMin; cx <= cxMax; cx++) {
+            for (int cz = czMin; cz <= czMax; cz++) {
+                world.getChunkProvider().provideChunk(cx, cz);
+            }
+        }
+
         int placed = 0;
         for (int x = minX; x <= maxX; x++) {
             for (int y = minY; y <= maxY; y++) {
@@ -4576,6 +4640,24 @@ public class TestProbeCommand extends CommandBase {
      * {@code /artest rocket assemble}.
      */
     private void handleFixture(MinecraftServer server, ICommandSender sender, String[] args) {
+        // TASK-28 F1 — pre-load a 3×3 chunk area around the fixture origin
+        // so per-variant setBlockState below hits loaded chunks. ROCKET
+        // FIXTURE IS DEDUCTED FROM THIS PATH: aggressive pre-load there
+        // triggered a 2 s server-thread block on cold-start, and the
+        // subsequent natural-tick burst race-cleared {@code isInFlight}
+        // on rockets force-launched right after, breaking 3 launch tests
+        // 100 % in the TASK-28 v6 10× rerun. Other fixture variants
+        // (multiblock / machine) don't race the natural-tick burst —
+        // their assertion windows are larger.
+        if (args.length >= 6 && !"rocket".equalsIgnoreCase(args[0])) {
+            int preloadDim = parseIntOr(args[2], Integer.MIN_VALUE);
+            int preloadX = parseIntOr(args[3], 0);
+            int preloadZ = parseIntOr(args[5], 0);
+            net.minecraft.world.WorldServer preloadWorld = server.getWorld(preloadDim);
+            if (preloadWorld != null) {
+                ensureChunkAreaLoaded(preloadWorld, preloadX, preloadZ, 1);
+            }
+        }
         if (args.length >= 5 && "rocket".equalsIgnoreCase(args[0])) {
             int dim = parseIntOr(args[1], Integer.MIN_VALUE);
             int baseX = parseIntOr(args[2], 0);
@@ -6500,6 +6582,12 @@ public class TestProbeCommand extends CommandBase {
             send(sender, "{\"error\":\"world not loaded\",\"dim\":" + dim + "}");
             return;
         }
+        // TASK-28 F1 — pre-load the controller chunk + its 8 neighbours so
+        // attemptCompleteStructure's per-cell block-match scan doesn't race
+        // chunk loading on multiblocks that straddle a chunk boundary
+        // (PrecisionLaserEtcher / ArcFurnace observed flaking through the
+        // existing 8×500 ms retry budget without this pre-load).
+        ensureChunkAreaLoaded(world, cx, cz, 1);
 
         net.minecraft.block.Block controller =
                 ForgeRegistries.BLOCKS.getValue(new ResourceLocation(controllerNamespace, controllerPath));
@@ -9131,12 +9219,12 @@ public class TestProbeCommand extends CommandBase {
      * {@code /artest field info <dim> <x> <y> <z>} — reads the projector's
      * private {@code extensionRange} field via reflection so tests can verify
      * "the field has grown" without scanning blocks. Also blocks the server
-     * thread up to ~6s (120 sleeps × 50ms) to let the projector's
+     * thread up to ~12s (240 sleeps × 50ms) to let the projector's
      * {@code % 5 == 0} time gate hit naturally — production runs the
      * extension cycle only every 5 world ticks, and {@code tile force-tick}
      * doesn't advance world time, so a wait against the natural tick loop is
      * the only way to drive extension without modifying production logic.
-     * The 6 s ceiling absorbs parallel-fork pressure that stretches effective
+     * The 12 s ceiling absorbs parallel-fork pressure that stretches effective
      * tick rate; happy-path callers exit on the first observed non-zero range.
      *
      * <p>{@code /artest field info-now <dim> <x> <y> <z>} — same probe but
@@ -9144,11 +9232,13 @@ public class TestProbeCommand extends CommandBase {
      */
     private void handleField(MinecraftServer server, ICommandSender sender, String[] args) {
         if (args.length < 5 ||
-                !("info".equalsIgnoreCase(args[0]) || "info-now".equalsIgnoreCase(args[0]))) {
-            send(sender, "{\"error\":\"unknown field subcommand — try info <dim> <x> <y> <z> | info-now <dim> <x> <y> <z>\"}");
+                !("info".equalsIgnoreCase(args[0]) || "info-now".equalsIgnoreCase(args[0])
+                  || "tick".equalsIgnoreCase(args[0]))) {
+            send(sender, "{\"error\":\"unknown field subcommand — try info <dim> <x> <y> <z> | info-now <dim> <x> <y> <z> | tick <dim> <x> <y> <z> [n]\"}");
             return;
         }
         boolean waitForTickGate = "info".equalsIgnoreCase(args[0]);
+        boolean directTick = "tick".equalsIgnoreCase(args[0]);
         int dim = parseIntOr(args[1], Integer.MIN_VALUE);
         int x = parseIntOr(args[2], 0);
         int y = parseIntOr(args[3], 0);
@@ -9169,12 +9259,24 @@ public class TestProbeCommand extends CommandBase {
                 (zmaster587.advancedRocketry.tile.TileForceFieldProjector) tile;
 
         if (waitForTickGate) {
-            // Loop up to 120 × 50ms = 6s while releasing the server thread so
+            // Loop up to 240 × 50ms = 12s while releasing the server thread so
             // natural ticks (and the projector's % 5 time gate) fire. Bail
             // early once we observe ANY non-zero extensionRange.
-            for (int iter = 0; iter < 120; iter++) {
+            for (int iter = 0; iter < 240; iter++) {
                 if (readExtensionRange(proj) != 0) break;
                 try { Thread.sleep(50L); } catch (InterruptedException ie) { Thread.currentThread().interrupt(); break; }
+            }
+        } else if (directTick) {
+            // Drive the projector's extension cycle directly, bypassing the
+            // natural %5 tick gate. Each call advances extension by 1 (when
+            // powered) or retracts by 1 (when unpowered). Optional count arg
+            // defaults to 1; tests typically pass N>=MAX_RANGE (32) for full
+            // extension or retraction in a single probe round-trip.
+            int count = (args.length >= 6) ? parseIntOr(args[5], 1) : 1;
+            if (count < 1) count = 1;
+            if (count > 64) count = 64;
+            for (int i = 0; i < count; i++) {
+                proj.onIntermittentUpdate();
             }
         }
 

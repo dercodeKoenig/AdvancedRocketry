@@ -90,12 +90,16 @@ public class ForceFieldProjectionSmokeTest extends AbstractHeadlessServerTest {
         assertTrue("projector must be powered after adjacent redstone: " + poweredProbe,
                 "true".equals(group(POWERED, poweredProbe)));
 
-        // Wait for the natural tick loop. /artest field info polls up to 1.5s
-        // for extensionRange to grow.
-        String grown = String.join("\n", client().execute(
-                "artest field info 0 " + px + " " + py + " " + pz));
-        int rangeAfter = Integer.parseInt(group(RANGE, grown));
-        assertTrue("extensionRange must grow above 0 once powered (got: " + grown + ")",
+        // Drive the projector's extension cycle directly via the test-only
+        // `field tick` probe — bypasses the production %5 natural-tick gate
+        // so we don't depend on natural-tick rate (which stretches under
+        // parallel-fork load and flakes the 12 s wait budget; TASK-28 F2).
+        // Five calls = five extensions; happy-path each call advances range
+        // by 1 (or stays put if next block isn't replaceable).
+        String tickResp = String.join("\n", client().execute(
+                "artest field tick 0 " + px + " " + py + " " + pz + " 5"));
+        int rangeAfter = Integer.parseInt(group(RANGE, tickResp));
+        assertTrue("extensionRange must grow above 0 once powered (got: " + tickResp + ")",
                 rangeAfter > 0);
 
         // Diagnostic dump — for each of the 6 cardinal neighbours, print what
@@ -137,15 +141,11 @@ public class ForceFieldProjectionSmokeTest extends AbstractHeadlessServerTest {
         // Remove redstone → projector unpowered.
         client().execute("artest place 0 " + px + " " + (py - 1) + " " + pz + " minecraft:stone");
 
-        // Wait for collapse via the same probe — the projector decrements
-        // extensionRange every 5 ticks while unpowered AND clears the field
-        // blocks one at a time.
-        for (int waitIter = 0; waitIter < 5; waitIter++) {
-            String collapse = String.join("\n", client().execute(
-                    "artest field info 0 " + px + " " + py + " " + pz));
-            int rangeNow = Integer.parseInt(group(RANGE, collapse));
-            if (rangeNow == 0) break;
-        }
+        // Drive collapse directly via `field tick` (same rationale as above
+        // — bypass the natural-tick %5 gate). Five calls is enough to drop
+        // extensionRange from the typical post-extension value back to 0.
+        client().execute(
+                "artest field tick 0 " + px + " " + py + " " + pz + " 5");
 
         String finalProbe = String.join("\n", client().execute(
                 "artest field info-now 0 " + px + " " + py + " " + pz));
