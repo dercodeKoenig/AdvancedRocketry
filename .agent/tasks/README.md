@@ -47,6 +47,7 @@ Bug-ledger history lives in
 | [TASK-18](TASK-18-industrial-machine-powered-cycle.md) | Industrial machine powered-cycle coverage — 7 of 9 multiblock machines shipped (14 server-tier tests + 3 probe extensions + shared `MachineRecipeEndToEndKit` with input-drain pin); ArcFurnace + PrecisionAssembler → TASK-26 (wildcard structure shape) | ✅ partial |
 | [TASK-25](TASK-25-plate-press-coverage.md) | PlatePress (single-block redstone-triggered) recipe coverage — 1 class × 2 tests + 3 probe verbs (`fixture machine plate-press`, `recipe-info-block`, `entity scan-items`) | ✅ |
 | [TASK-26](TASK-26-wildcard-based-machine-coverage.md) | Wildcard-structure machine coverage — ArcFurnace + PrecisionAssembler (2 classes × 2 tests = 4 server-tier tests + 1 generic-helper refactor with hatch-overlay + structure-block-filler for `'*'` cells + 1 kit hook for adaptive force-tick budget) | ✅ |
+| [TASK-27](TASK-27-flake-fix-port-and-tick-races.md) | Flake fix — port-bind retry in `RealDedicatedServerHarness` + per-test polling for tick races + shape-#3 `tryCompleteWithRetry` kit helper (Beacon + cuttingMachine migrated) + `wireless-info` wait-for-tile probe + `field info` budget bump. **Acceptance partial**: 10× metric not achieved — residual flake shapes outside original scope → TASK-28. | ✅ partial |
 
 ## Backlog
 
@@ -56,8 +57,8 @@ entry is an actionable TASK with a defined plan + acceptance.
 | ID | Title | Status | Blocker / trigger |
 |---|---|---|---|
 | [TASK-15](TASK-15-visual-regression.md) | Visual regression infrastructure for Minecraft client | 👁 Watching | 4 explicit promotion triggers in task file (GUI refactor / modpack-report / JEI rework / texture-pipeline bump). Revisit + consider Obsolete if no trigger in 6 months. |
-| [TASK-16](TASK-16-test-stability-flake-watch.md) | Test-stability flake watch — investigation deliverable. Three flake shapes root-caused; shape #3 mitigated in TASK-26 via kit retry; #1+#2 split into TASK-27. | 🟡 Investigation complete | Investigation done 2026-05-23. |
-| [TASK-27](TASK-27-flake-fix-port-and-tick-races.md) | Port-bind retry in `RealDedicatedServerHarness` (shape #1) + per-test `tick-until` polling for shape #2 | 🟢 Backlog | Touches sibling `ForgeTestFramework` repo (composite build). ~4 h. |
+| [TASK-16](TASK-16-test-stability-flake-watch.md) | Test-stability flake watch — investigation deliverable. Three flake shapes root-caused; shape #3 mitigated in TASK-26 via kit retry; #1+#2 split into TASK-27; #4 (worldgen sampling) confirmed across 3 sightings, promoted to TASK-28 F7. | 🟡 Investigation complete | Investigation done 2026-05-23. |
+| [TASK-28](TASK-28-residual-test-flakes.md) | Residual flake shapes from TASK-27 10× verification — chunk-load forcing (F1/F6/F7), projector tile drive (F2), recipe-pin (F3), fall-clearance fix (F4), SolarPanel watching (F5) | 🟢 Backlog | Surfaced 2026-05-24 from TASK-27 v4/v5 sweeps. ~7 h. |
 | [TASK-19](TASK-19-multiblock-powered-cycle-trio.md) | Multiblock powered-cycle (Terraformer / BHG / Beacon enable) | 🟢 Backlog | Three independent multiblocks, shared shape. ~9-10 h. |
 | [TASK-20](TASK-20-hovercraft-ride-coverage.md) | Hovercraft ride / throttle / fuel-drain coverage (testClient) | 🟢 Backlog | testClient territory; player-input simulation. ~9 h. Largest single testClient task in backlog. |
 | [TASK-21](TASK-21-ar-player-equipped-positives.md) | `/ar` player-equipped subcommand positive paths (testClient) | 🟢 Backlog | Completes `/ar` surface that TASK-11 started — guard side already deep, this is the positive side. ~6 h. |

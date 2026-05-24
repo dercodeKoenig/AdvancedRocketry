@@ -91,9 +91,12 @@ public class MachineRecipeIntegrationTest extends AbstractHeadlessServerTest {
         String outPos = opm.group(1) + " " + opm.group(2) + " " + opm.group(3);
         String pwrPos = ppm.group(1) + " " + ppm.group(2) + " " + ppm.group(3);
 
-        // 2. Validate multiblock.
-        String complete = String.join("\n",
-                client().execute("artest machine try-complete 0 " + cx + " " + cy + " " + cz));
+        // 2. Validate multiblock. Use the kit's retry helper — under
+        //    parallel-fork pressure `attemptCompleteStructure` rarely loses
+        //    the chunk-load + finalization race on the immediate first call
+        //    (TASK-16 shape #3).
+        String complete = MachineRecipeEndToEndKit.tryCompleteWithRetry(
+                client(), 0, cx, cy, cz);
         assertTrue("multiblock not complete: " + complete,
                 complete.contains("\"isComplete\":true"));
 
@@ -127,17 +130,29 @@ public class MachineRecipeIntegrationTest extends AbstractHeadlessServerTest {
         assertTrue("machine set-enabled failed: " + enable,
                 enable.contains("\"ok\":true") && enable.contains("\"enabled\":true"));
 
-        // 6. Drive ticks. Default cutting recipes take ~100 ticks; 300 is safe.
-        String tick = String.join("\n", client().execute(
-                "artest tile force-tick 0 " + cx + " " + cy + " " + cz + " 300"));
-        assertTrue("force-tick failed: " + tick, tick.contains("\"ok\":true"));
-
-        // 7. Read output hatch.
-        String out = String.join("\n", client().execute("artest hatch read 0 " + outPos));
-        assertTrue("hatch read errored: " + out, !out.contains("\"error\""));
+        // 6. Drive ticks in batches and poll the output hatch each batch.
+        //    Default cutting recipes take ~100 ticks; serial budget 300 was
+        //    enough but parallel-3-fork pressure stretches effective tick
+        //    rate (server thread shared across forks). Budget 12×100=1200
+        //    ticks (4× the recipe length) absorbs the worst case observed
+        //    in the 10× testServer rerun under load. Early-exit keeps the
+        //    happy-path cost at ~1 batch.
+        String out = "n/a";
+        boolean found = false;
+        for (int batch = 0; batch < 12; batch++) {
+            String tick = String.join("\n", client().execute(
+                    "artest tile force-tick 0 " + cx + " " + cy + " " + cz + " 100"));
+            assertTrue("force-tick failed: " + tick, tick.contains("\"ok\":true"));
+            out = String.join("\n", client().execute("artest hatch read 0 " + outPos));
+            assertTrue("hatch read errored: " + out, !out.contains("\"error\""));
+            if (out.contains("\"item\":\"" + expectedOutput + "\"")) {
+                found = true;
+                break;
+            }
+        }
         assertTrue("expected output " + expectedOutput
                         + " not in output hatch — recipe didn't complete: ingredient=" + ingredientItem
-                        + " response=" + out,
-                out.contains("\"item\":\"" + expectedOutput + "\""));
+                        + " last response=" + out,
+                found);
     }
 }

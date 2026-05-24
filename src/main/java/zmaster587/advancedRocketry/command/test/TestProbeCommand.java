@@ -9131,11 +9131,13 @@ public class TestProbeCommand extends CommandBase {
      * {@code /artest field info <dim> <x> <y> <z>} — reads the projector's
      * private {@code extensionRange} field via reflection so tests can verify
      * "the field has grown" without scanning blocks. Also blocks the server
-     * thread up to ~1.5s (30 sleeps × 50ms) to let the projector's
+     * thread up to ~6s (120 sleeps × 50ms) to let the projector's
      * {@code % 5 == 0} time gate hit naturally — production runs the
      * extension cycle only every 5 world ticks, and {@code tile force-tick}
      * doesn't advance world time, so a wait against the natural tick loop is
      * the only way to drive extension without modifying production logic.
+     * The 6 s ceiling absorbs parallel-fork pressure that stretches effective
+     * tick rate; happy-path callers exit on the first observed non-zero range.
      *
      * <p>{@code /artest field info-now <dim> <x> <y> <z>} — same probe but
      * without the wait (snapshot the current state).</p>
@@ -9167,10 +9169,10 @@ public class TestProbeCommand extends CommandBase {
                 (zmaster587.advancedRocketry.tile.TileForceFieldProjector) tile;
 
         if (waitForTickGate) {
-            // Loop up to 30 × 50ms = 1.5s while releasing the server thread so
+            // Loop up to 120 × 50ms = 6s while releasing the server thread so
             // natural ticks (and the projector's % 5 time gate) fire. Bail
             // early once we observe ANY non-zero extensionRange.
-            for (int iter = 0; iter < 30; iter++) {
+            for (int iter = 0; iter < 120; iter++) {
                 if (readExtensionRange(proj) != 0) break;
                 try { Thread.sleep(50L); } catch (InterruptedException ie) { Thread.currentThread().interrupt(); break; }
             }

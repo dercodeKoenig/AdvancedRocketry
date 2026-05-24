@@ -254,6 +254,23 @@ public class WirelessTransceiverContractTest extends AbstractSharedServerTest {
                             + " advancedrocketry:wirelessTransciever"));
             assertTrue("place failed at x=" + x + ": " + r,
                     r.contains("\"placed\":true"));
+            // Under parallel-fork load the tile entity can lag the block
+            // setBlockState by a tick or two. wireless-pair then sees
+            // tile=null and flakes. Poll wireless-info until the probe
+            // signals it found the tile (response carries `"ok":true`;
+            // tile-missing responses carry `"error":...`). Budget 5 × 200 ms
+            // — happy path costs one round-trip.
+            String last = "n/a";
+            boolean ready = false;
+            for (int attempt = 0; attempt < 5; attempt++) {
+                last = info(x);
+                if (last.contains("\"ok\":true")) {
+                    ready = true;
+                    break;
+                }
+                Thread.sleep(200);
+            }
+            assertTrue("tile entity never materialized at x=" + x + ": " + last, ready);
         }
     }
 

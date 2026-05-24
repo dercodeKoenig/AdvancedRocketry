@@ -139,25 +139,32 @@ public class MissionLifecyclePyramidTest extends AbstractSharedServerTest {
                 resp.contains("\"completed\":true"));
     }
 
-    /** After completion, the natural DimensionProperties.tick loop
-     *  removes the mission from the satellite registry — cleanup
-     *  contract. Second state call MUST report not-found, confirming
-     *  the prune fired. Probes registry-cleanup as a player-visible
-     *  contract: stale mission entries would leak the satellite map. */
+    /** After completion, the DimensionProperties.tick loop removes the
+     *  mission from the satellite registry — cleanup contract. Probes
+     *  registry-cleanup as a player-visible contract: stale mission
+     *  entries would leak the satellite map.
+     *
+     *  Drives the prune deterministically via {@code satellite
+     *  force-tick-dim} rather than waiting on the natural tick, then
+     *  polls {@code mission state} for the not-found response. */
     @Test
     public void completionPrunesMissionFromSatelliteRegistry() throws Exception {
         long mid = buildRocketAndStartGasMission(7400, 1000);
         String complete = ok(client().execute("artest mission complete-now " + mid));
         assertTrue("complete-now must succeed: " + complete,
                 complete.contains("\"completed\":true"));
-        // Give the natural overworld tick a moment to iterate
-        // tickingSatellites and prune the now-dead mission. The probe
-        // itself runs on the server thread and the natural tick runs
-        // between commands, so a single follow-up state lookup is
-        // enough — no busy-wait needed.
-        String state = ok(client().execute("artest mission state " + mid));
+
+        String state = "n/a";
+        boolean pruned = false;
+        for (int attempt = 0; attempt < 30; attempt++) {
+            ok(client().execute("artest satellite force-tick-dim 0"));
+            state = ok(client().execute("artest mission state " + mid));
+            if (state.contains("\"error\":\"mission not found\"")) {
+                pruned = true;
+                break;
+            }
+        }
         assertTrue("post-completion state lookup must report mission not-found "
-                        + "(natural tick prune): " + state,
-                state.contains("\"error\":\"mission not found\""));
+                        + "(after 30 dim-ticks): " + state, pruned);
     }
 }

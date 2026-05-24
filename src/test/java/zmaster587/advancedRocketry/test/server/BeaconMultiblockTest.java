@@ -47,8 +47,8 @@ public class BeaconMultiblockTest extends AbstractSharedServerTest {
         assertTrue("expected TileBeacon tile at controller pos: " + info,
                 info.contains("TileBeacon"));
 
-        String tryComplete = join(client().execute(
-                "artest machine try-complete 0 " + CX + " " + CY + " " + CZ));
+        String tryComplete = MachineRecipeEndToEndKit.tryCompleteWithRetry(
+                client(), 0, CX, CY, CZ);
         assertTrue("try-complete probe errored: " + tryComplete,
                 tryComplete.contains("\"ok\":true"));
         assertTrue("beacon multiblock didn't validate (isComplete=false): " + tryComplete,
@@ -62,8 +62,7 @@ public class BeaconMultiblockTest extends AbstractSharedServerTest {
                 "artest fixture multiblock beacon 0 " + cx + " " + cy + " " + cz));
         assertTrue("fixture failed: " + fixture, fixture.contains("\"ok\":true"));
 
-        String first = join(client().execute(
-                "artest machine try-complete 0 " + cx + " " + cy + " " + cz));
+        String first = MachineRecipeEndToEndKit.tryCompleteWithRetry(client(), 0, cx, cy, cz);
         assertTrue("baseline must validate: " + first,
                 first.contains("\"isComplete\":true"));
 
@@ -74,8 +73,7 @@ public class BeaconMultiblockTest extends AbstractSharedServerTest {
         assertTrue("could not replace redstone tip: " + breakTip,
                 breakTip.contains("\"ok\":true"));
 
-        String broken = join(client().execute(
-                "artest machine try-complete 0 " + cx + " " + cy + " " + cz));
+        String broken = MachineRecipeEndToEndKit.tryCompleteWithRetry(client(), 0, cx, cy, cz);
         assertTrue("structure stayed complete after redstone tip removal — "
                         + "validator broken: " + broken,
                 broken.contains("\"isComplete\":false"));
@@ -88,8 +86,7 @@ public class BeaconMultiblockTest extends AbstractSharedServerTest {
                 "artest fixture multiblock beacon 0 " + cx + " " + cy + " " + cz));
         assertTrue("fixture failed: " + fixture, fixture.contains("\"ok\":true"));
 
-        String first = join(client().execute(
-                "artest machine try-complete 0 " + cx + " " + cy + " " + cz));
+        String first = MachineRecipeEndToEndKit.tryCompleteWithRetry(client(), 0, cx, cy, cz);
         assertTrue("baseline must validate: " + first,
                 first.contains("\"isComplete\":true"));
 
@@ -101,8 +98,7 @@ public class BeaconMultiblockTest extends AbstractSharedServerTest {
         assertTrue("could not break shaft block: " + breakShaft,
                 breakShaft.contains("\"ok\":true"));
 
-        String broken = join(client().execute(
-                "artest machine try-complete 0 " + cx + " " + cy + " " + cz));
+        String broken = MachineRecipeEndToEndKit.tryCompleteWithRetry(client(), 0, cx, cy, cz);
         assertTrue("structure stayed complete after shaft removal — "
                         + "validator broken: " + broken,
                 broken.contains("\"isComplete\":false"));

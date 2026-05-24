@@ -126,27 +126,47 @@ final class MachineRecipeEndToEndKit {
         return all;
     }
 
+    /**
+     * Drives {@code /artest machine try-complete} with a TASK-16-shape-#3 retry
+     * shim. Returns the response from the last attempt that produced
+     * {@code attempted:true}, or the response from the final retry on
+     * timeout. Callers must assert their own {@code isComplete} expectation
+     * — this helper only guarantees that the validator actually ran.
+     *
+     * <p>The race: {@code attemptCompleteStructure} occasionally returns
+     * {@code false} on the immediate first call after the fixture is built
+     * (chunk-load + finalization race). Re-invoking it across the natural
+     * tick gap between two probe round-trips lets the finalization settle.
+     * Budget: 8 attempts × 500 ms gap (~4 s ceiling on the non-happy path;
+     * ~0 ms cost when the first call succeeds — which is the common case).
+     * Earlier 5×200ms budget proved insufficient under parallel-3-fork
+     * pressure during the TASK-27 10× rerun on multiple multiblocks
+     * (ArcFurnace, PrecisionLaserEtcher, Beacon).</p>
+     */
+    static String tryCompleteWithRetry(TestClient c, int dim, int cx, int cy, int cz) throws Exception {
+        String resp = null;
+        for (int attempt = 0; attempt < 8; attempt++) {
+            resp = String.join("\n",
+                    c.execute("artest machine try-complete " + dim + " " + cx + " " + cy + " " + cz));
+            if (resp.contains("\"attempted\":true")) return resp;
+            Thread.sleep(500);
+        }
+        return resp;
+    }
+
     static void assertFixtureValidates(TestClient c, int cx, int cy, int cz,
                                        String tag, String fixtureResp) throws Exception {
-        // TASK-16 shape #3 mitigation — `attemptCompleteStructure` very rarely
-        // returns false on the immediate first call after the fixture is
-        // built (the validator's chunk-load check + per-cell block-match scan
-        // appears to occasionally race with whatever finalization
-        // setBlockState chained behind it). Retry several times with a
-        // graceful gap before giving up; under full-pyramid testServer
-        // pressure the race window widens beyond what 3×75 ms covers, so
-        // the budget is 5 attempts × 200 ms (~1 s ceiling on the non-happy
-        // path; ~0 ms cost when the first call succeeds).
+        // TASK-16 shape #3 mitigation — see tryCompleteWithRetry above.
         StringBuilder attempts = new StringBuilder();
         String resp = null;
-        for (int attempt = 0; attempt < 5; attempt++) {
+        for (int attempt = 0; attempt < 8; attempt++) {
             resp = String.join("\n",
                     c.execute("artest machine try-complete 0 " + cx + " " + cy + " " + cz));
             if (resp.contains("\"isComplete\":true")) return;
             attempts.append("\n  attempt ").append(attempt + 1).append(": ").append(resp);
-            Thread.sleep(200);
+            Thread.sleep(500);
         }
-        throw new AssertionError(tag + " — multiblock not complete after 5 attempts"
+        throw new AssertionError(tag + " — multiblock not complete after 8 attempts"
                 + attempts + "\n  fixture: " + fixtureResp);
     }
 
