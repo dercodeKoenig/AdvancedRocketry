@@ -202,6 +202,9 @@ public class TestProbeCommand extends CommandBase {
                 case "config":
                     handleConfig(sender, tail(args));
                     break;
+                case "star":
+                    handleStar(sender, tail(args));
+                    break;
                 default:
                     send(sender, "{\"error\":\"unknown subcommand\",\"sub\":\"" + args[0] + "\"}");
             }
@@ -3772,6 +3775,55 @@ public class TestProbeCommand extends CommandBase {
         }
         sb.append(']');
         return sb.toString();
+    }
+
+    // §5.7c Star (StellarBody) probe (TASK-19 Phase 2) ----------------------
+
+    /**
+     * {@code /artest star <get|set-blackhole> <starId> [value]} — reads or
+     * mutates a {@link zmaster587.advancedRocketry.api.dimension.solar.StellarBody}'s
+     * black-hole flag via reflection. Used by TASK-19 Phase 2 to flip the
+     * default Sol star (id 0) into a black hole so a station orbiting it
+     * satisfies {@code TileBlackHoleGenerator.isAroundBlackHole()}.
+     *
+     * <p>Tests MUST restore the original flag in {@code @After} — otherwise
+     * subsequent methods on the shared harness inherit a black-hole Sol
+     * which corrupts unrelated sky-render and orbital-mechanics paths.</p>
+     */
+    private void handleStar(ICommandSender sender, String[] args) {
+        if (args.length == 0) {
+            send(sender, "{\"error\":\"missing subcommand — try get <starId> | set-blackhole <starId> <true|false>\"}");
+            return;
+        }
+        if ("get".equalsIgnoreCase(args[0]) && args.length >= 2) {
+            int id = parseIntOr(args[1], Integer.MIN_VALUE);
+            zmaster587.advancedRocketry.api.dimension.solar.StellarBody star =
+                    DimensionManager.getInstance().getStar(id);
+            if (star == null) {
+                send(sender, "{\"error\":\"star not found\",\"id\":" + id + "}");
+                return;
+            }
+            send(sender, "{\"ok\":true,\"id\":" + id
+                    + ",\"isBlackHole\":" + star.isBlackHole()
+                    + ",\"name\":\"" + escapeJson(String.valueOf(star.getName())) + "\"}");
+            return;
+        }
+        if ("set-blackhole".equalsIgnoreCase(args[0]) && args.length >= 3) {
+            int id = parseIntOr(args[1], Integer.MIN_VALUE);
+            boolean value = Boolean.parseBoolean(args[2]);
+            zmaster587.advancedRocketry.api.dimension.solar.StellarBody star =
+                    DimensionManager.getInstance().getStar(id);
+            if (star == null) {
+                send(sender, "{\"error\":\"star not found\",\"id\":" + id + "}");
+                return;
+            }
+            boolean before = star.isBlackHole();
+            star.setBlackHole(value);
+            send(sender, "{\"ok\":true,\"id\":" + id
+                    + ",\"before\":" + before + ",\"after\":" + star.isBlackHole() + "}");
+            return;
+        }
+        send(sender, "{\"error\":\"unknown subcommand — try get <starId> | set-blackhole <starId> <true|false>\"}");
     }
 
     // §5.8 Terraforming probe -------------------------------------------------

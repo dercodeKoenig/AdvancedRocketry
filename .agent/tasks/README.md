@@ -14,11 +14,11 @@ Bug-ledger history lives in
 
 ## Current state
 
-- **Pyramid**: 702 (testUnit 237 / testIntegration 80 /
-  testServer **344** / testClient 41). +5 from TASK-19 Phase 1a (3) +
-  Phase 1b (2) on 2026-05-25. Counter previously verified 2026-05-23
-  at 697 via `grep -rc '@Test$' src/test/java/.../{unit,integration,server,client}/`;
-  regen-and-recount due on TASK-19 close-out (TASK-17 Phase 1).
+- **Pyramid**: 708 (testUnit 237 / testIntegration 80 /
+  testServer **350** / testClient 41). +11 from TASK-19 Phase 1a (3) +
+  Phase 1b (2) + Phase 2 BHG (3) + Phase 3 Beacon (3) on 2026-05-25.
+  Counter regenerated via
+  `grep -rc '@Test$' src/test/java/.../{unit,integration,server,client}/`.
 - **testServer wall time**: 8m 27s (50 % faster than pre-B2).
 - **Bug ledger**: drained (8 of 8 fixed in TASK-12 on 2026-05-23).
   See `.agent/history/known-bugs-ledger.md` for the historical
@@ -50,6 +50,7 @@ Bug-ledger history lives in
 | [TASK-26](TASK-26-wildcard-based-machine-coverage.md) | Wildcard-structure machine coverage — ArcFurnace + PrecisionAssembler (2 classes × 2 tests = 4 server-tier tests + 1 generic-helper refactor with hatch-overlay + structure-block-filler for `'*'` cells + 1 kit hook for adaptive force-tick budget) | ✅ |
 | [TASK-27](TASK-27-flake-fix-port-and-tick-races.md) | Flake fix — port-bind retry in `RealDedicatedServerHarness` + per-test polling for tick races + shape-#3 `tryCompleteWithRetry` kit helper (Beacon + cuttingMachine migrated) + `wireless-info` wait-for-tile probe + `field info` budget bump. **Acceptance partial**: 10× metric not achieved — residual flake shapes outside original scope → TASK-28. | ✅ partial |
 | [TASK-28](TASK-28-residual-test-flakes.md) | Residual flake shapes from TASK-27 — chunk-force probe helper (F1/F6/F7), ForceField direct-tick refactor (F2), Centrifuge permissive output (F3), Observatory + Wireless migrations. **9/10 PASS in v10**; v11 F8 watch sweep (2026-05-25) confirmed **0/10 Beacon recurrence** — F8 in watching mode (1/5 clean reruns toward Obsolete), new F9 (MissionGasCompletion fluidEntries:0) at 1/5. TASK-29 not opened — triggers not met. | ✅ partial |
+| [TASK-19](TASK-19-multiblock-powered-cycle-trio.md) | Multiblock powered-cycle (Terraformer / BHG / Beacon) — 11 server-tier tests across 4 classes: Phase 1a AR-native terraformer (3), Phase 1b non-AR config flip (2), Phase 2 BHG on station orbiting black-hole star (3), Phase 3 Beacon enable/disable/break (3). 5 new probe verbs (`machine controller-state`, `machine clear-batteries`, `config get/set` whitelisted, `star get/set-blackhole`). | ✅ |
 
 ## Backlog
 
@@ -60,7 +61,6 @@ entry is an actionable TASK with a defined plan + acceptance.
 |---|---|---|---|
 | [TASK-15](TASK-15-visual-regression.md) | Visual regression infrastructure for Minecraft client | 👁 Watching | 4 explicit promotion triggers in task file (GUI refactor / modpack-report / JEI rework / texture-pipeline bump). Revisit + consider Obsolete if no trigger in 6 months. |
 | [TASK-16](TASK-16-test-stability-flake-watch.md) | Test-stability flake watch — investigation deliverable. Three flake shapes root-caused; shape #3 mitigated in TASK-26 via kit retry; #1+#2 split into TASK-27; #4 (worldgen sampling) confirmed across 3 sightings, promoted to TASK-28 F7. | 🟡 Investigation complete | Investigation done 2026-05-23. |
-| [TASK-19](TASK-19-multiblock-powered-cycle-trio.md) | Multiblock powered-cycle (Terraformer / BHG / Beacon enable) — Phase 1 split into 1a (AR planet) + 1b (overworld config flip), both ✅ shipped 2026-05-25 (5 server-tier tests + 3 probe verbs: `machine controller-state`, `machine clear-batteries`, `config get/set` whitelisted). Phase 2 (BHG) + Phase 3 (Beacon) still pending. | 🟡 In progress | Phase 1 done. Phase 2 needs black-hole arrangement recon; Phase 3 (Beacon) cleanest of remaining. ~6-7 h remaining. |
 | [TASK-20](TASK-20-hovercraft-ride-coverage.md) | Hovercraft ride / throttle / fuel-drain coverage (testClient) | 🟢 Backlog | testClient territory; player-input simulation. ~9 h. Largest single testClient task in backlog. |
 | [TASK-21](TASK-21-ar-player-equipped-positives.md) | `/ar` player-equipped subcommand positive paths (testClient) | 🟢 Backlog | Completes `/ar` surface that TASK-11 started — guard side already deep, this is the positive side. ~6 h. |
 | [TASK-22](TASK-22-uv-assembler-full-delta.md) | UV-assembler full behavioural delta from rocket assembler | 🟢 Backlog | Bounds / output entity class / mount eligibility. Class-identity pin replaced by real contracts. ~4 h. |

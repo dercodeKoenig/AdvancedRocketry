@@ -4,8 +4,11 @@
 
 - Source: 2026-05-23 audit — Gaps #4, #5, #6. Three multiblocks
   with structure-validation coverage but no powered-cycle pin.
-- Status: **Backlog**.
+- Status: ✅ **Completed 2026-05-25**.
 - Created: 2026-05-23.
+- Shipped: 11 server-tier tests (3+2+3+3) + 5 probe verbs
+  (`machine controller-state`, `machine clear-batteries`,
+  `config get/set`, `star get/set-blackhole`).
 
 ## Context
 
@@ -127,74 +130,89 @@ Tests the **native-dim branch** of the gate. Test:
   one JVM across all methods of this class — leaked config or
   density would corrupt subsequent methods.
 
-### Phase 2 — Black Hole Generator powered cycle (~3-4 h)
+### Phase 2 — Black Hole Generator powered cycle (~3 h) — ✅ shipped 2026-05-25
 
-BHG's `update()` gates on `isAroundBlackHole()` — the test must
-arrange that precondition. From production: this checks for a
-"black hole" entity / block within range. Phase 2 sets that up via
-`/ar` (if a planet-property toggle exists) OR spawns/places the
-required entity directly.
+`BlackHoleGeneratorPoweredCycleTest` — 3/3 tests passing:
 
-Test: `BlackHoleGeneratorPoweredCycleTest extends AbstractSharedServerTest`:
+- `bhgOnStationAroundBlackHoleProducesEnergy` — flips Sol star 0
+  to black hole, creates station orbiting Sol (dim 10000), queries
+  station spawn coords, builds fixture on space dim (-2) at those
+  coords, feeds 64 dirt to input hatch, set-enabled true, force-ticks
+  600, asserts output buffer accumulated > 0 RF.
+- `bhgWithoutBlackHoleStarDoesNotProduce` — same setup but Sol
+  black-hole flag stays false; same tick budget; asserts output
+  buffer unchanged. Pins the `isStar() && isBlackHole()` branch.
+- `bhgOnOverworldDoesNotProduceEvenWithBlackHoleStar` — counter-
+  test: Sol IS a black hole, but BHG built on dim 0 (overworld,
+  not spaceDimId); `isAroundBlackHole()` short-circuits on the
+  first guard (`dim == spaceDimId`). Pins the dim-gate.
 
-- Setup: place the BHG fixture, then arrange the
-  `isAroundBlackHole()` precondition (either toggle the
-  `DimensionProperties.isBlackHole` flag via a new probe verb OR
-  generate a planet via `/ar planet generate` with the black-hole
-  flag set — to be confirmed in recon at Phase 2 start).
+**Probe addition** for Phase 2:
 
-- `bhgAroundBlackHolePowersOutputBuffer` — full setup + N ticks,
-  assert output energy hatch's `stored` increased.
+- `artest star <get|set-blackhole> <starId> [value]` — reads or
+  mutates a `StellarBody`'s black-hole flag via the public
+  `setBlackHole` / `isBlackHole` API. Sol star 0 flag MUST be
+  restored in `@After` — leaking a black-hole Sol would corrupt
+  sky-render and orbital-mechanics paths in sibling tests.
 
-- `bhgNotAroundBlackHoleDoesNotPower` — same fixture, no black
-  hole, force ticks, assert stored unchanged.
+**Key learning**:
 
-- `bhgAtCapacityDoesNotOverflowNegative` — pre-fill energy hatch,
-  force ticks, assert no negative-stored regression.
+- `TileBlackHoleGenerator.isAroundBlackHole()` requires THREE
+  things — space dim placement + space station at coords + that
+  station orbiting a black-hole star. Tests must arrange all three
+  via existing probes (`artest station create`,
+  `artest dim load -2`) plus the new `artest star set-blackhole`.
 
-### Phase 3 — Beacon enable cycle (~3 h)
+### Phase 3 — Beacon enable cycle (~2 h) — ✅ shipped 2026-05-25
 
-The current beacon coverage pins:
-- Structure validates (`BeaconMultiblockTest`)
-- Probe envelope is well-formed (`BeaconLocationProbeSmokeTest`)
+`BeaconEnableCycleTest` — 3/3 tests passing:
 
-The gap is the **player-visible effect**: a powered beacon must
-register its position in `DimensionProperties.beaconLocations` so
-the beacon-finder item can locate it. Without this pin, the chain
-"redstone power → setMachineEnabled → beacon visible to finder"
-can silently break in either link.
+- `enabledBeaconRegistersLocation` — generates fresh AR planet
+  (shared via `@BeforeClass` since beacon registry doesn't
+  cross-pollinate between coords), builds fixture, try-completes,
+  set-enabled true, asserts controller pos appears in
+  `DimensionProperties.beaconLocations`.
+- `disabledBeaconDoesNotRegister` — set-enabled false (idempotent
+  with default), asserts pos absent.
+- `breakingControllerBlockUnregisters` — enable + register, then
+  `artest place ... minecraft:air` replaces the controller block;
+  Forge's `BlockBeacon.breakBlock` callback fires and calls
+  `removeBeaconLocation`. Asserts pos absent post-break.
 
-Test: `BeaconEnableCycleTest`:
+**No new probe verbs needed** — Phase 3 reuses:
+- `ar planet generate` / `dim load` (Phase 1a infra),
+- `fixture multiblock beacon` (existing, TASK-04),
+- `machine try-complete` / `set-enabled` (existing),
+- `place` (existing),
+- `beacon list <dim>` (existing, TASK-13 era).
 
-- `poweredBeaconRegistersLocationInDimensionProperties` — build
-  fixture, redstone-power via `/artest redstone set <pos> 15`
-  (verb may need adding), invoke `setMachineEnabled` via probe,
-  assert `DimensionProperties.beaconLocations` contains the
-  fixture's center position.
+**Why AR-native planet required**: `TileBeacon.setMachineEnabled` and
+`BlockBeacon.breakBlock` both guard the registry mutation behind
+`isDimensionCreated(dim)`. Overworld returns false; the tests would
+pass trivially (no mutation) without exercising the contract.
 
-- `unpoweredBeaconDoesNotRegister` — build fixture, no redstone,
-  assert location absent.
-
-- `removingBeaconBlockUnregisters` — build + register, break the
-  controller block via `/artest break`, assert location absent.
-
-If `/artest redstone set` doesn't exist, add as part of Phase 3
-infrastructure (~30 min).
+**Note on the original plan's "redstone" framing**: the task plan
+listed `/artest redstone set <pos> 15` as needed infra. Production
+reality (verified at Phase 3 start): the beacon's redstone block is
+INSIDE the multiblock structure (top of the 5-tall pillar). Once the
+fixture validates, "powered" means `setMachineEnabled(true)` — there's
+no external redstone trigger. No `/artest redstone set` verb shipped;
+the existing `machine set-enabled` covers the contract entirely.
 
 ## Acceptance
 
-- [ ] Four new test classes (Phase 1a / 1b / 2 / 3), ~3 tests each
-      = ~11-12 tests total.
-- [ ] All assertions are loose-bound on numeric magnitudes (per
+- [x] Four new test classes (Phase 1a / 1b / 2 / 3), 11 tests total
+      (3+2+3+3).
+- [x] All assertions are loose-bound on numeric magnitudes (per
       SOP), tight on observable side-effects (densities change,
-      stored increases, location appears).
-- [ ] Phase 1b's new `config set` probe verb is whitelisted to
-      terraformer-related keys (or has explicit policy comment
-      enumerating the allowed keys) — avoids becoming a generic
-      test-pollution vector.
-- [ ] Phase 2 cleans up any generated black hole / planet in
-      `@After`.
-- [ ] Pyramid counter regenerated per TASK-17 phase 1.
+      stored increases, location appears, location removed).
+- [x] Phase 1b's `config set` probe verb is whitelisted to
+      `allowTerraformNonAR` + `terraformRequiresFluid` — single
+      constant in `TestProbeCommand.CONFIG_WHITELIST` is the SSOT.
+- [x] Phase 2 restores Sol star 0's black-hole flag in `@After`.
+- [x] Phase 1a + 1b restore atmosphere density + config flags in
+      `@After`; Phase 1a + 3 delete generated planets.
+- [x] Pyramid counter regenerated: 708 (237 / 80 / 350 / 41).
 
 ## Technical decisions
 
