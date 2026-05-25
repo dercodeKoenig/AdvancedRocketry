@@ -2,7 +2,6 @@ package zmaster587.advancedRocketry.test.server;
 
 import org.junit.After;
 import org.junit.Before;
-import org.junit.Ignore;
 import org.junit.Test;
 
 import java.util.HashSet;
@@ -49,6 +48,11 @@ public class TerraformerPoweredCycleOnArPlanetTest extends AbstractSharedServerT
             Pattern.compile("\"powerPos\":\\[(-?\\d+),(-?\\d+),(-?\\d+)]");
     private static final Pattern LIQUID_INPUT_POS =
             Pattern.compile("\"liquidInputPos\":\\[(-?\\d+),(-?\\d+),(-?\\d+)]");
+    /** Captures each {@code [x,y,z]} triple inside
+     *  {@code "liquidInputPositions":[...]}. Iterating `find()` enumerates
+     *  all four 'L' hatches in the terraformer structure. */
+    private static final Pattern LIQUID_TRIPLE =
+            Pattern.compile("\\[(-?\\d+),(-?\\d+),(-?\\d+)]");
 
     /** Each method picks distinct controller coords so per-method planets
      *  don't collide if a future refactor moves to class-scope. */
@@ -103,17 +107,6 @@ public class TerraformerPoweredCycleOnArPlanetTest extends AbstractSharedServerT
      *  consuming {@code terraformliquidRate = 40} mB of both N2 and O2.
      *  The test runs in a fill→tick refill loop because no fluid hatch
      *  can hold the full 18000×40 = 720000 mB single-step requirement.</p> */
-    @Ignore("TASK-19 Phase 1a happy-path WIP — onRunningPoweredTick never fires "
-            + "(progress stays 0 after 24000 force-ticks). Root cause: artest energy "
-            + "inject lands on the creative input plug's Forge IEnergyStorage but the "
-            + "controller's libVulpes batteries.getUniversalEnergyStored() reads 0 — "
-            + "bridge between Forge capability and libVulpes IUniversalEnergy not "
-            + "happening for the placed TileCreativePowerInput. Next-session work: "
-            + "either add a probe verb that reflects directly into the controller's "
-            + "batteries field, or override fixture placement to use blockForgeInputPlug "
-            + "(mapping index 1) instead of the default creative variant. Counter-tests "
-            + "in this class already PASS — toolchain (planet generate, fixture build, "
-            + "structure validation, dim lifecycle) verified end-to-end.")
     @Test
     public void nativePlanetTerraformerWithFuelAndPowerStepsDensity() throws Exception {
         assertDimIsNativeArPlanet();
@@ -124,29 +117,37 @@ public class TerraformerPoweredCycleOnArPlanetTest extends AbstractSharedServerT
         injectPower(fixture, 30_000_000);
         enableMachine(CX_POSITIVE);
 
-        String preInfo = exec("artest machine info " + newDim + " "
-                + CX_POSITIVE + " " + CY + " " + CZ);
-        assertTrue("post-enable: machine not in running state — " + preInfo,
-                preInfo.contains("\"isRunning\":true")
-                        && preInfo.contains("\"getMachineEnabled\":true"));
+        // DIAGNOSTIC — dump the controller's internal aggregator state so
+        // a failure points directly at integration (P/L hatches not added)
+        // vs cycle (currentTime not incrementing).
+        String preState = exec("artest machine controller-state "
+                + newDim + " " + CX_POSITIVE + " " + CY + " " + CZ);
+        assertTrue("controller-state probe missing batteries readout — " + preState,
+                preState.contains("\"batteriesPresent\":true"));
 
         int densityBefore = readDensity();
-        // Refill loop: each iteration tops up both fluids (hatch caps at
-        // typically 16000 mB) then runs ~400 ticks (drains ~16000 mB at
-        // 40 mB/t). 60 iterations × 400 ticks = 24000 ticks → at least
+        // Refill loop: terraformer needs BOTH N2 and O2 each tick.
+        // TileFluidHatch holds one fluid per tank — so split: hatch 0+1
+        // are N2 sources, hatch 2+3 are O2 sources. The controller's
+        // drain loop iterates fluidInPorts; it picks up N2 from the
+        // first two and O2 from the last two.
+        // Budget: 60 iterations × 400 ticks = 24000 ticks → at least
         // one density step (every 18000 ticks).
         for (int i = 0; i < 60; i++) {
-            injectFluid(fixture, "nitrogen", 16000);
-            injectFluid(fixture, "oxygen", 16000);
+            injectFluidAt(fixture, 0, "nitrogen", 16000);
+            injectFluidAt(fixture, 1, "nitrogen", 16000);
+            injectFluidAt(fixture, 2, "oxygen", 16000);
+            injectFluidAt(fixture, 3, "oxygen", 16000);
             forceTick(CX_POSITIVE, 400);
         }
         int densityAfter = readDensity();
 
-        String postInfo = exec("artest machine info " + newDim + " "
-                + CX_POSITIVE + " " + CY + " " + CZ);
+        String postState = exec("artest machine controller-state "
+                + newDim + " " + CX_POSITIVE + " " + CY + " " + CZ);
         assertNotEquals("powered + fueled terraformer did not move density"
                         + " (before=" + densityBefore + " after=" + densityAfter + ")"
-                        + " — postInfo=" + postInfo,
+                        + "; preState=" + preState
+                        + "; postState=" + postState,
                 densityBefore, densityAfter);
     }
 
@@ -171,27 +172,45 @@ public class TerraformerPoweredCycleOnArPlanetTest extends AbstractSharedServerT
                 densityBefore, densityAfter);
     }
 
-    /** Counter-test: no energy injected → useEnergy() exhausts immediately
-     *  → currentTime never reaches completionTime → processComplete() never
-     *  fires → density unchanged. Pins the power-required branch. */
+    /** Counter-test: controller's battery aggregator cleared
+     *  ({@code MultiBattery.clear()}) so {@code hasEnergy(powerPerTick)}
+     *  reads 0 →  libVulpes' update() skips onRunningPoweredTick →
+     *  currentTime never increments → processComplete never fires →
+     *  density unchanged. Pins the power-required branch.
+     *
+     *  <p><b>Why clear-batteries instead of skip-inject</b>: the default
+     *  'P'-mapping fixture places creative input plugs whose
+     *  {@code TileCreativePowerInput.getUniversalEnergyStored()} returns
+     *  {@code Integer.MAX_VALUE >> 4} unconditionally. Skipping
+     *  {@code energy inject} still leaves the controller with effectively
+     *  infinite aggregated power, so this counter-test wouldn't actually
+     *  exercise the no-power branch without the explicit clear.</p> */
     @Test
     public void nativePlanetTerraformerWithoutPowerDoesNotStep() throws Exception {
         assertDimIsNativeArPlanet();
         String fixture = buildAndCompleteFixture(CX_NO_POWER);
-        // Deliberately skip energy injection.
-        // Top up fluid each iteration so the OOF gate isn't what blocks
-        // progress — power-absence must be the sole reason.
         enableMachine(CX_NO_POWER);
+        // Wipe the aggregator AFTER integrateTile populated it, so the
+        // controller observes an empty battery list each tick.
+        String drain = exec("artest machine clear-batteries " + newDim
+                + " " + CX_NO_POWER + " " + CY + " " + CZ);
+        assertTrue("clear-batteries probe failed: " + drain,
+                drain.contains("\"cleared\":true"));
 
+        // Top up fluid each iteration so OOF can't be the cause of any
+        // non-progression observed below — power-absence must be the
+        // sole reason.
         int densityBefore = readDensity();
         for (int i = 0; i < 60; i++) {
-            injectFluid(fixture, "nitrogen", 16000);
-            injectFluid(fixture, "oxygen", 16000);
+            injectFluidAt(fixture, 0, "nitrogen", 16000);
+            injectFluidAt(fixture, 1, "nitrogen", 16000);
+            injectFluidAt(fixture, 2, "oxygen", 16000);
+            injectFluidAt(fixture, 3, "oxygen", 16000);
             forceTick(CX_NO_POWER, 400);
         }
         int densityAfter = readDensity();
 
-        assertEquals("powerless terraformer moved density anyway"
+        assertEquals("battery-drained terraformer moved density anyway"
                         + " (before=" + densityBefore + " after=" + densityAfter + ")",
                 densityBefore, densityAfter);
     }
@@ -236,15 +255,42 @@ public class TerraformerPoweredCycleOnArPlanetTest extends AbstractSharedServerT
                 info.contains("WorldProviderPlanet"));
     }
 
-    private void injectFluid(String fixture, String fluidName, int amount) throws Exception {
-        Matcher m = LIQUID_INPUT_POS.matcher(fixture);
-        assertTrue("no liquidInputPos in fixture response: " + fixture, m.find());
-        int lx = Integer.parseInt(m.group(1));
-        int ly = Integer.parseInt(m.group(2));
-        int lz = Integer.parseInt(m.group(3));
+    /** Injects {@code amount} mB of {@code fluidName} into the
+     *  {@code hatchIndex}-th 'L' hatch returned by the fixture probe.
+     *  {@code TileFluidHatch} holds one fluid type at a time, so the
+     *  terraformer's onRunningPoweredTick (which demands BOTH N2 and O2)
+     *  needs N2 in some hatches and O2 in others — see
+     *  {@link #nativePlanetTerraformerWithFuelAndPowerStepsDensity}'s
+     *  per-hatch loop. */
+    private void injectFluidAt(String fixture, int hatchIndex, String fluidName,
+                               int amount) throws Exception {
+        int[] pos = nthLiquidInputPos(fixture, hatchIndex);
         String resp = exec("artest fluid inject "
-                + newDim + " " + lx + " " + ly + " " + lz + " " + fluidName + " " + amount);
-        assertTrue(fluidName + " inject failed: " + resp, resp.contains("\"ok\":true"));
+                + newDim + " " + pos[0] + " " + pos[1] + " " + pos[2]
+                + " " + fluidName + " " + amount);
+        assertTrue(fluidName + " inject failed at hatch " + hatchIndex + ": " + resp,
+                resp.contains("\"ok\":true"));
+    }
+
+    /** Scans the fixture response's {@code liquidInputPositions} array
+     *  for the n-th triple. */
+    private static int[] nthLiquidInputPos(String fixture, int n) {
+        // Slice the substring starting at "liquidInputPositions" so we
+        // don't accidentally pick up the back-compat single
+        // "liquidInputPos" or unrelated position lists.
+        int sectionStart = fixture.indexOf("\"liquidInputPositions\"");
+        assertTrue("no liquidInputPositions in fixture response: " + fixture,
+                sectionStart >= 0);
+        Matcher m = LIQUID_TRIPLE.matcher(fixture);
+        m.region(sectionStart, fixture.length());
+        for (int i = 0; i <= n; i++) {
+            assertTrue("liquidInputPositions has fewer than " + (n + 1)
+                    + " hatches: " + fixture, m.find());
+        }
+        return new int[]{
+                Integer.parseInt(m.group(1)),
+                Integer.parseInt(m.group(2)),
+                Integer.parseInt(m.group(3))};
     }
 
     private void enableMachine(int cx) throws Exception {

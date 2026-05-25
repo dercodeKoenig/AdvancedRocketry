@@ -36,42 +36,49 @@ branches; without this split the suite tests neither branch
 realistically (overworld with default config skips the mutation
 silently).
 
-### Phase 1a — Terraformer on AR-native planet (~3-4 h) — partially shipped 2026-05-25
+### Phase 1a — Terraformer on AR-native planet (~5 h) — ✅ shipped 2026-05-25
 
-**Status**: test class checked in with 2/3 passing. Happy-path test
-(`nativePlanetTerraformerWithFuelAndPowerStepsDensity`) currently
-FAILs with `progress:0` after 24000 force-ticks — `onRunningPoweredTick`
-never fires because `batteries.getUniversalEnergyStored()` reports 0
-even though `artest energy inject` lands on the creative input plug
-(`TileCreativePowerInput`) at the 'P' position.
+`TerraformerPoweredCycleOnArPlanetTest` — 3/3 tests passing:
 
-**Root cause (suspected)**: `artest energy inject` writes via the
-Forge `IEnergyStorage` capability; libVulpes' controller-side
-`batteries` aggregator reads via `IUniversalEnergy`. The bridge
-either (a) doesn't happen because `integrateTile` isn't running for
-the `'P'` block, or (b) the creative plug's `IUniversalEnergy`
-state is separate from its Forge capability state.
+- `nativePlanetTerraformerWithFuelAndPowerStepsDensity` — generates
+  fresh AR planet, builds 17×17 fixture, splits fluid (N2 in
+  hatches 0+1, O2 in 2+3), force-ticks 24000, asserts
+  `currentAtmosphere` mutates (delta ≥ 1).
+- `nativePlanetTerraformerWithoutFuelDoesNotStep` — same setup
+  minus fluid injection; OOF gate holds, density unchanged.
+- `nativePlanetTerraformerWithoutPowerDoesNotStep` — fixture's
+  creative input plugs auto-provide infinite power, so the test
+  uses the new `artest machine clear-batteries` probe to drain
+  the controller's `MultiBattery` aggregator after enable;
+  `hasEnergy` reads 0 thereafter; density unchanged.
 
-**Next-session work shape**:
+**Probe additions** for Phase 1a (in `TestProbeCommand`):
 
-- Add a new probe verb (e.g. `/artest machine inject-controller-energy
-  <dim> <x> <y> <z> <amount>`) that reflects into the controller's
-  `batteries` field and writes directly — bypasses the
-  IUniversalEnergy/Forge-capability bridge. Tag it as terraformer-
-  specific (or generic-multiblock) infra.
-- OR: confirm via `artest energy stored` at the 'P' position that
-  injection actually accepts non-zero energy. If `accepted:0`,
-  switch fixture to place `blockForgeInputPlug` (mapping index 1)
-  instead of the creative variant via a hatch-override.
+- `artest machine controller-state <dim> <x> <y> <z>` — reflective
+  dump of `batteries.getUniversalEnergyStored`, `batteriesCount`,
+  `fluidInPortsCount`, `currentTime`, `outOfFluid`. Used to
+  diagnose why progress stays 0 (initially turned out to be OOF
+  because a single hatch held both N2 + O2 only as one fluid).
+- `artest machine clear-batteries <dim> <x> <y> <z>` — clears
+  controller's `MultiBattery` via reflection. Counter-tests need
+  this because the default `'P'`-fixture places creative input
+  plugs whose `getUniversalEnergyStored()` returns MAX
+  unconditionally; "skip energy inject" alone doesn't simulate a
+  no-power state.
 
-**Shipped this session**:
-- `TerraformerPoweredCycleOnArPlanetTest` class scaffolded.
-- `@Before` generates a fresh AR planet via `/ar planet generate`;
-  `@After` deletes it.
-- `assertDimIsNativeArPlanet()` precondition guard (passes).
-- Counter-tests (`nativePlanetTerraformerWithoutFuelDoesNotStep`,
-  `nativePlanetTerraformerWithoutPowerDoesNotStep`) — PASSING.
-  Density unchanged in both cases after 24000 force-ticks.
+**Key learnings for future powered-cycle tests**:
+
+- `TileFluidHatch` holds **one fluid type** per tank. The
+  terraformer's drain logic walks all `fluidInPorts` looking for
+  BOTH N2 and O2 each tick — must distribute fluids across
+  multiple hatches.
+- The default `'P'`-fixture is creative-powered. To exercise the
+  no-power branch, use `clear-batteries` (don't rely on
+  skip-inject).
+- `getCompletionTime() = 18000 × terraformSpeed`; default speed 1
+  → ~18000 ticks per density step. Tests need 20000+ force-ticks
+  + fluid refill loop (single hatch caps at 16000 mB, drains 40
+  mB/t).
 
 Generates a fresh AR planet via `/ar planet generate`, builds the
 17×17 multiblock there, drives the cycle, asserts density drift.
@@ -89,26 +96,36 @@ Tests the **native-dim branch** of the gate. Test:
 - `nativePlanetTerraformerWithoutPowerDoesNotStep` — same setup,
   no power injected, force ticks, assert density unchanged.
 
-### Phase 1b — Terraformer on non-AR dim with config flip (~2-3 h)
+### Phase 1b — Terraformer on overworld with config flip (~2 h) — ✅ shipped 2026-05-25
 
-Tests the **`allowTerraformNonAR` branch** of the gate. Needs a
-new probe verb `/artest config set <category> <key> <value>` (or
-similar) since `ARConfiguration` is the runtime-flip vector. Test:
-`TerraformerPoweredCycleOnOverworldTest extends AbstractSharedServerTest`.
+`TerraformerPoweredCycleOnOverworldTest` — 2/2 tests passing:
 
-- New probe verb in `TestProbeCommand` (~30-45 min): flip a
-  whitelisted config key (e.g. `allowTerraformNonAR`) on the live
-  `ARConfiguration` instance and restore in finally. Whitelist to
-  prevent test pollution beyond terraformer-related fields.
+- `overworldTerraformerWithNonArConfigFlipStepsDensity` — flips
+  `allowTerraformNonAR=true` via the new `artest config set`
+  probe, builds fixture on dim 0 (overworld, `WorldProviderSurface`),
+  same fuel+power+tick pipeline as Phase 1a, asserts density
+  mutates.
+- `overworldTerraformerWithoutConfigFlipDoesNotStep` — counter-test
+  with `allowTerraformNonAR=false` (default); same fixture+inputs;
+  asserts density unchanged. Pins the gate's blocking side.
 
-- `overworldTerraformerWithNonArConfigFlipStepsDensity` —
-  flip `allowTerraformNonAR=true`, build fixture on dim 0, inject
-  fuel+power, force ticks, assert density delta ≠ 0, restore
-  config in `@After`.
+**Probe addition** for Phase 1b:
 
-- `overworldTerraformerWithoutConfigFlipDoesNotStep` — leave
-  config default-false, fuel+power+tick, assert density unchanged
-  (counter-test pinning the gate's other side).
+- `artest config <get|set> <key> [value]` — whitelisted ARConfiguration
+  field access via reflection. Whitelist:
+  `allowTerraformNonAR`, `terraformRequiresFluid`. Tests MUST restore
+  the original value in `@After`. The whitelist comment in
+  `TestProbeCommand.CONFIG_WHITELIST` is the SSOT for new keys —
+  add a key there only when a test actually needs it.
+
+**State-isolation pattern**:
+
+- `@Before` snapshots `allowTerraformNonAR` + dim 0's current
+  atmosphere density via new `artest config get` + existing
+  `artest terraforming info`.
+- `@After` restores both unconditionally. The shared harness keeps
+  one JVM across all methods of this class — leaked config or
+  density would corrupt subsequent methods.
 
 ### Phase 2 — Black Hole Generator powered cycle (~3-4 h)
 

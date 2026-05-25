@@ -199,6 +199,9 @@ public class TestProbeCommand extends CommandBase {
                 case "mission":
                     handleMission(server, sender, tail(args));
                     break;
+                case "config":
+                    handleConfig(sender, tail(args));
+                    break;
                 default:
                     send(sender, "{\"error\":\"unknown subcommand\",\"sub\":\"" + args[0] + "\"}");
             }
@@ -3133,6 +3136,118 @@ public class TestProbeCommand extends CommandBase {
             send(sender, jsonMap(info));
             return;
         }
+        if (args.length >= 5 && "controller-state".equalsIgnoreCase(args[0])) {
+            // controller-state <dim> <x> <y> <z> — reflective dump of libVulpes
+            // multiblock controller internals: aggregated battery energy and
+            // fluidInPorts count. Used by TASK-19 powered-cycle tests to
+            // verify that integrateTile() actually wired up the structure's
+            // P/L hatches (separate from whether `artest energy inject` /
+            // `artest fluid inject` lands on the individual hatch tiles).
+            int dim = parseIntOr(args[1], Integer.MIN_VALUE);
+            int x = parseIntOr(args[2], 0), y = parseIntOr(args[3], 0), z = parseIntOr(args[4], 0);
+            net.minecraft.world.WorldServer world = server.getWorld(dim);
+            if (world == null) {
+                send(sender, "{\"error\":\"world not loaded\",\"dim\":" + dim + "}");
+                return;
+            }
+            TileEntity tile = world.getTileEntity(new BlockPos(x, y, z));
+            if (tile == null) {
+                send(sender, "{\"error\":\"no tile entity\"}");
+                return;
+            }
+            Map<String, Object> info = new LinkedHashMap<>();
+            info.put("tileClass", tile.getClass().getName());
+            // Walk class hierarchy for the libVulpes TileMultiBlock fields.
+            try {
+                java.lang.reflect.Field bat = findFieldOrNull(tile.getClass(), "batteries");
+                if (bat != null) {
+                    bat.setAccessible(true);
+                    Object multiBattery = bat.get(tile);
+                    info.put("batteriesPresent", multiBattery != null);
+                    if (multiBattery != null) {
+                        java.lang.reflect.Method getStored = multiBattery.getClass()
+                                .getMethod("getUniversalEnergyStored");
+                        info.put("batteriesStored", getStored.invoke(multiBattery));
+                        java.lang.reflect.Method getMax = multiBattery.getClass()
+                                .getMethod("getMaxEnergyStored");
+                        info.put("batteriesMax", getMax.invoke(multiBattery));
+                        // Read internal LinkedList size to detect "empty aggregator"
+                        // (i.e. integrateTile never added the P plugs).
+                        java.lang.reflect.Field listField = findFieldOrNull(multiBattery.getClass(), "batteries");
+                        if (listField != null) {
+                            listField.setAccessible(true);
+                            Object list = listField.get(multiBattery);
+                            if (list instanceof java.util.Collection<?>) {
+                                info.put("batteriesCount", ((java.util.Collection<?>) list).size());
+                            }
+                        }
+                    }
+                }
+                java.lang.reflect.Field fluidIn = findFieldOrNull(tile.getClass(), "fluidInPorts");
+                if (fluidIn != null) {
+                    fluidIn.setAccessible(true);
+                    Object portsList = fluidIn.get(tile);
+                    if (portsList instanceof java.util.Collection<?>) {
+                        info.put("fluidInPortsCount", ((java.util.Collection<?>) portsList).size());
+                    }
+                }
+                java.lang.reflect.Field currentTime = findFieldOrNull(tile.getClass(), "currentTime");
+                if (currentTime != null) {
+                    currentTime.setAccessible(true);
+                    info.put("currentTime", currentTime.get(tile));
+                }
+                java.lang.reflect.Field oof = findFieldOrNull(tile.getClass(), "outOfFluid");
+                if (oof != null) {
+                    oof.setAccessible(true);
+                    info.put("outOfFluid", oof.get(tile));
+                }
+            } catch (ReflectiveOperationException e) {
+                info.put("reflectionError",
+                        e.getClass().getSimpleName() + ": " + e.getMessage());
+            }
+            send(sender, jsonMap(info));
+            return;
+        }
+        if (args.length >= 5 && "clear-batteries".equalsIgnoreCase(args[0])) {
+            // clear-batteries <dim> <x> <y> <z> — empties the libVulpes
+            // MultiBattery aggregator on the controller via reflection.
+            // Used by TASK-19 counter-tests to disable the "infinite power"
+            // that creative input plugs (default mapping for 'P') provide.
+            // Plugs stay placed; only the controller-side aggregator is
+            // cleared, so hasEnergy() returns false on subsequent ticks.
+            int dim = parseIntOr(args[1], Integer.MIN_VALUE);
+            int x = parseIntOr(args[2], 0), y = parseIntOr(args[3], 0), z = parseIntOr(args[4], 0);
+            net.minecraft.world.WorldServer world = server.getWorld(dim);
+            if (world == null) {
+                send(sender, "{\"error\":\"world not loaded\",\"dim\":" + dim + "}");
+                return;
+            }
+            TileEntity tile = world.getTileEntity(new BlockPos(x, y, z));
+            if (tile == null) {
+                send(sender, "{\"error\":\"no tile entity\"}");
+                return;
+            }
+            try {
+                java.lang.reflect.Field bat = findFieldOrNull(tile.getClass(), "batteries");
+                if (bat == null) {
+                    send(sender, "{\"error\":\"tile has no batteries field\"}");
+                    return;
+                }
+                bat.setAccessible(true);
+                Object multiBattery = bat.get(tile);
+                if (multiBattery == null) {
+                    send(sender, "{\"error\":\"batteries field is null\"}");
+                    return;
+                }
+                java.lang.reflect.Method clear = multiBattery.getClass().getMethod("clear");
+                clear.invoke(multiBattery);
+                send(sender, "{\"ok\":true,\"cleared\":true}");
+            } catch (ReflectiveOperationException e) {
+                send(sender, "{\"error\":\"reflection failed\",\"msg\":\""
+                        + escapeJson(e.getMessage()) + "\"}");
+            }
+            return;
+        }
         if (args.length >= 6 && "set-enabled".equalsIgnoreCase(args[0])) {
             // set-enabled <dim> <x> <y> <z> <true|false>
             int dim = parseIntOr(args[1], Integer.MIN_VALUE);
@@ -3541,6 +3656,122 @@ public class TestProbeCommand extends CommandBase {
         }
         send(sender, "{\"matched\":false,\"ticks\":" + timeoutTicks + ",\"lastSeen\":\""
                 + escapeJson(String.valueOf(lastSeen)) + "\"}");
+    }
+
+    // §5.7b ARConfiguration set/get probe (TASK-19 Phase 1b) ----------------
+
+    /**
+     * Whitelist of mutable {@link zmaster587.advancedRocketry.api.ARConfiguration}
+     * fields exposed via {@code /artest config set}. Keep it tight — this
+     * verb writes directly to the live config instance and would otherwise
+     * be a generic test-pollution vector. Each entry lists the field that
+     * tests currently need to flip:
+     *
+     * <ul>
+     *   <li>{@code allowTerraformNonAR} — TASK-19 Phase 1b, exercise the
+     *       non-AR-planet branch of
+     *       {@code TileAtmosphereTerraformer.processComplete}.</li>
+     *   <li>{@code terraformRequiresFluid} — reserved for future
+     *       fluid-bypass tests; not currently used.</li>
+     * </ul>
+     *
+     * <p>Tests MUST restore the original value in {@code @After}, otherwise
+     * subsequent tests on the shared harness inherit the flipped state.</p>
+     */
+    private static final java.util.Set<String> CONFIG_WHITELIST =
+            new java.util.LinkedHashSet<>(java.util.Arrays.asList(
+                    "allowTerraformNonAR",
+                    "terraformRequiresFluid"));
+
+    private void handleConfig(ICommandSender sender, String[] args) {
+        if (args.length == 0) {
+            send(sender, "{\"error\":\"missing subcommand — try get <key> | set <key> <value>\","
+                    + "\"whitelist\":" + jsonStringArray(CONFIG_WHITELIST) + "}");
+            return;
+        }
+        if ("get".equalsIgnoreCase(args[0]) && args.length >= 2) {
+            String key = args[1];
+            if (!CONFIG_WHITELIST.contains(key)) {
+                send(sender, "{\"error\":\"key not in whitelist\",\"key\":\""
+                        + escapeJson(key) + "\",\"whitelist\":"
+                        + jsonStringArray(CONFIG_WHITELIST) + "}");
+                return;
+            }
+            try {
+                java.lang.reflect.Field f = zmaster587.advancedRocketry.api.ARConfiguration.class
+                        .getField(key);
+                Object value = f.get(zmaster587.advancedRocketry.api.ARConfiguration.getCurrentConfig());
+                send(sender, "{\"ok\":true,\"key\":\"" + escapeJson(key)
+                        + "\",\"value\":" + jsonValue(value) + "}");
+            } catch (ReflectiveOperationException e) {
+                send(sender, "{\"error\":\"reflection failed\",\"msg\":\""
+                        + escapeJson(e.getMessage()) + "\"}");
+            }
+            return;
+        }
+        if ("set".equalsIgnoreCase(args[0]) && args.length >= 3) {
+            String key = args[1];
+            String rawValue = args[2];
+            if (!CONFIG_WHITELIST.contains(key)) {
+                send(sender, "{\"error\":\"key not in whitelist\",\"key\":\""
+                        + escapeJson(key) + "\",\"whitelist\":"
+                        + jsonStringArray(CONFIG_WHITELIST) + "}");
+                return;
+            }
+            try {
+                java.lang.reflect.Field f = zmaster587.advancedRocketry.api.ARConfiguration.class
+                        .getField(key);
+                Object cfg = zmaster587.advancedRocketry.api.ARConfiguration.getCurrentConfig();
+                Object oldValue = f.get(cfg);
+                Object newValue = parseConfigValue(f.getType(), rawValue);
+                if (newValue == null) {
+                    send(sender, "{\"error\":\"unsupported field type\",\"type\":\""
+                            + f.getType().getName() + "\"}");
+                    return;
+                }
+                f.set(cfg, newValue);
+                send(sender, "{\"ok\":true,\"key\":\"" + escapeJson(key)
+                        + "\",\"oldValue\":" + jsonValue(oldValue)
+                        + ",\"newValue\":" + jsonValue(newValue) + "}");
+            } catch (ReflectiveOperationException e) {
+                send(sender, "{\"error\":\"reflection failed\",\"msg\":\""
+                        + escapeJson(e.getMessage()) + "\"}");
+            }
+            return;
+        }
+        send(sender, "{\"error\":\"unknown subcommand — try get <key> | set <key> <value>\"}");
+    }
+
+    private static Object parseConfigValue(Class<?> type, String raw) {
+        if (type == boolean.class || type == Boolean.class) return Boolean.parseBoolean(raw);
+        if (type == int.class || type == Integer.class) {
+            try { return Integer.parseInt(raw); } catch (NumberFormatException e) { return null; }
+        }
+        if (type == double.class || type == Double.class) {
+            try { return Double.parseDouble(raw); } catch (NumberFormatException e) { return null; }
+        }
+        if (type == float.class || type == Float.class) {
+            try { return Float.parseFloat(raw); } catch (NumberFormatException e) { return null; }
+        }
+        if (type == String.class) return raw;
+        return null;
+    }
+
+    private static String jsonValue(Object v) {
+        if (v == null) return "null";
+        if (v instanceof Boolean || v instanceof Number) return v.toString();
+        return "\"" + escapeJson(v.toString()) + "\"";
+    }
+
+    private static String jsonStringArray(java.util.Collection<String> items) {
+        StringBuilder sb = new StringBuilder("[");
+        int i = 0;
+        for (String s : items) {
+            if (i++ > 0) sb.append(',');
+            sb.append('"').append(escapeJson(s)).append('"');
+        }
+        sb.append(']');
+        return sb.toString();
     }
 
     // §5.8 Terraforming probe -------------------------------------------------
@@ -9211,6 +9442,18 @@ public class TestProbeCommand extends CommandBase {
             }
         }
         throw new NoSuchFieldException(name);
+    }
+
+    /** Non-throwing variant of {@link #findFieldInHierarchy} — returns
+     *  {@code null} if no field with the given name exists anywhere in
+     *  {@code cls}'s ancestry. Used by diagnostic probes that should
+     *  emit partial state instead of bailing on the first absent field. */
+    private static java.lang.reflect.Field findFieldOrNull(Class<?> cls, String name) {
+        try {
+            return findFieldInHierarchy(cls, name);
+        } catch (NoSuchFieldException e) {
+            return null;
+        }
     }
 
     // §7.18 — force-field projector state probe -------------------------------
