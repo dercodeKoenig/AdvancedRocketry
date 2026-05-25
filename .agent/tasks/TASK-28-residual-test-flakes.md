@@ -233,13 +233,69 @@ pre-load. See F8 below.
 gated body, no behaviour change). Pyramid counter unchanged
 (237 / 80 / 339 / 41 = 697). Bug ledger unchanged.
 
-## Followups → TASK-29 (deferred)
+## Followups (watching, no TASK-29 yet)
 
-- **F8 — Beacon `try-complete` resists kit retry under dispatcher
-  pre-load.** Observed 1 / 10 in v10 despite 8 × 500 ms retry +
-  3×3 chunk pre-load. Pattern: `attempted:false` on every retry
-  attempt for ~4 s. Suspected libVulpes internal state lag during
-  parallel-3-fork pressure; needs deeper instrumentation before a
-  fix-shape is clear. Not a regression — Beacon was historically
-  the canonical shape-#3 flake from TASK-16. Defer to TASK-29 when
-  a second consecutive occurrence sharpens the pattern.
+### F8 — Beacon `try-complete` resists kit retry under dispatcher pre-load
+
+- **v10 (TASK-28 close-out)**: 1 / 10 sightings. `attempted:false`
+  on every retry attempt for ~4 s despite 8 × 500 ms retry + 3×3
+  chunk pre-load.
+- **v11 (2026-05-25 F8 watch sweep)**: **0 / 10 sightings**. No
+  recurrence under identical conditions (`-Pforks=3`, cache-bust
+  per run, all 336 server-tier tests executed each iteration).
+- **Cumulative**: 1 sighting in 20 runs (95 % observed reliability).
+  Trigger for TASK-29 was "2nd consecutive occurrence" — not met.
+- **Status downgrade**: F8 stays watching by the F5 convention
+  (single-sighting flakes downgrade to **Obsolete** after 5
+  consecutive clean 10× reruns). Counter: **1 / 5**. Promote to
+  TASK-29 only if a 2nd sighting lands.
+- **Not a regression** — Beacon was historically the canonical
+  shape-#3 flake from TASK-16; structural mitigations (kit retry +
+  chunk pre-load) have moved its observed rate to single-digits.
+
+### F9 — MissionGasCompletion fluid tiles report empty after complete-now
+
+- **First seen**: v11 run 1 (2026-05-25)
+  (`MissionGasCompletionTest.gasCompletionFillsRocketFluidTilesWithConfiguredFluid`).
+- **Evidence**: probe response after `artest mission complete-now`
+  shows `completed:true, isDeadAfter:true, rocketCount:7,
+  fluidEntries:0`. Test asserts fluidEntries > 0. Sibling tests in
+  the same class (`gasCompletionRespawnsRocketInLaunchDim`,
+  `gasCompletionDoesNotFillFluidWhenIntakePowerZero`) PASSED in
+  the same run.
+- **Suspicious detail**: `rocketCount:7` (the test builds 1
+  rocket via `buildAndAssembleRocket(8300, "with-fluid-cargo")`).
+  Likely either:
+    1. cross-test fixture pollution — rockets from earlier tests
+       lingering near launch coords, OR
+    2. the `with-fluid-cargo` variant didn't actually swap the 2
+       fuel tanks for liquidTank blocks → StorageChunk.liquidTiles
+       empty → production fill loop has nothing to write to. The
+       7-rocket count would then point at fixture-build re-running
+       under a chunk-load race.
+- **Status**: 👁 **Watching — 1 / 5**. Needs a 2nd sighting before
+  characterisation. Do not preemptively fix the probe or the test;
+  see [`flake-diagnosis.md`](../sops/development/flake-diagnosis.md)
+  Step 5 — sparse single-occurrence flakes are obsolete-by-5-runs,
+  not retry-tuned.
+- **Fix shape (speculative, awaiting 2nd sighting)**: either
+  pre-load chunk(s) around launch coords before `complete-now`
+  reads, or pin fixture-variant fluid-tank substitution with a
+  dedicated probe verb (`fixture inspect with-fluid-cargo`).
+
+## v11 sweep — F8 watch (2026-05-25)
+
+10× `./gradlew testServer -Pforks=3 --no-daemon` with per-iteration
+cache-bust (`rm -rf build/{reports/tests,test-results,tmp}/testServer`).
+Wall: 905-905-884-895-898-878-890-896-893-891 s (median 893 s,
+~14.9 min/run, total ~149 min).
+
+| Run | PASS | FAIL | Failed test |
+|---|---|---|---|
+| 1 | 335 | 1 | `MissionGasCompletionTest.gasCompletionFillsRocketFluidTilesWithConfiguredFluid` (F9 new) |
+| 2-10 | 336 | 0 | — |
+
+**Outcome**: 9/10 PASS. F8 (Beacon) — 0 / 10 recurrence. F9
+(MissionGasCompletion) — 1 / 10 new shape, watching. Bug ledger
+unchanged. Pyramid unchanged (237 / 80 / 339 / 41 = 697). Production
+code untouched.
