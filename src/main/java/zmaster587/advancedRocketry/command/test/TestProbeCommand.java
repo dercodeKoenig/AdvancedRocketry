@@ -94,6 +94,9 @@ public class TestProbeCommand extends CommandBase {
                 case "rocket":
                     handleRocket(server, sender, tail(args));
                     break;
+                case "assembler":
+                    handleAssembler(server, sender, tail(args));
+                    break;
                 case "station":
                     handleStation(sender, tail(args));
                     break;
@@ -662,6 +665,12 @@ public class TestProbeCommand extends CommandBase {
             Map<String, Object> info = new LinkedHashMap<>();
             info.put("entityId", rocket.getEntityId());
             info.put("uuid", rocket.getPersistentID().toString());
+            // TASK-22 — exact entity class FQN, used to distinguish
+            // EntityRocket (rocket-assembler output) from
+            // EntityStationDeployedRocket (UV-assembler output). Both
+            // are valid types in this probe surface because the latter
+            // extends the former.
+            info.put("entityClass", rocket.getClass().getName());
             info.put("dim", rocket.world.provider.getDimension());
             info.put("posX", rocket.posX);
             info.put("posY", rocket.posY);
@@ -1061,6 +1070,86 @@ public class TestProbeCommand extends CommandBase {
      *  scanner has finished — but synchronous and independent of energy supply,
      *  so it works on bare fixtures without a creative input plug.
      */
+    /**
+     * {@code /artest assembler pad-bounds <dim> <x> <y> <z>} — invokes
+     * {@code TileRocketAssemblingMachine.getRocketPadBounds()} on the
+     * controller at the given pos and returns the resulting BB's
+     * dimensions. Polymorphic — fires UV's override on
+     * {@code TileUnmannedVehicleAssembler}, parent's on
+     * {@code TileRocketAssemblingMachine}.
+     *
+     * <p>{@code /artest assembler max-y} — reports
+     * {@code TileRocketAssemblingMachine.MAX_SIZE_Y} and
+     * {@code TileUnmannedVehicleAssembler.MAX_SIZE_Y} via reflection,
+     * one shared probe call. The two private-static-final constants
+     * are the contract for "how tall a rocket can each assembler scan";
+     * pinning their relative magnitude (rocket > UV) catches a regression
+     * that swaps or unifies the caps.</p>
+     *
+     * <p>Used by TASK-22 to observe the {@code MAX_SIZE_Y} delta:
+     * rocket assembler caps at 128, UV caps at 17.</p>
+     */
+    private void handleAssembler(MinecraftServer server, ICommandSender sender, String[] args) {
+        if (args.length >= 1 && "max-y".equalsIgnoreCase(args[0])) {
+            Map<String, Object> info = new LinkedHashMap<>();
+            info.put("rocketAssemblerMaxY", readPrivateIntStatic(
+                    zmaster587.advancedRocketry.tile.TileRocketAssemblingMachine.class,
+                    "MAX_SIZE_Y"));
+            info.put("uvAssemblerMaxY", readPrivateIntStatic(
+                    zmaster587.advancedRocketry.tile.TileUnmannedVehicleAssembler.class,
+                    "MAX_SIZE_Y"));
+            info.put("rocketAssemblerMaxXZ", readPrivateIntStatic(
+                    zmaster587.advancedRocketry.tile.TileRocketAssemblingMachine.class,
+                    "MAX_SIZE"));
+            info.put("uvAssemblerMaxXZ", readPrivateIntStatic(
+                    zmaster587.advancedRocketry.tile.TileUnmannedVehicleAssembler.class,
+                    "MAX_SIZE"));
+            send(sender, jsonMap(info));
+            return;
+        }
+        if (args.length >= 5 && "pad-bounds".equalsIgnoreCase(args[0])) {
+            int dim = parseIntOr(args[1], Integer.MIN_VALUE);
+            int x = parseIntOr(args[2], 0), y = parseIntOr(args[3], 0), z = parseIntOr(args[4], 0);
+            net.minecraft.world.WorldServer world = server.getWorld(dim);
+            if (world == null) {
+                send(sender, "{\"error\":\"world not loaded\",\"dim\":" + dim + "}");
+                return;
+            }
+            BlockPos pos = new BlockPos(x, y, z);
+            TileEntity tile = world.getTileEntity(pos);
+            if (!(tile instanceof zmaster587.advancedRocketry.tile.TileRocketAssemblingMachine)) {
+                send(sender, "{\"error\":\"not a rocket assembling machine\",\"tile\":\""
+                        + (tile == null ? "null" : tile.getClass().getName()) + "\"}");
+                return;
+            }
+            zmaster587.advancedRocketry.tile.TileRocketAssemblingMachine builder =
+                    (zmaster587.advancedRocketry.tile.TileRocketAssemblingMachine) tile;
+            net.minecraft.util.math.AxisAlignedBB bb = builder.getRocketPadBounds(world, pos);
+            Map<String, Object> info = new LinkedHashMap<>();
+            info.put("tileClass", tile.getClass().getName());
+            if (bb == null) {
+                info.put("bbNull", true);
+            } else {
+                info.put("bbNull", false);
+                int sx = (int) (bb.maxX - bb.minX + 1);
+                int sy = (int) (bb.maxY - bb.minY + 1);
+                int sz = (int) (bb.maxZ - bb.minZ + 1);
+                info.put("sizeX", sx);
+                info.put("sizeY", sy);
+                info.put("sizeZ", sz);
+                info.put("minX", (int) bb.minX);
+                info.put("minY", (int) bb.minY);
+                info.put("minZ", (int) bb.minZ);
+                info.put("maxX", (int) bb.maxX);
+                info.put("maxY", (int) bb.maxY);
+                info.put("maxZ", (int) bb.maxZ);
+            }
+            send(sender, jsonMap(info));
+            return;
+        }
+        send(sender, "{\"error\":\"unknown assembler subcommand — try pad-bounds <dim> <x> <y> <z>\"}");
+    }
+
     private void handleRocketAssemble(MinecraftServer server, ICommandSender sender, String[] args) {
         int dim = parseIntOr(args[1], Integer.MIN_VALUE);
         int x = parseIntOr(args[2], 0), y = parseIntOr(args[3], 0), z = parseIntOr(args[4], 0);
@@ -5089,6 +5178,14 @@ public class TestProbeCommand extends CommandBase {
                     parseIntOr(args[5], 0));
             return;
         }
+        if (args.length >= 5 && "uv-rocket".equalsIgnoreCase(args[0])) {
+            handleFixtureUvRocket(server, sender,
+                    parseIntOr(args[1], Integer.MIN_VALUE),
+                    parseIntOr(args[2], 0),
+                    parseIntOr(args[3], 64),
+                    parseIntOr(args[4], 0));
+            return;
+        }
         if (args.length >= 6 && "multiblock".equalsIgnoreCase(args[0])
                 && "blackhole-gen".equalsIgnoreCase(args[1])) {
             handleFixtureBlackHoleGenerator(server, sender,
@@ -6298,6 +6395,118 @@ public class TestProbeCommand extends CommandBase {
         info.put("controllerPos", new int[]{cx, cy, cz});
         info.put("controllerBlock", controller.getRegistryName().toString());
         send(sender, jsonMap(info));
+    }
+
+    /**
+     * Builds a minimal UV-assembler fixture satisfying
+     * {@code TileUnmannedVehicleAssembler.getRocketPadBounds} (which uses a
+     * different geometry from {@link
+     * zmaster587.advancedRocketry.tile.TileRocketAssemblingMachine#getRocketPadBounds}):
+     *
+     * <ul>
+     *   <li>{@code deployableRocketBuilder} controller at (cx, cy, cz),
+     *       NORTH-facing.</li>
+     *   <li>{@code structureTower} column UP from builder, 6 tall →
+     *       {@code yMax = 6} (well under UV's {@code MAX_SIZE_Y = 17}).</li>
+     *   <li>{@code structureTower} row SOUTH at the top of the column
+     *       (cx, cy+6, cz+1..cz+3) → {@code zSize = 3}.</li>
+     *   <li>{@code structureTower} row WEST + EAST at builder Y
+     *       (cx-2..cx-1, cy, cz) + (cx+1..cx+2, cy, cz) → {@code xSize = 5}.</li>
+     *   <li>Rocket components (engines + fuel tanks + guidance + seat)
+     *       placed inside the resulting BB
+     *       (cx-2..cx+2, cy..cy+5, cz+1..cz+4).</li>
+     * </ul>
+     *
+     * <p>Returns the builder pos so the test can call
+     * {@code artest rocket assemble} on the controller (which polymorphically
+     * fires UV's {@code assembleRocket} → spawns {@code EntityStationDeployedRocket}).</p>
+     */
+    private void handleFixtureUvRocket(MinecraftServer server, ICommandSender sender,
+                                       int dim, int cx, int cy, int cz) {
+        net.minecraft.world.WorldServer world = server.getWorld(dim);
+        if (world == null) {
+            send(sender, "{\"error\":\"world not loaded\",\"dim\":" + dim + "}");
+            return;
+        }
+        net.minecraft.block.Block uvBuilder = ForgeRegistries.BLOCKS
+                .getValue(new ResourceLocation("advancedrocketry", "deployableRocketBuilder"));
+        net.minecraft.block.Block structureTower = ForgeRegistries.BLOCKS
+                .getValue(new ResourceLocation("advancedrocketry", "structureTower"));
+        net.minecraft.block.Block advEngine = ForgeRegistries.BLOCKS
+                .getValue(new ResourceLocation("advancedrocketry", "advRocketmotor"));
+        net.minecraft.block.Block fuelTank = ForgeRegistries.BLOCKS
+                .getValue(new ResourceLocation("advancedrocketry", "fuelTank"));
+        net.minecraft.block.Block guidanceComputer = ForgeRegistries.BLOCKS
+                .getValue(new ResourceLocation("advancedrocketry", "guidanceComputer"));
+        net.minecraft.block.Block seat = ForgeRegistries.BLOCKS
+                .getValue(new ResourceLocation("advancedrocketry", "seat"));
+        if (uvBuilder == null || structureTower == null || advEngine == null
+                || fuelTank == null || guidanceComputer == null || seat == null) {
+            send(sender, "{\"error\":\"missing AR block(s) for UV fixture\"}");
+            return;
+        }
+        ensureChunkAreaLoaded(world, cx, cz, 1);
+
+        // Pre-clear the volume around the fixture (similar to rocket fixture
+        // hygiene — terrain in the way would inflate scanRocket counts).
+        for (int gx = cx - 3; gx <= cx + 3; gx++) {
+            for (int gy = cy; gy <= cy + 7; gy++) {
+                for (int gz = cz - 1; gz <= cz + 5; gz++) {
+                    world.setBlockToAir(new BlockPos(gx, gy, gz));
+                }
+            }
+        }
+
+        // Builder NORTH-facing.
+        net.minecraft.block.state.IBlockState builderState = uvBuilder.getDefaultState();
+        try {
+            builderState = builderState.withProperty(
+                    zmaster587.libVulpes.block.RotatableBlock.FACING,
+                    net.minecraft.util.EnumFacing.NORTH);
+        } catch (IllegalArgumentException ignored) {
+            // Property absent — keep default state.
+        }
+        world.setBlockState(new BlockPos(cx, cy, cz), builderState);
+
+        // structureTower column directly above builder (cy+1..cy+6).
+        net.minecraft.block.state.IBlockState towerState = structureTower.getDefaultState();
+        for (int dy = 1; dy <= 6; dy++) {
+            world.setBlockState(new BlockPos(cx, cy + dy, cz), towerState);
+        }
+        // structureTower top-south row (cy+6, cz+1..cz+3).
+        for (int dz = 1; dz <= 3; dz++) {
+            world.setBlockState(new BlockPos(cx, cy + 6, cz + dz), towerState);
+        }
+        // structureTower west/east at builder Y.
+        for (int dx = 1; dx <= 2; dx++) {
+            world.setBlockState(new BlockPos(cx - dx, cy, cz), towerState);
+            world.setBlockState(new BlockPos(cx + dx, cy, cz), towerState);
+        }
+
+        // Rocket components inside the BB (cx-2..cx+2, cy..cy+5, cz+1..cz+4).
+        // Engines (bottom row, two of them on either side of the bb center).
+        world.setBlockState(new BlockPos(cx - 1, cy + 1, cz + 1), advEngine.getDefaultState());
+        world.setBlockState(new BlockPos(cx + 1, cy + 1, cz + 1), advEngine.getDefaultState());
+        // Fuel tanks: 3 wide × 2 tall column inside the bb.
+        for (int dx = -1; dx <= 1; dx++) {
+            for (int dy = 2; dy <= 3; dy++) {
+                world.setBlockState(new BlockPos(cx + dx, cy + dy, cz + 1),
+                        fuelTank.getDefaultState());
+            }
+        }
+        // Guidance computer.
+        world.setBlockState(new BlockPos(cx, cy + 4, cz + 1), guidanceComputer.getDefaultState());
+        // Seat.
+        world.setBlockState(new BlockPos(cx, cy + 5, cz + 1), seat.getDefaultState());
+
+        send(sender, "{\"ok\":true,\"builderPos\":["
+                + cx + "," + cy + "," + cz + "]"
+                + ",\"expectedBbMinX\":" + (cx - 2)
+                + ",\"expectedBbMaxX\":" + (cx + 2)
+                + ",\"expectedBbMinY\":" + cy
+                + ",\"expectedBbMaxY\":" + (cy + 5)
+                + ",\"expectedBbMinZ\":" + (cz + 1)
+                + ",\"expectedBbMaxZ\":" + (cz + 4) + "}");
     }
 
     /**
@@ -8605,6 +8814,115 @@ public class TestProbeCommand extends CommandBase {
                     + "}");
             return;
         }
+        if ("held-air-component-route".equals(sub)) {
+            // /artest player held-air-component-route
+            //
+            // Reads the player's chest stack's air via the IFillableArmor
+            // surface of the chest's Item class — NOT via ItemAirUtils'
+            // static "air" NBT key (which is only the enchanted-vanilla
+            // path). For ItemSpaceChest this walks the embedded inventory
+            // and sums each component's FluidStack amount.
+            net.minecraft.item.ItemStack chest = player.getItemStackFromSlot(
+                    net.minecraft.inventory.EntityEquipmentSlot.CHEST);
+            int chestAir = -1;
+            if (!chest.isEmpty()
+                    && chest.getItem() instanceof zmaster587.advancedRocketry.api.armor.IFillableArmor) {
+                chestAir = ((zmaster587.advancedRocketry.api.armor.IFillableArmor) chest.getItem())
+                        .getAirRemaining(chest);
+            }
+            send(sender, "{\"ok\":true,\"player\":\""
+                    + escapeJson(player.getName()) + "\""
+                    + ",\"chestSlot\":\""
+                    + escapeJson(chest.isEmpty() ? "" : chest.getItem().getRegistryName().toString())
+                    + "\""
+                    + ",\"chestAir\":" + chestAir + "}");
+            return;
+        }
+        if ("equip-space-chest".equals(sub)) {
+            // /artest player equip-space-chest [pressureTankOxygenAmount]
+            //
+            // TASK-24 — equip the player with the AR ItemSpaceChest carrying
+            // an oxygen-filled ItemPressureTank component in slot 0. The
+            // pressure tank's FluidStack is what drains in vacuum via
+            // ItemSpaceChest.decrementAir (capability route), NOT the
+            // chest's top-level "air" NBT (the enchanted-vanilla route
+            // pinned by equip-airsuit).
+            //
+            // Differs from equip-airsuit:
+            //   - This places itemSpaceSuit_Chest, not enchanted vanilla.
+            //   - Air buffer lives inside the pressure-tank component's
+            //     FluidStack, not on the chest's NBT.
+            //   - readChestAir via ItemAirUtils still works because that
+            //     method dispatches through IFillableArmor.getAirRemaining
+            //     which ItemSpaceChest overrides to walk components.
+            int initialOxygen = args.length >= 2 ? parseIntOr(args[1], 1000) : 1000;
+            net.minecraft.item.Item suitItem =
+                    zmaster587.advancedRocketry.api.AdvancedRocketryItems.itemSpaceSuit_Chest;
+            net.minecraft.item.Item tankItem =
+                    zmaster587.advancedRocketry.api.AdvancedRocketryItems.itemPressureTank;
+            if (suitItem == null || tankItem == null) {
+                send(sender, "{\"error\":\"AR space-suit items missing (chest="
+                        + (suitItem != null) + ", tank=" + (tankItem != null) + ")\"}");
+                return;
+            }
+
+            net.minecraft.item.ItemStack chest = new net.minecraft.item.ItemStack(suitItem);
+            net.minecraft.item.ItemStack tank = new net.minecraft.item.ItemStack(tankItem);
+
+            // Fill the tank with oxygen via its Forge IFluidHandlerItem capability.
+            // The capability is created lazily by ItemPressureTank.initCapabilities.
+            net.minecraftforge.fluids.capability.IFluidHandlerItem tankFluid =
+                    tank.getCapability(net.minecraftforge.fluids.capability
+                            .CapabilityFluidHandler.FLUID_HANDLER_ITEM_CAPABILITY,
+                            net.minecraft.util.EnumFacing.UP);
+            if (tankFluid == null) {
+                send(sender, "{\"error\":\"pressure tank exposes no IFluidHandlerItem capability\"}");
+                return;
+            }
+            int filled = tankFluid.fill(new net.minecraftforge.fluids.FluidStack(
+                    zmaster587.advancedRocketry.api.AdvancedRocketryFluids.fluidOxygen,
+                    initialOxygen), true);
+
+            // Embed via the production addArmorComponent path so any future
+            // validation in onComponentAdded fires as it would in-game.
+            ((zmaster587.advancedRocketry.armor.ItemSpaceArmor) suitItem)
+                    .addArmorComponent(player.world, chest, tank, 0);
+
+            // Equip ALL 4 suit pieces so AtmosphereNeedsSuit.isImmune returns
+            // true (the gate requires leg + feet + helm + chest all protect).
+            // Without the other 3, vacuum damage fires before the chest drain
+            // ever gets exercised.
+            net.minecraft.item.Item helmItem =
+                    zmaster587.advancedRocketry.api.AdvancedRocketryItems.itemSpaceSuit_Helmet;
+            net.minecraft.item.Item legItem =
+                    zmaster587.advancedRocketry.api.AdvancedRocketryItems.itemSpaceSuit_Leggings;
+            net.minecraft.item.Item bootItem =
+                    zmaster587.advancedRocketry.api.AdvancedRocketryItems.itemSpaceSuit_Boots;
+            if (helmItem != null) {
+                player.setItemStackToSlot(net.minecraft.inventory.EntityEquipmentSlot.HEAD,
+                        new net.minecraft.item.ItemStack(helmItem));
+            }
+            if (legItem != null) {
+                player.setItemStackToSlot(net.minecraft.inventory.EntityEquipmentSlot.LEGS,
+                        new net.minecraft.item.ItemStack(legItem));
+            }
+            if (bootItem != null) {
+                player.setItemStackToSlot(net.minecraft.inventory.EntityEquipmentSlot.FEET,
+                        new net.minecraft.item.ItemStack(bootItem));
+            }
+            player.setItemStackToSlot(net.minecraft.inventory.EntityEquipmentSlot.CHEST, chest);
+
+            int readBack = ((zmaster587.advancedRocketry.api.armor.IFillableArmor) suitItem)
+                    .getAirRemaining(chest);
+            send(sender, "{\"ok\":true,\"player\":\""
+                    + escapeJson(player.getName()) + "\""
+                    + ",\"chestSlot\":\""
+                    + escapeJson(chest.getItem().getRegistryName().toString()) + "\""
+                    + ",\"requestedOxygen\":" + initialOxygen
+                    + ",\"tankFilled\":" + filled
+                    + ",\"chestAir\":" + readBack + "}");
+            return;
+        }
         if ("clear-armor".equals(sub)) {
             // /artest player clear-armor — empty all four armor slots.
             // Used by drain counter-tests where the player must be
@@ -8883,9 +9201,57 @@ public class TestProbeCommand extends CommandBase {
      */
     private void handleSealDetector(net.minecraft.server.MinecraftServer server,
                                     ICommandSender sender, String[] args) {
+        if (args.length >= 2 && "add-block-ban".equalsIgnoreCase(args[0])) {
+            // /artest seal-detector add-block-ban <block-id>
+            String blockId = args[1];
+            net.minecraft.block.Block block =
+                    ForgeRegistries.BLOCKS.getValue(new ResourceLocation(blockId));
+            if (block == null) {
+                send(sender, "{\"error\":\"unknown block id\",\"id\":\""
+                        + escapeJson(blockId) + "\"}");
+                return;
+            }
+            zmaster587.advancedRocketry.util.SealableBlockHandler.INSTANCE
+                    .addUnsealableBlock(block);
+            send(sender, "{\"ok\":true,\"id\":\"" + escapeJson(blockId)
+                    + "\",\"action\":\"added-to-blockBanList\"}");
+            return;
+        }
+        if (args.length >= 2 && "remove-block-ban".equalsIgnoreCase(args[0])) {
+            // /artest seal-detector remove-block-ban <block-id> — undo of
+            // add-block-ban. Reaches the package-private blockBanList via
+            // reflection because SealableBlockHandler has no public removal
+            // API for the block ban list (addSealableBlock would also flip
+            // into the allow list, which is not the right undo here).
+            String blockId = args[1];
+            net.minecraft.block.Block block =
+                    ForgeRegistries.BLOCKS.getValue(new ResourceLocation(blockId));
+            if (block == null) {
+                send(sender, "{\"error\":\"unknown block id\",\"id\":\""
+                        + escapeJson(blockId) + "\"}");
+                return;
+            }
+            try {
+                java.lang.reflect.Field f = zmaster587.advancedRocketry.util.SealableBlockHandler
+                        .class.getDeclaredField("blockBanList");
+                f.setAccessible(true);
+                @SuppressWarnings("unchecked")
+                java.util.List<net.minecraft.block.Block> list =
+                        (java.util.List<net.minecraft.block.Block>) f.get(
+                                zmaster587.advancedRocketry.util.SealableBlockHandler.INSTANCE);
+                boolean removed = list.remove(block);
+                send(sender, "{\"ok\":true,\"id\":\"" + escapeJson(blockId)
+                        + "\",\"removed\":" + removed + "}");
+            } catch (ReflectiveOperationException e) {
+                send(sender, "{\"error\":\"reflection failed\",\"msg\":\""
+                        + escapeJson(e.getMessage()) + "\"}");
+            }
+            return;
+        }
         if (args.length < 5 || !"check".equalsIgnoreCase(args[0])) {
             send(sender, "{\"error\":\"unknown seal-detector subcommand — "
-                    + "try check <dim> <x> <y> <z>\"}");
+                    + "try check <dim> <x> <y> <z> | add-block-ban <block-id> | "
+                    + "remove-block-ban <block-id>\"}");
             return;
         }
         int dim = parseIntOr(args[1], Integer.MIN_VALUE);
@@ -9494,6 +9860,21 @@ public class TestProbeCommand extends CommandBase {
             }
         }
         throw new NoSuchFieldException(name);
+    }
+
+    /** Reads a private static final int field via reflection. Returns
+     *  {@code Integer.MIN_VALUE} on reflective failure (caller treats
+     *  that as "field missing"). Used by TASK-22 to expose
+     *  {@code MAX_SIZE_Y} / {@code MAX_SIZE} constants of the two
+     *  assembler classes. */
+    private static int readPrivateIntStatic(Class<?> cls, String name) {
+        try {
+            java.lang.reflect.Field f = cls.getDeclaredField(name);
+            f.setAccessible(true);
+            return f.getInt(null);
+        } catch (ReflectiveOperationException e) {
+            return Integer.MIN_VALUE;
+        }
     }
 
     /** Non-throwing variant of {@link #findFieldInHierarchy} — returns

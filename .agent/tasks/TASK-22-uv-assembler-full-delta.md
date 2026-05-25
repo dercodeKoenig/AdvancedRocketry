@@ -6,8 +6,60 @@
   pins only the class-identity divergence ("UV is its own class,
   not collapsing to rocket assembler"). Deeper behavioural delta
   is deferred.
-- Status: **Backlog**.
+- Status: ✅ **Completed 2026-05-25** (partial — Phases 1 & 2 shipped; Phase 3 deferred).
 - Created: 2026-05-23.
+
+## Actual scope (2026-05-25)
+
+**Phase 1 (bounds delta) — ✅ shipped via constants reflection.**
+
+`UvAssemblerBoundsConstantsTest`:
+- `rocketAssemblerAllowsTallerStructureThanUvAssembler` — UV's
+  `MAX_SIZE_Y` strictly < rocket's. Both positive.
+- `uvAssemblerHeightCapMatchesItsWidthCap` — UV is a cube
+  (MAX_SIZE == MAX_SIZE_Y), pinning the design invariant.
+
+Drives new `/artest assembler max-y` probe (reflective constants
+read on both tile classes). Pure read, no state mutation.
+
+Original plan's "build a tall fixture and observe truncation"
+approach was abandoned: constructing a tower-of-25 fixture costs
+~50 setBlockState calls plus terrain pre-clear; the constants pin
+covers the same player-visible contract ("UV's height cap is
+smaller than rocket's") at a fraction of the test wall-time.
+
+**Phase 2 (output entity class delta) — ✅ shipped end-to-end.**
+
+`UvAssemblerOutputEntityClassTest`:
+- `rocketAssemblerProducesEntityRocketNotStationDeployed` — uses
+  existing `artest fixture rocket simple`, assembles, asserts
+  `entityClass.endsWith(".EntityRocket")` and NOT
+  `StationDeployedRocket`.
+- `uvAssemblerProducesEntityStationDeployedRocket` — uses new
+  `artest fixture uv-rocket` (UV-specific geometry: column + U-shape
+  + rocket components inside the resulting BB), assembles, asserts
+  `entityClass.endsWith(".EntityStationDeployedRocket")`.
+
+Drives:
+- New `/artest fixture uv-rocket <dim> <x> <y> <z>` probe — UV
+  fixture variant matching UV's `getRocketPadBounds` algorithm
+  (column above builder + lateral towers).
+- New `entityClass` field in `/artest rocket info` response.
+
+**Phase 3 (mount eligibility) — deferred.**
+
+`EntityStationDeployedRocket extends EntityRocket` and inherits
+`processInitialInteract` unchanged. So at the entity-API surface,
+both accept the same passenger-mount flow. The player-visible
+difference (UV launches DOWNWARD vs rocket launches UPWARD) is
+encoded in `EntityStationDeployedRocket.launchDirection = DOWN`
+plus the override of the flight tick — that's pinned implicitly
+by the Phase 2 entity-class delta (any future swap of the entity
+class would break the launchDirection initialisation too).
+
+A dedicated launch-direction pin can be added later if a
+regression appears; right now it would duplicate Phase 2's
+contract through a more brittle assertion path.
 
 ## Context
 

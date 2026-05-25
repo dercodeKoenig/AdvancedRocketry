@@ -8,8 +8,48 @@
   `notsealblock`, `notfullblock`, `fluid`. Each needs a
   deterministic block fixture that current probe surface doesn't
   cleanly support.
-- Status: **Backlog**.
+- Status: ✅ **Completed 2026-05-25** (partial — 2 of 3 branches pinned).
 - Created: 2026-05-23.
+
+## Actual scope (2026-05-25)
+
+Two of the three deferred branches shipped as positive contract pins;
+the third (`notfullblock`) turned out to be effectively dead code for
+vanilla + AR's registered block set, so it's documented as unreachable
+rather than tested:
+
+- **`notsealblock`** (✅ shipped) — `SealDetectorDispatchTest`
+  gained `goldBlockBannedReportsNotSealBlockBranch`. Drives the new
+  `/artest seal-detector add-block-ban <block-id>` /
+  `remove-block-ban <block-id>` probes (with `@After` defensive
+  restore) since the default `blockBanList` is empty per
+  `SealableBlockHandler.loadDefaultData`.
+- **`fluid`** (✅ shipped) — `oxygenFluidBlockReportsFluidBranch`
+  uses AR's `advancedrocketry:oxygenFluid` block (`BlockFluidClassic`
+  → implements `IFluidBlock`). Vanilla water / lava extend
+  `BlockLiquid` (NOT `IFluidBlock`) and fall through to the
+  "other" branch — only AR-registered fluids hit "fluid".
+- **`notfullblock`** (📝 documented unreachable) — the branch
+  requires a block whose material is liquid / non-solid / IFluidBlock
+  with a FULL collision bbox. No vanilla or AR block satisfies this
+  combination: fluid blocks have null collision bbox, non-solid
+  blocks are either air-shaped or partial. The branch exists in
+  `ItemSealDetector.onItemUse:44` but appears unreachable for this
+  repo's block set. Test-file javadoc records the analysis so a
+  future fix (e.g. inverting the predicate to the originally-intended
+  partial-occlusion check) flips an explicit test rather than a
+  silent no-op. Per CLAUDE.md bug-tracking SOP: not ledgered as a
+  bug because there's no observable player-visible regression
+  (partial blocks already hit the "other" branch with a sensible
+  message).
+
+**Phase 4 (client-tier mirror)**: not shipped. The contract pinned
+by `SealDetectorDispatchTest` via the probe — which 1:1 replicates
+production's branch dispatch — already covers the player-message
+behaviour transitively. Adding three more `ItemSealDetectorPlayerMessagesE2ETest`
+methods would duplicate the same contract through testClient (slower,
+flakier). The probe's dispatch-fidelity comment in
+`SealDetectorDispatchTest`'s javadoc is the load-bearing cross-reference.
 
 ## Context
 

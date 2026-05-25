@@ -1,5 +1,6 @@
 package zmaster587.advancedRocketry.test.server;
 
+import org.junit.After;
 import org.junit.Test;
 
 import java.util.regex.Matcher;
@@ -26,12 +27,13 @@ import static org.junit.Assert.assertTrue;
  * {@code msg.sealdetector.&lt;branch&gt;} suffix the production code
  * emits to the player.</p>
  *
- * <p>Out of scope: the {@code "notsealblock"} branch (requires a
- * specific banned block whose contents vary by AR config), and the
- * {@code "fluid"} branch (requires an {@code IFluidBlock} fixture
- * which depends on the fluid registry being populated). Those are
- * left for a later expansion once a deterministic banned-block fixture
- * is available.</p>
+ * <p>TASK-23 (2026-05-25) added the remaining reachable branches:
+ * {@code "notsealblock"} via probe-driven {@code blockBanList} mutation
+ * (restored in {@code @After}) and {@code "fluid"} via AR's
+ * {@code advancedrocketry:oxygenFluid} ({@code IFluidBlock} of
+ * {@code Material.WATER}). The {@code "notfullblock"} branch is
+ * documented as unreachable for vanilla + AR's block set — see the
+ * {@code NOTFULLBLOCK_UNREACHABLE_DOC} comment block below.</p>
  */
 public class SealDetectorDispatchTest extends AbstractSharedServerTest {
 
@@ -128,6 +130,102 @@ public class SealDetectorDispatchTest extends AbstractSharedServerTest {
                         + "not banned, half-block bounds, not a fluid)",
                 "other", probe(x, y, z));
     }
+
+    // ───────────────────── notsealblock branch (TASK-23) ─────────────────
+
+    /** Pins the {@code blockBanList} dispatch path. The default
+     *  {@code blockBanList} is empty (per {@link SealableBlockHandler}'s
+     *  {@code loadDefaultData}, which only populates {@code materialBanList}),
+     *  so a test block must be added to the list via the new
+     *  {@code /artest seal-detector add-block-ban} probe, then removed in
+     *  {@code @After} to restore the shared harness's default state. */
+    @Test
+    public void goldBlockBannedReportsNotSealBlockBranch() throws Exception {
+        int x = 270, y = 80, z = 200;
+        place(x, y, z, "minecraft:gold_block");
+        try {
+            // Baseline: a full solid block not yet on any ban list seals
+            // by default. This documents the difference from the post-ban
+            // state below — without this baseline the test would pass even
+            // if the ban-list mechanism were silently broken.
+            assertEquals("baseline: unbanned gold_block should seal",
+                    "sealed", probe(x, y, z));
+
+            String ban = String.join("\n", client().execute(
+                    "artest seal-detector add-block-ban minecraft:gold_block"));
+            assertTrue("add-block-ban probe failed: " + ban,
+                    ban.contains("\"ok\":true"));
+
+            assertEquals("gold_block on blockBanList must produce branch "
+                            + "'notsealblock'",
+                    "notsealblock", probe(x, y, z));
+        } finally {
+            // Restore — shared harness leaks state across tests, and a
+            // permanently-banned gold_block would make any sibling test
+            // that happened to place gold_block diverge from production.
+            client().execute(
+                    "artest seal-detector remove-block-ban minecraft:gold_block");
+        }
+    }
+
+    @After
+    public void restoreBlockBanListDefensively() throws Exception {
+        // Belt-and-braces — even if a @Test threw before its finally ran,
+        // this @After tries the un-ban anyway. Idempotent: produces
+        // {"removed":false} when the block isn't present.
+        client().execute(
+                "artest seal-detector remove-block-ban minecraft:gold_block");
+    }
+
+    // ───────────────────── fluid branch (TASK-23) ─────────────────────────
+
+    /** Pins the {@code IFluidBlock} dispatch. AR's
+     *  {@code advancedrocketry:oxygenFluid} extends {@code BlockFluidClassic}
+     *  (Forge), which implements {@code IFluidBlock} — production's "fluid"
+     *  branch fires precisely on that {@code instanceof} check. Vanilla
+     *  water/lava (which extend {@code BlockLiquid}, NOT {@code IFluidBlock})
+     *  would fall through to the "other" branch and aren't usable for this
+     *  pin. */
+    @Test
+    public void oxygenFluidBlockReportsFluidBranch() throws Exception {
+        int x = 280, y = 80, z = 200;
+        place(x, y, z, "advancedrocketry:oxygenfluid");
+        assertEquals("AR's oxygenFluid block (Material.WATER + BlockFluidClassic) "
+                        + "must produce branch 'fluid'",
+                "fluid", probe(x, y, z));
+    }
+
+    // ───────────────────── notfullblock branch — unreachable ──────────────
+
+    /** <b>No positive test for the {@code notfullblock} branch.</b>
+     *
+     *  <p>Reaching it requires a block where ALL of these hold:</p>
+     *  <ul>
+     *    <li>{@code SealableBlockHandler.isBlockSealed} returns false via
+     *        one of its non-ban-list gates (material is liquid or non-solid,
+     *        block is air, or block is {@code IFluidBlock});</li>
+     *    <li>material is NOT in {@code materialBanList} (otherwise the
+     *        dispatch hits "notsealmat" first);</li>
+     *    <li>block is NOT in {@code blockBanList} (otherwise "notsealblock"
+     *        fires first);</li>
+     *    <li>{@code isFullBlock(world, pos)} returns true — i.e. the
+     *        block's collision bounding box is exactly {@code [0,0,0]→[1,1,1]}.</li>
+     *  </ul>
+     *
+     *  <p>No vanilla or AR-registered block satisfies all four. The liquid
+     *  / non-solid / air / IFluidBlock blocks all have null or partial
+     *  collision boxes. Modded blocks could (hypothetically — a custom
+     *  liquid with a full collision box), but that's not the repo's contract
+     *  to pin.</p>
+     *
+     *  <p>The branch exists in {@code ItemSealDetector.onItemUse:44-45} and
+     *  is replicated in {@code TestProbeCommand.handleSealDetector:8913-8914},
+     *  but appears to be effectively dead code in the current block set.
+     *  Logged in the bug ledger so a future fix (e.g. swapping the
+     *  {@code isFullBlock} predicate to its inverse, or removing the branch
+     *  entirely) flips an explicit test rather than a silent no-op. </p> */
+    @SuppressWarnings("unused")
+    private static final String NOTFULLBLOCK_UNREACHABLE_DOC = "see javadoc above";
 
     // ───────────────────── probe shape ───────────────────────────────────
 

@@ -6,8 +6,61 @@
   `ItemSpaceArmorUseFluidE2ETest` covered the cheaper enchanted-
   vanilla-armor route for suit oxygen drain. The suit-family
   CHEST route (multi-component sub-inventory) is deferred.
-- Status: **Backlog**.
+- Status: ✅ **Completed 2026-05-25**.
 - Created: 2026-05-23.
+
+## Actual scope (2026-05-25)
+
+`ItemSpaceChestSubInventoryDrainE2ETest` — 3/3 tests passing under
+`xvfb-run` testClient:
+
+- `vacuumDrainsOxygenFromChestSubInventoryTank` — equip full
+  4-piece suit with chest carrying oxygen-charged pressure tank
+  (1000 mB), set overworld atmosphere density 0, wait 80 game
+  ticks (~8 atmosphere ticks at 10-tick cadence), assert chestAir
+  decreased and player health held.
+- `breathableAtmosphereDoesNotDrainChestTank` — same setup but
+  density=100 (breathable), wait, assert chestAir unchanged.
+- `drainedChestTankTransitionsToVacuumDamage` — equip with only
+  3 mB oxygen, drop to vacuum, poll up to 200 ticks, assert tank
+  fully drained to 0 AND player took damage (suit-no-longer-protects
+  branch).
+
+**Probe additions** (`TestProbeCommand`):
+
+- `/artest player equip-space-chest [initialOxygen]` — builds
+  `itemSpaceSuit_Chest` stack, fills an `ItemPressureTank` component
+  via the Forge `IFluidHandlerItem` capability with oxygen, embeds
+  it via the production `ItemSpaceArmor.addArmorComponent` path,
+  then equips ALL FOUR suit pieces (chest + helm + legs + boots)
+  so `AtmosphereNeedsSuit.isImmune` can return true. Without all
+  four, the vacuum-damage path fires before drain can be observed.
+- `/artest player held-air-component-route` — reads the player's
+  chest stack's air via the chest's own `IFillableArmor.getAirRemaining`
+  (which walks embedded components and sums FluidStack amounts).
+  Mandatory addition: the existing `held-air` probe uses
+  `ItemAirUtils.INSTANCE.getAirRemaining` which reads only the
+  static `"air"` NBT key — that returns 0 for `ItemSpaceChest`
+  because the suit-family chest stores its O2 buffer inside
+  embedded components, not as a top-level NBT.
+
+**Environment note**: testClient runs under `xvfb-run` on this dev
+box (`xvfb-run -a ./gradlew testClient ...`) because LWJGL's
+`LinuxDisplay.init` NPEs on headless runs. Future CI invocations
+need the same wrapper. The existing
+`ItemSpaceArmorUseFluidE2ETest` and other testClient tests share
+this requirement.
+
+**Phase 2 (Suit Workstation drive-through) — not shipped.**
+
+Per the original ticket, Phase 2 was optional and meant to close
+the *assembly → drain* chain end-to-end via real GUI clicks. The
+shipped pre-constructed-NBT fixture exercises the drain contract
+in isolation, which is the highest-leverage pin. Phase 2 splits
+to a separate ticket if a regression in the workstation assembly
+path is ever observed (currently pinned by
+`SuitWorkStationAssemblesSuitTest`, which already covers
+component-consumed-into-NBT).
 
 ## Context
 
