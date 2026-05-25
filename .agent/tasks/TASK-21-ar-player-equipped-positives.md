@@ -7,8 +7,51 @@
   (non-player sender) with deep coverage in
   `WorldCommandGuardContractTest`; the positive side requires a
   real player.
-- Status: **Backlog**.
+- Status: ✅ **Completed 2026-05-25**.
 - Created: 2026-05-23.
+
+## Actual scope (2026-05-25)
+
+`WorldCommandPlayerEquippedE2ETest` — 5/5 client tests covering all
+reachable positive paths:
+
+- `arGotoTransfersPlayerToTargetDim` — generate AR planet, op bot,
+  `exec-as-player /ar goto <dim>`, assert player.dim matches.
+  (The original plan's `goto <dim> <x> <y> <z>` form does NOT exist
+  in production — `commandGoto` takes only `<dim>` or
+  `station <id>`.)
+- `arGotoStationTeleportsToStationSpawnInSpaceDim` — create station,
+  `/ar goto station <id>`, assert player.dim == spaceDim (-2).
+- `arGiveStationAddsChipToPlayerInventory` — create station,
+  `/ar giveStation <id>`, verify chip count >= 1 via new
+  `player inventory-contains` probe.
+- `arAddTorchAddsHeldBlockToTorchList` — give-held cobblestone,
+  `/ar addTorch`, command result >= 1.
+- `arAddSolidBlockOverrideAddsHeldBlockToSealedList` — give-held
+  dirt, `/ar addSolidBlockOverride`, command result >= 1.
+
+**Out of scope (not shipped this batch)**:
+
+- `/ar fetch <player>` — needs a second connected bot; the
+  testClient harness supports one player. Defer to a separate task
+  if multi-bot harness lands.
+- `/ar fillData <type> <amount>` — needs fixture for ItemData stack
+  with the right data-type compatibility; covered transitively by
+  the satellite-construction flow.
+
+**New probes** for this task (`TestProbeCommand`):
+
+- `player exec-as-player <command...>` — runs a command via the
+  server's command manager with the bot's player as the sender.
+  Distinct from `serverClient().execute(cmd)` which uses a
+  synthetic non-player sender that AR rejects.
+- `player op-self` / `player deop-self` — elevate / restore op
+  level so the bot can run /ar commands (op-protected).
+- `player inventory-contains <item-id>` — observability probe.
+- `player give-held <item-id>` — equip a specific item in main
+  hand for /ar addTorch / addSolidBlockOverride setups.
+
+**testClient ENV**: requires `xvfb-run` wrapper.
 
 ## Context
 

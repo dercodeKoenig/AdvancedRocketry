@@ -9135,6 +9135,180 @@ public class TestProbeCommand extends CommandBase {
                     + ",\"chestAir\":" + readBack + "}");
             return;
         }
+        if ("mount-entity".equals(sub) && args.length >= 2) {
+            // /artest player mount-entity <entityId>
+            //
+            // TASK-20 P1 — start the player riding the given entity.
+            // Bridges the testClient bot's lack of "right-click on
+            // entity" interaction by calling startRiding server-side.
+            // Observable result identical: player.getRidingEntity()
+            // == that entity.
+            int entityId = parseIntOr(args[1], Integer.MIN_VALUE);
+            net.minecraft.entity.Entity entity = player.world.getEntityByID(entityId);
+            if (entity == null) {
+                send(sender, "{\"error\":\"entity not found\",\"entityId\":" + entityId + "}");
+                return;
+            }
+            boolean mounted = player.startRiding(entity);
+            send(sender, "{\"ok\":true,\"mounted\":" + mounted
+                    + ",\"ridingEntityId\":" + (player.getRidingEntity() == null
+                            ? -1 : player.getRidingEntity().getEntityId()) + "}");
+            return;
+        }
+        if ("dismount".equals(sub)) {
+            // /artest player dismount — dismount the player from any
+            // ridden entity. TASK-20 P1 — bridges the bot's lack of
+            // "sneak input" by calling dismountRidingEntity server-side.
+            net.minecraft.entity.Entity wasRiding = player.getRidingEntity();
+            int wasRidingId = wasRiding == null ? -1 : wasRiding.getEntityId();
+            player.dismountRidingEntity();
+            send(sender, "{\"ok\":true"
+                    + ",\"wasRidingId\":" + wasRidingId
+                    + ",\"ridingEntityIdNow\":" + (player.getRidingEntity() == null
+                            ? -1 : player.getRidingEntity().getEntityId()) + "}");
+            return;
+        }
+        if ("riding-entity".equals(sub)) {
+            // /artest player riding-entity — observability probe for
+            // the player's current riding state.
+            net.minecraft.entity.Entity riding = player.getRidingEntity();
+            send(sender, "{\"ok\":true"
+                    + ",\"ridingEntityId\":" + (riding == null ? -1 : riding.getEntityId())
+                    + ",\"ridingEntityClass\":\""
+                    + escapeJson(riding == null ? "" : riding.getClass().getName())
+                    + "\"}");
+            return;
+        }
+        if ("exec-as-player".equals(sub) && args.length >= 1) {
+            // /artest player exec-as-player <command-and-args...>
+            //
+            // TASK-21 — runs a command via the server's command manager
+            // with the bot's player as the sender. Used to drive /ar
+            // player-equipped verbs (goto, giveStation, addTorch,
+            // fillData, addSolidBlockOverride) which gate on "sender
+            // instanceof Entity". The bot must already have op (use
+            // op-self probe below).
+            //
+            // The whole rest of args[] is concatenated with spaces and
+            // sent as a single command string (matching how chat-
+            // command parsing works).
+            StringBuilder cmd = new StringBuilder();
+            for (int i = 1; i < args.length; i++) {
+                if (i > 1) cmd.append(' ');
+                cmd.append(args[i]);
+            }
+            int result = server.getCommandManager().executeCommand(player, cmd.toString());
+            send(sender, "{\"ok\":true"
+                    + ",\"command\":\"" + escapeJson(cmd.toString()) + "\""
+                    + ",\"result\":" + result
+                    + ",\"playerDim\":" + player.world.provider.getDimension()
+                    + ",\"playerPosX\":" + player.posX
+                    + ",\"playerPosY\":" + player.posY
+                    + ",\"playerPosZ\":" + player.posZ + "}");
+            return;
+        }
+        if ("op-self".equals(sub)) {
+            // /artest player op-self — elevate the bot's player to op
+            // level 4 in the server's PlayerList. Reset by removing
+            // from ops after the test (via deop-self).
+            server.getPlayerList().addOp(player.getGameProfile());
+            send(sender, "{\"ok\":true,\"opped\":true"
+                    + ",\"playerName\":\"" + escapeJson(player.getName()) + "\"}");
+            return;
+        }
+        if ("deop-self".equals(sub)) {
+            server.getPlayerList().removeOp(player.getGameProfile());
+            send(sender, "{\"ok\":true,\"opped\":false}");
+            return;
+        }
+        if ("inventory-contains".equals(sub) && args.length >= 2) {
+            // /artest player inventory-contains <item-registry-name>
+            //
+            // Returns true if the bot's main inventory has at least one
+            // ItemStack of the given item. Used by /ar giveStation
+            // positive test to verify the chip was added.
+            String registryName = args[1];
+            net.minecraftforge.fml.common.registry.ForgeRegistries.ITEMS.getValue(
+                    new ResourceLocation(registryName));
+            int count = 0;
+            for (int i = 0; i < player.inventory.getSizeInventory(); i++) {
+                net.minecraft.item.ItemStack stack = player.inventory.getStackInSlot(i);
+                if (!stack.isEmpty() && stack.getItem().getRegistryName() != null
+                        && stack.getItem().getRegistryName().toString().equals(registryName)) {
+                    count += stack.getCount();
+                }
+            }
+            send(sender, "{\"ok\":true"
+                    + ",\"item\":\"" + escapeJson(registryName) + "\""
+                    + ",\"count\":" + count + "}");
+            return;
+        }
+        if ("give-held".equals(sub) && args.length >= 2) {
+            // /artest player give-held <item-registry-name>
+            //
+            // Equip the named item in the player's main hand. Used to
+            // set up the /ar addTorch / fillData positive paths which
+            // require a specific held item.
+            String registryName = args[1];
+            net.minecraft.item.Item item =
+                    net.minecraftforge.fml.common.registry.ForgeRegistries.ITEMS
+                            .getValue(new ResourceLocation(registryName));
+            if (item == null) {
+                send(sender, "{\"error\":\"unknown item\",\"name\":\""
+                        + escapeJson(registryName) + "\"}");
+                return;
+            }
+            player.setHeldItem(net.minecraft.util.EnumHand.MAIN_HAND,
+                    new net.minecraft.item.ItemStack(item));
+            send(sender, "{\"ok\":true,\"held\":\"" + escapeJson(registryName) + "\"}");
+            return;
+        }
+        if ("drive-ridden-entity".equals(sub) && args.length >= 3) {
+            // /artest player drive-ridden-entity <moveForward> <ticks>
+            //
+            // TASK-20 P2 — composite probe that re-applies
+            // player.moveForward immediately before each entity.onUpdate
+            // call. The standalone set-move-forward probe is racy in
+            // testClient because the bot client's CPacketInput stream
+            // resets the field between probe round-trips. This probe
+            // keeps the field stable across the whole tick burst by
+            // setting it inline.
+            float forward = (float) parseDoubleOr(args[1], 0.0);
+            int ticks = Math.max(1, parseIntOr(args[2], 1));
+            net.minecraft.entity.Entity ridden = player.getRidingEntity();
+            if (ridden == null) {
+                send(sender, "{\"error\":\"player not riding any entity\"}");
+                return;
+            }
+            int ticked = 0;
+            for (int i = 0; i < ticks; i++) {
+                if (ridden.isDead) break;
+                player.moveForward = forward;
+                ridden.onUpdate();
+                ticked++;
+            }
+            send(sender, "{\"ok\":true,\"ticked\":" + ticked
+                    + ",\"moveForward\":" + player.moveForward
+                    + ",\"riddenIsDead\":" + ridden.isDead
+                    + ",\"riddenPosX\":" + ridden.posX
+                    + ",\"riddenPosY\":" + ridden.posY
+                    + ",\"riddenPosZ\":" + ridden.posZ + "}");
+            return;
+        }
+        if ("set-move-forward".equals(sub) && args.length >= 2) {
+            // /artest player set-move-forward <value>
+            //
+            // TASK-20 P2 — set the player's moveForward input field
+            // server-side. EntityHoverCraft.onUpdate reads
+            // player.moveForward via getPassengerMovingForward; setting
+            // it directly drives the throttle without needing client-
+            // side W-key simulation (which our testClient ClientBot
+            // does not support).
+            float value = (float) parseDoubleOr(args[1], 0.0);
+            player.moveForward = value;
+            send(sender, "{\"ok\":true,\"moveForward\":" + player.moveForward + "}");
+            return;
+        }
         if ("clear-armor".equals(sub)) {
             // /artest player clear-armor — empty all four armor slots.
             // Used by drain counter-tests where the player must be

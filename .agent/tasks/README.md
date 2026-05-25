@@ -14,11 +14,11 @@ Bug-ledger history lives in
 
 ## Current state
 
-- **Pyramid**: 754 (testUnit **257** / testIntegration **81** /
-  testServer **370** / testClient **46**). +57 on 2026-05-25 from
-  TASK-19 Phase 1+2+3 (11) + TASK-23 (2) + TASK-22 (4) + TASK-24 (3) +
-  Tier 1 audit gaps 4/1/5/2 (10: 3 unit + 7 server) +
-  Tier 2/3 audit gaps 11/6/15/14/10/8/12 (27: 17 unit + 1 integration + 7 server + 2 client).
+- **Pyramid**: 763 (testUnit 257 / testIntegration 81 /
+  testServer 370 / testClient **55**). +66 on 2026-05-25 from
+  TASK-19 (11) + TASK-23 (2) + TASK-22 (4) + TASK-24 (3) +
+  Tier 1 audit gaps (10) + Tier 2/3 audit gaps (27) +
+  TASK-20 hovercraft (4) + TASK-21 /ar player-equipped (5).
   Counter regenerated via
   `grep -rc '@Test$' src/test/java/.../{unit,integration,server,client}/`.
 - **testServer wall time**: 8m 27s (50 % faster than pre-B2).
@@ -60,6 +60,8 @@ Bug-ledger history lives in
 | [TASK-22](TASK-22-uv-assembler-full-delta.md) | UV-assembler full behavioural delta from rocket assembler — 4 server-tier tests across 2 classes: Phase 1 bounds-constants delta via reflection (2), Phase 2 output entity class delta (rocket → EntityRocket, UV → EntityStationDeployedRocket) via new `uv-rocket` fixture probe (2). Phase 3 mount eligibility deferred — implicitly covered by Phase 2's entity-class pin. | ✅ partial |
 | [TASK-23](TASK-23-sealdetector-remaining-branches.md) | SealDetector remaining branches — 2 of 3 deferred branches pinned: `notsealblock` via probe-driven `blockBanList` mutation, `fluid` via AR's `oxygenFluid` (IFluidBlock). Third branch `notfullblock` documented as unreachable (no vanilla/AR block satisfies the required full-collision-bbox + liquid/IFluidBlock combination). Phase 4 client mirror skipped — server-tier probe replicates dispatch 1:1. | ✅ partial |
 | [TASK-24](TASK-24-spacearmor-chest-route.md) | SpaceArmor CHEST sub-inventory drain (testClient) — 3 testClient tests pinning vacuum-drain through `ItemSpaceChest.decrementAir` (component-walking + FluidStack drain in embedded pressure tank). 2 new probes (`player equip-space-chest`, `player held-air-component-route`). testClient harness requires `xvfb-run` wrapper on headless dev boxes. Phase 2 (Suit Workstation drive-through) deferred. | ✅ |
+| [TASK-20](TASK-20-hovercraft-ride-coverage.md) | Hovercraft ride / mount / throttle / motion (testClient) — 4 client tests: mount via startRiding probe, dismount, throttle-via-drive-ridden-entity probe (composite that re-applies moveForward inline to defeat CPacketInput reset), unmounted hovercraft doesn't drift. Phase 3 fuel reframed as documentation — production has zero fuel logic; documented so future addition forces a contract pin. 5 new probes. | ✅ partial |
+| [TASK-21](TASK-21-ar-player-equipped-positives.md) | `/ar` player-equipped positive paths (testClient) — 5 client tests: goto dim, goto station, giveStation chip, addTorch, addSolidBlockOverride. New `player exec-as-player` probe (bot-as-sender via commandManager) + op-self/deop-self + inventory-contains + give-held probes. `/ar fetch` deferred (needs two-bot harness); `/ar fillData` covered transitively by satellite-construction flow. | ✅ partial |
 
 ## Backlog
 
@@ -70,8 +72,6 @@ entry is an actionable TASK with a defined plan + acceptance.
 |---|---|---|---|
 | [TASK-15](TASK-15-visual-regression.md) | Visual regression infrastructure for Minecraft client | 👁 Watching | 4 explicit promotion triggers in task file (GUI refactor / modpack-report / JEI rework / texture-pipeline bump). Revisit + consider Obsolete if no trigger in 6 months. |
 | [TASK-16](TASK-16-test-stability-flake-watch.md) | Test-stability flake watch — investigation deliverable. Three flake shapes root-caused; shape #3 mitigated in TASK-26 via kit retry; #1+#2 split into TASK-27; #4 (worldgen sampling) confirmed across 3 sightings, promoted to TASK-28 F7. | 🟡 Investigation complete | Investigation done 2026-05-23. |
-| [TASK-20](TASK-20-hovercraft-ride-coverage.md) | Hovercraft ride / throttle / fuel-drain coverage (testClient) | 🟢 Backlog | testClient territory; player-input simulation. ~9 h. Largest single testClient task in backlog. |
-| [TASK-21](TASK-21-ar-player-equipped-positives.md) | `/ar` player-equipped subcommand positive paths (testClient) | 🟢 Backlog | Completes `/ar` surface that TASK-11 started — guard side already deep, this is the positive side. ~6 h. |
 
 ## Conscious non-goals
 

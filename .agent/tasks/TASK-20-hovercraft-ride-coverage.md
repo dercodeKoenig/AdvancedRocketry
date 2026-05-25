@@ -4,8 +4,57 @@
 
 - Source: 2026-05-23 audit — Gap #2 ("Hovercraft riding / fuel-burn
   / fan-physics").
-- Status: **Backlog**.
+- Status: ✅ **Completed 2026-05-25** (partial — Phase 1+2 shipped; Phase 3 reframed as documentation).
 - Created: 2026-05-23.
+
+## Actual scope (2026-05-25)
+
+**Phase 1 (mount/dismount) + Phase 2 (throttle) — ✅ shipped.**
+
+`HovercraftRideE2ETest` — 4/4 client tests:
+
+- `playerMountsHovercraftViaStartRiding` — spawn craft via probe,
+  `mount-entity` probe drives `startRiding`, assert
+  `riding-entity` probe reports the craft's id + class.
+- `playerDismountClearsRidingEntity` — mount + dismount via probe,
+  assert riding cleared.
+- `forwardThrottleMovesHovercraftLaterally` — mount, `drive-ridden-
+  entity 1 40` (combined probe that re-applies moveForward inline
+  before each onUpdate), assert craft lateral position changed.
+- `unmountedHovercraftDoesNotMoveLaterally` — counter-test:
+  unmounted craft ticks but doesn't drift laterally.
+
+**Phase 3 (fuel drain) — reframed as documentation.**
+
+Reading `EntityHoverCraft.java` revealed the audit's "fuel drain"
+gap was based on assumed mechanics that don't exist: the production
+class has ZERO fuel/energy logic. `onUpdate` only reads
+`player.moveForward` and applies acceleration; no fuel field, no
+drain. Documented in `HovercraftRideE2ETest`'s javadoc so a future
+addition of fuel mechanics MUST add the corresponding contract pin.
+
+**Phase 4 (persistence) — not shipped this batch.**
+
+Chunk-unload/reload persistence is testServer-tier (server-driven
+chunk lifecycle), not testClient. Could be added later as a
+sibling smoke test if a regression motivates.
+
+**New probes** for this task (`TestProbeCommand`):
+
+- `player mount-entity <entityId>` — bridges ClientBot's missing
+  "right-click on entity" by calling `startRiding` server-side.
+- `player dismount` — clears `getRidingEntity` via
+  `dismountRidingEntity`.
+- `player riding-entity` — observability probe.
+- `player set-move-forward <value>` — set `player.moveForward`
+  field; standalone, racy in client harness because CPacketInput
+  resets between probe round-trips.
+- `player drive-ridden-entity <moveForward> <ticks>` — composite
+  probe; re-applies moveForward inline before each `onUpdate` call
+  on the ridden entity. The reliable throttle driver.
+
+**testClient ENV**: requires `xvfb-run` wrapper (LWJGL on headless
+Linux), same as TASK-24.
 
 ## Context
 
