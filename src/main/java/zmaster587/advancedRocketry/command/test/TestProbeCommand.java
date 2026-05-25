@@ -655,6 +655,26 @@ public class TestProbeCommand extends CommandBase {
                     + ",\"dismantle\":" + RocketEventRecorder.dismantleCount + "}");
             return;
         }
+        if ("event-payloads".equalsIgnoreCase(args[0])) {
+            // Gap #6 — dump last-observed entity id + dim per event type.
+            RocketEventRecorder.ensureRegistered();
+            StringBuilder out = new StringBuilder("{");
+            out.append("\"launchEntityId\":").append(RocketEventRecorder.lastLaunchEntityId)
+                    .append(",\"launchDim\":").append(RocketEventRecorder.lastLaunchDim);
+            out.append(",\"preLaunchEntityId\":").append(RocketEventRecorder.lastPreLaunchEntityId)
+                    .append(",\"preLaunchDim\":").append(RocketEventRecorder.lastPreLaunchDim);
+            out.append(",\"orbitReachedEntityId\":").append(RocketEventRecorder.lastOrbitReachedEntityId)
+                    .append(",\"orbitReachedDim\":").append(RocketEventRecorder.lastOrbitReachedDim);
+            out.append(",\"dismantleEntityId\":").append(RocketEventRecorder.lastDismantleEntityId)
+                    .append(",\"dismantleDim\":").append(RocketEventRecorder.lastDismantleDim);
+            out.append(",\"landedEntityId\":").append(RocketEventRecorder.lastLandedEntityId)
+                    .append(",\"landedDim\":").append(RocketEventRecorder.lastLandedDim);
+            out.append(",\"deOrbitingEntityId\":").append(RocketEventRecorder.lastDeOrbitingEntityId)
+                    .append(",\"deOrbitingDim\":").append(RocketEventRecorder.lastDeOrbitingDim);
+            out.append('}');
+            send(sender, out.toString());
+            return;
+        }
         if ("arm-prelaunch-cancel".equalsIgnoreCase(args[0])) {
             // Gap 1 — arm the test-only RocketPreLaunchEvent canceller.
             // Subsequent prepareLaunch() calls fire the event, which is
@@ -8702,6 +8722,60 @@ public class TestProbeCommand extends CommandBase {
                     + "}");
             return;
         }
+        if ("try-orescanner-rclick".equals(sub)) {
+            // /artest player try-orescanner-rclick [register-satellite-on-dim]
+            //
+            // Gap T3 #12 — equip the player with ItemOreScanner and
+            // invoke onItemRightClick. The production path opens the
+            // OreMapping GUI WHEN the stored satellite-ID resolves to a
+            // SatelliteOreMapping on the current dim — otherwise the
+            // right-click is a no-op. Pin "no crash" on the empty path
+            // and the path-with-satellite.
+            //
+            // If args[1] is a dim id, register a fresh SatelliteOreMapping
+            // on that dim and seed the held item's NBT to point at it.
+            // Otherwise (no arg or "none"), the held item has no NBT —
+            // production must early-out without NPE.
+            int satRegisterDim = (args.length >= 2 && !"none".equalsIgnoreCase(args[1]))
+                    ? parseIntOr(args[1], Integer.MIN_VALUE) : Integer.MIN_VALUE;
+            long satId = -1;
+            if (satRegisterDim != Integer.MIN_VALUE) {
+                net.minecraft.world.WorldServer satWorld = server.getWorld(satRegisterDim);
+                zmaster587.advancedRocketry.dimension.DimensionProperties props = satWorld == null ? null
+                        : zmaster587.advancedRocketry.dimension.DimensionManager.getInstance()
+                                .getDimensionProperties(satRegisterDim);
+                if (satWorld != null && props != null) {
+                    zmaster587.advancedRocketry.satellite.SatelliteOreMapping sat =
+                            new zmaster587.advancedRocketry.satellite.SatelliteOreMapping();
+                    satId = System.nanoTime();
+                    sat.getProperties().setId(satId);
+                    props.addSatellite(sat, satWorld);
+                }
+            }
+
+            net.minecraft.item.Item scanner =
+                    zmaster587.advancedRocketry.api.AdvancedRocketryItems.itemOreScanner;
+            net.minecraft.item.ItemStack held = new net.minecraft.item.ItemStack(scanner);
+            if (satId != -1) {
+                ((zmaster587.advancedRocketry.item.ItemOreScanner) scanner)
+                        .setSatelliteID(held, satId);
+            }
+            player.setHeldItem(net.minecraft.util.EnumHand.MAIN_HAND, held);
+
+            String error = null;
+            try {
+                scanner.onItemRightClick(player.world, player, net.minecraft.util.EnumHand.MAIN_HAND);
+            } catch (RuntimeException e) {
+                error = e.getClass().getSimpleName() + ": " + e.getMessage();
+            }
+            send(sender, "{\"ok\":true"
+                    + ",\"hadSatelliteId\":" + (satId != -1)
+                    + ",\"satelliteId\":" + satId
+                    + ",\"registeredOnDim\":" + satRegisterDim
+                    + ",\"error\":" + (error == null ? "null" : "\"" + escapeJson(error) + "\"")
+                    + "}");
+            return;
+        }
         if ("try-biomechanger-rclick".equals(sub) && args.length >= 2) {
             // /artest player try-biomechanger-rclick <dim>
             //
@@ -10563,6 +10637,23 @@ public class TestProbeCommand extends CommandBase {
         public static volatile int landedCount = 0;
         public static volatile int deOrbitingCount = 0;
 
+        // Gap #6 payload pins — last-observed entity id + dim for each
+        // event type, so tests can verify subscribers receive the right
+        // payload (not just that the event fired). Defaults to -1 so a
+        // missed event is distinguishable from "fired with entityId=0".
+        public static volatile int lastLaunchEntityId = -1;
+        public static volatile int lastLaunchDim = Integer.MIN_VALUE;
+        public static volatile int lastPreLaunchEntityId = -1;
+        public static volatile int lastPreLaunchDim = Integer.MIN_VALUE;
+        public static volatile int lastOrbitReachedEntityId = -1;
+        public static volatile int lastOrbitReachedDim = Integer.MIN_VALUE;
+        public static volatile int lastDismantleEntityId = -1;
+        public static volatile int lastDismantleDim = Integer.MIN_VALUE;
+        public static volatile int lastLandedEntityId = -1;
+        public static volatile int lastLandedDim = Integer.MIN_VALUE;
+        public static volatile int lastDeOrbitingEntityId = -1;
+        public static volatile int lastDeOrbitingDim = Integer.MIN_VALUE;
+
         private static volatile boolean registered = false;
 
         public static synchronized void ensureRegistered() {
@@ -10575,31 +10666,43 @@ public class TestProbeCommand extends CommandBase {
         public void onLaunch(
                 zmaster587.advancedRocketry.api.RocketEvent.RocketLaunchEvent e) {
             launchCount++;
+            lastLaunchEntityId = e.getEntity() == null ? -1 : e.getEntity().getEntityId();
+            lastLaunchDim = e.world == null ? Integer.MIN_VALUE : e.world.provider.getDimension();
         }
         @net.minecraftforge.fml.common.eventhandler.SubscribeEvent
         public void onPreLaunch(
                 zmaster587.advancedRocketry.api.RocketEvent.RocketPreLaunchEvent e) {
             preLaunchCount++;
+            lastPreLaunchEntityId = e.getEntity() == null ? -1 : e.getEntity().getEntityId();
+            lastPreLaunchDim = e.world == null ? Integer.MIN_VALUE : e.world.provider.getDimension();
         }
         @net.minecraftforge.fml.common.eventhandler.SubscribeEvent
         public void onOrbitReached(
                 zmaster587.advancedRocketry.api.RocketEvent.RocketReachesOrbitEvent e) {
             orbitReachedCount++;
+            lastOrbitReachedEntityId = e.getEntity() == null ? -1 : e.getEntity().getEntityId();
+            lastOrbitReachedDim = e.world == null ? Integer.MIN_VALUE : e.world.provider.getDimension();
         }
         @net.minecraftforge.fml.common.eventhandler.SubscribeEvent
         public void onDismantle(
                 zmaster587.advancedRocketry.api.RocketEvent.RocketDismantleEvent e) {
             dismantleCount++;
+            lastDismantleEntityId = e.getEntity() == null ? -1 : e.getEntity().getEntityId();
+            lastDismantleDim = e.world == null ? Integer.MIN_VALUE : e.world.provider.getDimension();
         }
         @net.minecraftforge.fml.common.eventhandler.SubscribeEvent
         public void onLanded(
                 zmaster587.advancedRocketry.api.RocketEvent.RocketLandedEvent e) {
             landedCount++;
+            lastLandedEntityId = e.getEntity() == null ? -1 : e.getEntity().getEntityId();
+            lastLandedDim = e.world == null ? Integer.MIN_VALUE : e.world.provider.getDimension();
         }
         @net.minecraftforge.fml.common.eventhandler.SubscribeEvent
         public void onDeOrbiting(
                 zmaster587.advancedRocketry.api.RocketEvent.RocketDeOrbitingEvent e) {
             deOrbitingCount++;
+            lastDeOrbitingEntityId = e.getEntity() == null ? -1 : e.getEntity().getEntityId();
+            lastDeOrbitingDim = e.world == null ? Integer.MIN_VALUE : e.world.provider.getDimension();
         }
     }
 }

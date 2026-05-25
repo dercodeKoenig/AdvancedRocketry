@@ -14,10 +14,11 @@ Bug-ledger history lives in
 
 ## Current state
 
-- **Pyramid**: 727 (testUnit **240** / testIntegration 80 /
-  testServer **363** / testClient **44**). +30 on 2026-05-25 from
+- **Pyramid**: 754 (testUnit **257** / testIntegration **81** /
+  testServer **370** / testClient **46**). +57 on 2026-05-25 from
   TASK-19 Phase 1+2+3 (11) + TASK-23 (2) + TASK-22 (4) + TASK-24 (3) +
-  Tier 1 audit gaps 4/1/5/2 (10: 3 unit + 7 server).
+  Tier 1 audit gaps 4/1/5/2 (10: 3 unit + 7 server) +
+  Tier 2/3 audit gaps 11/6/15/14/10/8/12 (27: 17 unit + 1 integration + 7 server + 2 client).
   Counter regenerated via
   `grep -rc '@Test$' src/test/java/.../{unit,integration,server,client}/`.
 - **testServer wall time**: 8m 27s (50 % faster than pre-B2).
