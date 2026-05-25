@@ -76,6 +76,26 @@ number, a loop bound, an internal data-structure choice, or an
 internal helper — these are anti-patterns called out explicitly
 in the SOP.
 
+---
+
+## Flake diagnosis — REQUIRED reading before tuning retry budgets
+
+When a test fails intermittently (or your 10× rerun comes back red),
+re-read [`.agent/sops/development/flake-diagnosis.md`](./.agent/sops/development/flake-diagnosis.md)
+before reaching for the retry-budget knob. The SOP distinguishes
+three failure modes — real race, self-introduced regression,
+test-design bug — and gives the diagnosis checklist. Skipping it
+costs 150-minute reruns chasing the wrong variable.
+
+**The core rule**: failure DISTRIBUTION across runs tells you which
+mode. Same N tests every run → regression. Sparse non-deterministic
+set → race. Alternating outputs on same test → test-design.
+
+**Cache-bust sanity**: every 10×-rerun loop MUST delete
+`build/{reports,test-results,tmp}/testServer` between iterations
+AND grep per-run `PASSED` count, or you'll discover ten "PASS" runs
+where only run 1 actually executed.
+
 This rule overrides the agent's instinct to "make assertions
 tighter". Tighter is not always better.
 

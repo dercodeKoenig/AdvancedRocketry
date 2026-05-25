@@ -26,6 +26,26 @@ When auditing test depth, count **contract-coverage**, not pin-count.
 Resist the temptation to "tighten" with magic-number assertions —
 that's the wrong shape of pin.
 
+### Before tuning retry budgets / chasing test flakes
+
+**[SOP: Flake diagnosis](./sops/development/flake-diagnosis.md)** —
+must be read before reaching for the retry-budget knob OR running a
+10× verification sweep.
+
+**TL;DR**: failure DISTRIBUTION tells you the mode. Same N tests
+every run → regression (revert your recent diff). Sparse
+non-deterministic set → race (find the non-time variable: chunk
+load, populate, tick-gate, recipe order). Alternating outputs on
+same test → test-design (loosen, don't tighten).
+
+10× verification loops MUST cache-bust between iterations (delete
+`build/{reports,test-results,tmp}/testServer`) AND grep per-run
+PASSED count — Gradle's `:testServer UP-TO-DATE` will report PASS
+on every run after the first if you don't.
+
+If your retry budget exceeds 5 s and the failure rate is still
+> 5 %, the fix is structural, not timed.
+
 ### Before closing a TASK (status → Completed / Obsolete / Blocked)
 
 **[SOP: Task lifecycle](./sops/development/task-lifecycle.md)** —
