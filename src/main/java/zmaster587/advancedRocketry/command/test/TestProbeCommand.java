@@ -655,6 +655,32 @@ public class TestProbeCommand extends CommandBase {
                     + ",\"dismantle\":" + RocketEventRecorder.dismantleCount + "}");
             return;
         }
+        if ("arm-prelaunch-cancel".equalsIgnoreCase(args[0])) {
+            // Gap 1 — arm the test-only RocketPreLaunchEvent canceller.
+            // Subsequent prepareLaunch() calls fire the event, which is
+            // then cancelled, preventing LAUNCH_COUNTER from being set
+            // to 200. Tests MUST disarm in @After.
+            ensurePreLaunchCancellerRegistered();
+            preLaunchObservedCount = 0;
+            preLaunchCancelledCount = 0;
+            cancelNextPreLaunch = true;
+            send(sender, "{\"ok\":true,\"armed\":true}");
+            return;
+        }
+        if ("disarm-prelaunch-cancel".equalsIgnoreCase(args[0])) {
+            cancelNextPreLaunch = false;
+            send(sender, "{\"ok\":true,\"armed\":false"
+                    + ",\"observedSinceArm\":" + preLaunchObservedCount
+                    + ",\"cancelledSinceArm\":" + preLaunchCancelledCount + "}");
+            return;
+        }
+        if ("prelaunch-cancel-counts".equalsIgnoreCase(args[0])) {
+            ensurePreLaunchCancellerRegistered();
+            send(sender, "{\"ok\":true,\"armed\":" + cancelNextPreLaunch
+                    + ",\"observed\":" + preLaunchObservedCount
+                    + ",\"cancelled\":" + preLaunchCancelledCount + "}");
+            return;
+        }
         if ("info".equalsIgnoreCase(args[0]) && args.length >= 2) {
             int entityId = parseIntOr(args[1], Integer.MIN_VALUE);
             EntityRocket rocket = findRocket(server, entityId);
@@ -671,6 +697,22 @@ public class TestProbeCommand extends CommandBase {
             // are valid types in this probe surface because the latter
             // extends the former.
             info.put("entityClass", rocket.getClass().getName());
+            // Gap 1 (RocketPreLaunchEvent cancellation) — countdown
+            // value set by prepareLaunch() to 200 when the event isn't
+            // cancelled. Stays at default (-1) when cancelled.
+            // LAUNCH_COUNTER is private static final; reach in via reflection.
+            try {
+                java.lang.reflect.Field counterField =
+                        zmaster587.advancedRocketry.entity.EntityRocket.class
+                                .getDeclaredField("LAUNCH_COUNTER");
+                counterField.setAccessible(true);
+                @SuppressWarnings("unchecked")
+                net.minecraft.network.datasync.DataParameter<Integer> param =
+                        (net.minecraft.network.datasync.DataParameter<Integer>) counterField.get(null);
+                info.put("launchCounter", rocket.getDataManager().get(param));
+            } catch (ReflectiveOperationException e) {
+                info.put("launchCounter", -999);
+            }
             info.put("dim", rocket.world.provider.getDimension());
             info.put("posX", rocket.posX);
             info.put("posY", rocket.posY);
@@ -1089,6 +1131,62 @@ public class TestProbeCommand extends CommandBase {
      * <p>Used by TASK-22 to observe the {@code MAX_SIZE_Y} delta:
      * rocket assembler caps at 128, UV caps at 17.</p>
      */
+    /**
+     * Gap 2 — service station state observability.
+     * {@code /artest infra service-state <dim> <x> <y> <z>} — reads
+     * {@link zmaster587.advancedRocketry.tile.infrastructure.TileRocketServiceStation}'s
+     * package-private state via reflection: linkedRocket entity id (or -1
+     * if unlinked), partsToRepair count, and assemblers count.
+     */
+    private void handleInfraServiceState(MinecraftServer server,
+                                         ICommandSender sender,
+                                         int dim, int x, int y, int z) {
+        net.minecraft.world.WorldServer world = server.getWorld(dim);
+        if (world == null) {
+            send(sender, "{\"error\":\"world not loaded\",\"dim\":" + dim + "}");
+            return;
+        }
+        TileEntity tile = world.getTileEntity(new BlockPos(x, y, z));
+        if (!(tile instanceof zmaster587.advancedRocketry.tile.infrastructure
+                .TileRocketServiceStation)) {
+            send(sender, "{\"error\":\"not a TileRocketServiceStation\",\"tile\":\""
+                    + (tile == null ? "null" : tile.getClass().getName()) + "\"}");
+            return;
+        }
+        Map<String, Object> info = new LinkedHashMap<>();
+        info.put("tileClass", tile.getClass().getName());
+        try {
+            java.lang.reflect.Field linkedF = tile.getClass().getDeclaredField("linkedRocket");
+            linkedF.setAccessible(true);
+            Object linkedRocket = linkedF.get(tile);
+            if (linkedRocket instanceof net.minecraft.entity.Entity) {
+                info.put("linkedRocketId",
+                        ((net.minecraft.entity.Entity) linkedRocket).getEntityId());
+            } else {
+                info.put("linkedRocketId", -1);
+            }
+            java.lang.reflect.Field partsF = tile.getClass().getDeclaredField("partsToRepair");
+            partsF.setAccessible(true);
+            Object partsList = partsF.get(tile);
+            int partsCount = (partsList instanceof java.util.Collection<?>)
+                    ? ((java.util.Collection<?>) partsList).size() : -1;
+            info.put("partsToRepairCount", partsCount);
+            java.lang.reflect.Field initF = tile.getClass().getDeclaredField("initialPartToRepairCount");
+            initF.setAccessible(true);
+            info.put("initialPartToRepairCount", initF.get(tile));
+            java.lang.reflect.Field asmF = tile.getClass().getDeclaredField("assemblers");
+            asmF.setAccessible(true);
+            Object asmList = asmF.get(tile);
+            int asmCount = (asmList instanceof java.util.Collection<?>)
+                    ? ((java.util.Collection<?>) asmList).size() : -1;
+            info.put("assemblersCount", asmCount);
+        } catch (ReflectiveOperationException e) {
+            info.put("reflectionError",
+                    e.getClass().getSimpleName() + ": " + e.getMessage());
+        }
+        send(sender, jsonMap(info));
+    }
+
     private void handleAssembler(MinecraftServer server, ICommandSender sender, String[] args) {
         if (args.length >= 1 && "max-y".equalsIgnoreCase(args[0])) {
             Map<String, Object> info = new LinkedHashMap<>();
@@ -1148,6 +1246,38 @@ public class TestProbeCommand extends CommandBase {
             return;
         }
         send(sender, "{\"error\":\"unknown assembler subcommand — try pad-bounds <dim> <x> <y> <z>\"}");
+    }
+
+    /**
+     * Gap 1 (RocketPreLaunchEvent cancellation contract) — test-only
+     * subscriber that conditionally cancels the {@code RocketPreLaunchEvent}.
+     * Registered lazily the first time {@code arm-prelaunch-cancel} is
+     * called. The toggle is volatile because the listener fires on the
+     * server thread while the probe runs on the command-handler thread.
+     *
+     * <p>Tests MUST {@code disarm-prelaunch-cancel} in {@code @After} —
+     * leaving the flag armed would silently break every subsequent rocket
+     * test in the shared harness.</p>
+     */
+    private static volatile boolean cancelNextPreLaunch = false;
+    private static volatile boolean preLaunchCancellerRegistered = false;
+    private static volatile int preLaunchObservedCount = 0;
+    private static volatile int preLaunchCancelledCount = 0;
+
+    private static synchronized void ensurePreLaunchCancellerRegistered() {
+        if (preLaunchCancellerRegistered) return;
+        net.minecraftforge.common.MinecraftForge.EVENT_BUS.register(new Object() {
+            @net.minecraftforge.fml.common.eventhandler.SubscribeEvent
+            public void onPreLaunch(
+                    zmaster587.advancedRocketry.api.RocketEvent.RocketPreLaunchEvent event) {
+                preLaunchObservedCount++;
+                if (cancelNextPreLaunch) {
+                    event.setCanceled(true);
+                    preLaunchCancelledCount++;
+                }
+            }
+        });
+        preLaunchCancellerRegistered = true;
     }
 
     private void handleRocketAssemble(MinecraftServer server, ICommandSender sender, String[] args) {
@@ -4704,6 +4834,14 @@ public class TestProbeCommand extends CommandBase {
     // §5.10 Rocket infrastructure probe ---------------------------------------
 
     private void handleInfra(MinecraftServer server, ICommandSender sender, String[] args) {
+        if (args.length >= 5 && "service-state".equalsIgnoreCase(args[0])) {
+            handleInfraServiceState(server, sender,
+                    parseIntOr(args[1], Integer.MIN_VALUE),
+                    parseIntOr(args[2], 0),
+                    parseIntOr(args[3], 0),
+                    parseIntOr(args[4], 0));
+            return;
+        }
         if (args.length >= 4 && "info".equalsIgnoreCase(args[0])) {
             int dim = parseIntOr(args[1], Integer.MIN_VALUE);
             int x = parseIntOr(args[2], 0);

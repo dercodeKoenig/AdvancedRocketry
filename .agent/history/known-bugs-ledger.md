@@ -94,3 +94,34 @@ some pins look the way they do):
 If those files ever get a refactor pass, the comments can be
 modernised (the bugs they describe are fixed); they are not
 load-bearing.
+
+---
+
+## Batch #2 (2026-05-25, open)
+
+Live entries — bugs discovered during coverage audits or test
+authoring that have not yet been fixed.
+
+1. **`SatelliteRegistry.getNewSatellite` returns `null` for unknown
+   types instead of the documented `SatelliteDefunct` fallback.**
+   File: `src/main/java/zmaster587/advancedRocketry/api/SatelliteRegistry.java:97`.
+   The javadoc promises "SatelliteDefunct otherwise" but the code
+   returns `null`. Downstream `createFromNBT` (line 84) immediately
+   calls `satellite.readFromNBT(nbt)` → `NullPointerException`.
+   **Consequence**: a save containing a satellite of a type that was
+   registered by a companion mod no longer in the modpack:
+   - On dim load: `DimensionProperties.readFromNBT` catches the NPE
+     in a try/catch around `createFromNBT` and silently drops the
+     satellite — save loads OK with the satellite missing.
+   - On packet handling: `PacketSatellite.readClient` only catches
+     `IOException` — an NPE propagates, potentially crashing the
+     client packet handler / disconnecting the player.
+   - Other callers (`EntityRocket.readEntityFromNBT:2038`,
+     `ItemSatellite:43`, `TileSatelliteBuilder:89`, etc.) also lack
+     null-guards.
+   **Pinned by**: `SatelliteRegistryFallbackTest.unknownSatelliteTypeReturnsNullInsteadOfDefunct_documentsKnownBug`
+   and `…createFromNBTWithUnknownTypeThrowsNPE_documentsKnownBug`
+   (both pass against the current buggy behaviour). Fix candidates:
+   either return `new SatelliteDefunct()` from
+   `getNewSatellite:97`, or null-guard at every caller.
+   **Found**: 2026-05-25 during coverage-audit (Gap 4).

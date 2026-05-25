@@ -14,15 +14,20 @@ Bug-ledger history lives in
 
 ## Current state
 
-- **Pyramid**: 717 (testUnit 237 / testIntegration 80 /
-  testServer **356** / testClient **44**). +20 on 2026-05-25 from
-  TASK-19 Phase 1+2+3 (11) + TASK-23 (2) + TASK-22 (4) + TASK-24 (3).
+- **Pyramid**: 727 (testUnit **240** / testIntegration 80 /
+  testServer **363** / testClient **44**). +30 on 2026-05-25 from
+  TASK-19 Phase 1+2+3 (11) + TASK-23 (2) + TASK-22 (4) + TASK-24 (3) +
+  Tier 1 audit gaps 4/1/5/2 (10: 3 unit + 7 server).
   Counter regenerated via
   `grep -rc '@Test$' src/test/java/.../{unit,integration,server,client}/`.
 - **testServer wall time**: 8m 27s (50 % faster than pre-B2).
-- **Bug ledger**: drained (8 of 8 fixed in TASK-12 on 2026-05-23).
-  See `.agent/history/known-bugs-ledger.md` for the historical
-  batch. No live bugs tracked at present.
+- **Bug ledger**: 1 live bug (Batch #2 opened 2026-05-25).
+  Batch #1 fully drained by TASK-12 on 2026-05-23. New entry:
+  `SatelliteRegistry.getNewSatellite` returns `null` for unknown
+  types instead of the documented `SatelliteDefunct` fallback —
+  pinned by `SatelliteRegistryFallbackTest._documentsKnownBug` pair.
+  Found during coverage-audit Gap 4. See
+  `.agent/history/known-bugs-ledger.md` Batch #2.
 
 ## Done
 
