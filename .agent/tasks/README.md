@@ -14,8 +14,18 @@ Bug-ledger history lives in
 
 ## Current state
 
-- **Pyramid**: 820 (testUnit **288** / testIntegration 81 /
-  testServer **394** / testClient 57). +15 on 2026-05-26 from
+- **Pyramid**: 825 (testUnit **288** / testIntegration 81 /
+  testServer **399** / testClient 57). +5 on 2026-05-26 from
+  TASK-34 + TASK-30 batch: TASK-34 fluid loader/unloader active
+  transfer (2 server — loaderTransfersOxygenIntoRocketStorage +
+  unloaderDrainsRocketStorageIntoOwnTank, with `rocket
+  storage-fluid-fill` probe addition); TASK-30 station controller
+  tick contracts (3 server — altitude/gravity/orientation walk
+  target, with `station controller-set-target` probe and station
+  info extension for gravity/rotation/targetGravity/targetRPH).
+  Bug #3 logged to ledger (gravity controller redstone-default
+  bug — workaround test pins end-state walk).
+  Earlier same-day batch: +15 from
   TASK-29/31/32 batch: TASK-29 scanning satellite tick contracts
   (6 server — per-type DataType pins for Optical/Density/Mass/Composition,
   oreScanner non-SatelliteData pin, SpyTelescope no-op-tick pin),
@@ -42,7 +52,7 @@ Bug-ledger history lives in
   Counter regenerated via
   `grep -rc '@Test$' src/test/java/.../{unit,integration,server,client}/`.
 - **testServer wall time**: 8m 27s (50 % faster than pre-B2).
-- **Bug ledger**: 2 live bugs (Batch #2 opened 2026-05-25).
+- **Bug ledger**: 3 live bugs (Batch #2 opened 2026-05-25).
   Batch #1 fully drained by TASK-12 on 2026-05-23. Entries:
   (1) `SatelliteRegistry.getNewSatellite` returns `null` for unknown
   types instead of the documented `SatelliteDefunct` fallback —
@@ -52,6 +62,20 @@ Bug-ledger history lives in
   argument and writes the `standTime` field — masked today because
   the single caller passes the field value. Ledger-only.
   Found during TASK-30 Gap 3 authoring (2026-05-26).
+  (3) `TileStationGravityController` constructor does NOT call
+  `redstoneControl.setRedstoneState(OFF)` (its altitude sibling
+  does, line 43). `ModuleRedstoneOutputButton`'s default is `ON`,
+  so freshly-placed gravity controllers enter `update()` with
+  `redstoneControl.getState() == ON`, overwriting the station's
+  `targetGravity` to `(strongPower * 6) + 10 = 10` on every tick
+  with no redstone wiring around it. Player-visible: a placed
+  gravity controller pulls station gravity to 0.1 by default
+  until the player explicitly toggles the redstone control via
+  GUI. Worked around by `StationControllersTickContractTest`'s
+  gravity test (pins end-state walk, not target identity). No
+  `_documentsKnownBug` test — the workaround test already
+  inherits the contract polarity. Found during TASK-30
+  authoring (2026-05-26).
   See `.agent/history/known-bugs-ledger.md` Batch #2.
 
 ## Done
@@ -89,6 +113,8 @@ Bug-ledger history lives in
 | [TASK-29](TASK-29-scanning-satellite-tick-contracts.md) | Scanning satellite tick contracts — 6 server-tier tests pinning per-type DataType identity (Optical→DISTANCE, Density→ATMOSPHEREDENSITY, Mass→MASS, Composition→COMPOSITION), oreScanner non-SatelliteData + battery-only accrual, SpyTelescope no-op-tick defense-in-depth. Probe `satellite data` updated to emit `dataType.name()` (stable enum, not localization key). | ✅ |
 | [TASK-31](TASK-31-rocket-event-payload-contracts.md) | Rocket lifecycle event payloads — 3 server-tier tests extending RocketEventPayloadContractTest: RocketLandedEvent (real-tick descent), RocketDeOrbitingEvent (`ticksExisted == 20` branch), RocketReachesOrbitEvent (via `force-orbit-reached` probe). Together with the pre-existing Dismantle + PreLaunch pins, all 6 RocketEvent subtypes now have entity-id + dim payload coverage. | ✅ |
 | [TASK-32](TASK-32-tier3-misc-coverage.md) | Tier 3 misc — 4 tests across testUnit + testServer. 3a ItemPackedStructure unit pins (null-gate + hasSubtypes flag — full setStructure round-trip requires runtime profiler, deferred to existing server-tier coverage). 3b custom AtmosphereType registry + NBT round-trip (2 unit tests). 3c MonitoringStation comparator override (2 server: unlinked-returns-0 + monotonic-with-posY); new `infra monitor-info comparatorOverride` field on the probe. | ✅ |
+| [TASK-34](TASK-34-fuel-loader-active-transfer.md) | Fluid loader / unloader active transfer — 2 server tests using the existing `with-fluid-cargo` fixture variant (loader oxygen → rocket liquidTanks via real-tick natural transfer, unloader pulls oxygen back into its own tank). 1 new probe verb `rocket storage-fluid-fill` (writes via `FLUID_HANDLER_CAPABILITY` on storage TEs). Phase 0 outcome: NOT Obsolete — capability survives storage chunk round-trip when using `liquidTank` (TileFluidTank) blocks, already proven by MissionGasCompletionTest. | ✅ |
+| [TASK-30](TASK-30-station-controller-tick-contracts.md) | Station controller tick contracts (altitude / gravity / orientation) — 3 server tests. New `station controller-set-target <dim> <x> <y> <z> <id> <value>` probe (calls `ISliderBar.setProgress` directly), `station info` extended with `gravity`, `targetGravity`, `rotationEast/Up/North`, `targetRPH0..2`, `targetOrbitalDistance`. Gravity controller has a redstone-default-state production bug — logged in ledger as Batch #2 entry #3, test workaround pins end-state walk under the broken default. | ✅ |
 
 ## Backlog
 
@@ -99,9 +125,7 @@ entry is an actionable TASK with a defined plan + acceptance.
 |---|---|---|---|
 | [TASK-15](TASK-15-visual-regression.md) | Visual regression infrastructure for Minecraft client | 👁 Watching | 4 explicit promotion triggers in task file (GUI refactor / modpack-report / JEI rework / texture-pipeline bump). Revisit + consider Obsolete if no trigger in 6 months. |
 | [TASK-16](TASK-16-test-stability-flake-watch.md) | Test-stability flake watch — investigation deliverable. Three flake shapes root-caused; shape #3 mitigated in TASK-26 via kit retry; #1+#2 split into TASK-27; #4 (worldgen sampling) confirmed across 3 sightings, promoted to TASK-28 F7. | 🟡 Investigation complete | Investigation done 2026-05-23. |
-| [TASK-30](TASK-30-station-controller-tick-contracts.md) | Station controller tick contracts (Altitude / Gravity / Orientation) | Blocked | Needs `station controller-set-target` probe verb (Phase 0 ~2h). |
 | [TASK-33](TASK-33-satellitebuilder-real-construction.md) | SatelliteBuilder real end-to-end construction (full GUI flow) | Blocked | Needs `bot().click()` audit for `ModuleBuildButton` or new `gui press-build-button` probe (Phase 0 ~2h). |
-| [TASK-34](TASK-34-fuel-loader-active-transfer.md) | Fuel loader active fluid transfer (loader + unloader, both directions) | Blocked | Storage chunk capability loss — Phase 0 investigation may flip this to Obsolete. |
 | [TASK-35](TASK-35-ar-fetch-two-bot-harness.md) | `/ar fetch` positive coverage (two-player verb) | Blocked | Needs `player spawn-fake-player` probe to provide a second resolvable player (Phase 0 ~3h). |
 | [TASK-36](TASK-36-terraforming-and-service-station-depth.md) | Deeper contracts — TerraformingTerminal biome-mutation + ServiceStation repair cycle | Blocked | 36a needs `item make-biomechanger-chip` probe; 36b needs `service-station inject-broken-part` probe. |
 

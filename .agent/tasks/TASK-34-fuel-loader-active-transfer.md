@@ -5,8 +5,47 @@
 - Source: 2026-05-25 Tier 2 audit, gap #9. Explicitly deferred by
   the audit itself with the rationale that the fixture path was
   unclear. Carried forward into 2026-05-26 audit.
-- Status: **Blocked** — see Blocker section.
+- Status: **✅ Completed 2026-05-26** — see `.agent/tasks/README.md`
+  Done table.
 - Created: 2026-05-26.
+
+## Actual scope shipped
+
+**Phase 0 — investigation outcome**: NOT Obsolete. The blocker
+description's "fixture rocket's fuel tanks lose
+FLUID_HANDLER_CAPABILITY" referred specifically to the rocket's
+`BlockFuelTank` tiles. The `with-fluid-cargo` fixture variant
+(already in `TestProbeCommand` at the time of this TASK) replaces
+2 fuel-tank positions with `advancedrocketry:liquidTank`
+(TileFluidTank) blocks, and TileFluidTank's capability IS
+preserved across the storage-chunk round-trip — already proven by
+`MissionGasCompletionTest.gasCompletionFillsRocketFluidTilesWithConfiguredFluid`
+which depends on the same path.
+
+**Phase 1 — fixture variant**: pre-existing (no work). The
+`with-fluid-cargo` variant ships in `TestProbeCommand` at line
+5246+.
+
+**Phase 2 — transfer tests** (`FluidLoaderActiveTransferTest`, 2
+tests):
+
+1. `loaderTransfersOxygenIntoRocketStorageLiquidTanks` —
+   pre-fill loader's own tank with oxygen, link rocket
+   (with-fluid-cargo), force-tick. End-state contract: rocket
+   storage holds oxygen AND loader's tank has drained. Pinned
+   end-state rather than synthetic delta because natural server
+   ticks between probe commands already transfer fluid — the
+   contract is direction-of-transfer, not exact tick budget.
+2. `unloaderDrainsRocketStorageLiquidTanksIntoOwnTank` —
+   pre-fill rocket storage via new `rocket storage-fluid-fill`
+   probe, link unloader, force-tick. End-state contract:
+   unloader's tank gained oxygen AND rocket storage drained.
+
+**Probe addition**: `rocket storage-fluid-fill <entityId>
+<fluidName> <amount>` — iterates `rocket.storage.getFluidTiles()`
+and fills each via `FLUID_HANDLER_CAPABILITY`. Used by the
+unloader test to pre-fill rocket tanks (which live in the
+detached `WorldDummy`, not addressable via world coords).
 
 ## Context
 

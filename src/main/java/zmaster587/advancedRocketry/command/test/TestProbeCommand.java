@@ -897,6 +897,52 @@ public class TestProbeCommand extends CommandBase {
             send(sender, builder.toString());
             return;
         }
+        if ("storage-fluid-fill".equalsIgnoreCase(args[0]) && args.length >= 4) {
+            // /artest rocket storage-fluid-fill <entityId> <fluidName> <amount>
+            //
+            // TASK-34 — iterate the rocket's StorageChunk.getFluidTiles()
+            // and fill each one with up to <amount> mB of <fluidName> via
+            // the FLUID_HANDLER_CAPABILITY. Returns the total amount
+            // actually filled across all tiles + per-tile count.
+            //
+            // The storage chunk's tiles live in a detached WorldDummy
+            // (not addressable via world coords), so `fluid inject` can't
+            // reach them. This probe is the equivalent of running the
+            // mission-gas fill loop manually without spawning a mission.
+            int entityId = parseIntOr(args[1], Integer.MIN_VALUE);
+            String fluidName = args[2];
+            int amount = parseIntOr(args[3], 0);
+            EntityRocket rocket = findRocket(server, entityId);
+            if (rocket == null) {
+                send(sender, "{\"error\":\"rocket not found\",\"entityId\":" + entityId + "}");
+                return;
+            }
+            if (rocket.storage == null) {
+                send(sender, "{\"error\":\"rocket has no storage\",\"entityId\":" + entityId + "}");
+                return;
+            }
+            net.minecraftforge.fluids.Fluid fluid =
+                    net.minecraftforge.fluids.FluidRegistry.getFluid(fluidName);
+            if (fluid == null) {
+                send(sender, "{\"error\":\"fluid not registered\",\"name\":\""
+                        + escapeJson(fluidName) + "\"}");
+                return;
+            }
+            int totalFilled = 0;
+            int tilesWithCapability = 0;
+            for (TileEntity te : rocket.storage.getFluidTiles()) {
+                net.minecraftforge.fluids.capability.IFluidHandler h =
+                        te.getCapability(net.minecraftforge.fluids.capability.CapabilityFluidHandler
+                                .FLUID_HANDLER_CAPABILITY, null);
+                if (h == null) continue;
+                tilesWithCapability++;
+                totalFilled += h.fill(new net.minecraftforge.fluids.FluidStack(fluid, amount), true);
+            }
+            send(sender, "{\"ok\":true,\"entityId\":" + entityId
+                    + ",\"tilesWithCapability\":" + tilesWithCapability
+                    + ",\"totalFilled\":" + totalFilled + "}");
+            return;
+        }
         if ("find-by-uuid".equalsIgnoreCase(args[0]) && args.length >= 2) {
             // TASK-07 Phase 3: find a rocket by its persistent UUID across all
             // loaded dimensions. Needed after EntityRocket.changeDimension()
@@ -1536,6 +1582,17 @@ public class TestProbeCommand extends CommandBase {
                 info.put("hasFreePad", sso.hasFreeLandingPad());
                 info.put("hasWarpCores", sso.hasWarpCores);
                 info.put("hasUsableWarpCore", sso.hasUsableWarpCore());
+                // TASK-30 — surface the live state that the station
+                // controllers' update() loops walk toward their target.
+                info.put("targetOrbitalDistance", sso.targetOrbitalDistance);
+                info.put("gravity", station.getProperties().getGravitationalMultiplier());
+                info.put("targetGravity", sso.targetGravity);
+                info.put("rotationEast", station.getDeltaRotation(net.minecraft.util.EnumFacing.EAST));
+                info.put("rotationUp", station.getDeltaRotation(net.minecraft.util.EnumFacing.UP));
+                info.put("rotationNorth", station.getDeltaRotation(net.minecraft.util.EnumFacing.NORTH));
+                info.put("targetRPH0", sso.targetRotationsPerHour[0]);
+                info.put("targetRPH1", sso.targetRotationsPerHour[1]);
+                info.put("targetRPH2", sso.targetRotationsPerHour[2]);
             }
             send(sender, jsonMap(info));
             return;
@@ -1740,10 +1797,55 @@ public class TestProbeCommand extends CommandBase {
                     + ",\"allowAutoLand\":" + allowed + "}");
             return;
         }
+        if ("controller-set-target".equalsIgnoreCase(args[0]) && args.length >= 7) {
+            // /artest station controller-set-target <dim> <x> <y> <z> <id> <value>
+            //
+            // TASK-30 — drive the production setter pathway on one of the
+            // three station controllers (TileStationAltitudeController /
+            // GravityController / OrientationController). The tile
+            // implements ISliderBar.setProgress(id, value) which writes
+            // through to ((SpaceStationObject)station).targetXxx — the
+            // same write the GUI's slider input ultimately produces.
+            //
+            // The probe bypasses the GUI/network round-trip and reaches
+            // setProgress directly. Tests can then force-tick the tile
+            // and observe the station's actual orbitalDistance/gravity/
+            // rotation walking toward the target.
+            int dim = parseIntOr(args[1], Integer.MIN_VALUE);
+            int x = parseIntOr(args[2], 0);
+            int y = parseIntOr(args[3], 0);
+            int z = parseIntOr(args[4], 0);
+            int progressId = parseIntOr(args[5], 0);
+            int value = parseIntOr(args[6], 0);
+            net.minecraft.world.WorldServer world =
+                    net.minecraftforge.fml.common.FMLCommonHandler.instance()
+                            .getMinecraftServerInstance().getWorld(dim);
+            if (world == null) {
+                send(sender, "{\"error\":\"world not loaded\",\"dim\":" + dim + "}");
+                return;
+            }
+            TileEntity tile = world.getTileEntity(new BlockPos(x, y, z));
+            if (!(tile instanceof zmaster587.libVulpes.inventory.modules.ISliderBar)) {
+                send(sender, "{\"error\":\"tile not ISliderBar\",\"tile\":\""
+                        + (tile == null ? "null" : tile.getClass().getName()) + "\"}");
+                return;
+            }
+            zmaster587.libVulpes.inventory.modules.ISliderBar slider =
+                    (zmaster587.libVulpes.inventory.modules.ISliderBar) tile;
+            slider.setProgress(progressId, value);
+            int readback = slider.getProgress(progressId);
+            send(sender, "{\"ok\":true,\"tileClass\":\""
+                    + escapeJson(tile.getClass().getName())
+                    + "\",\"progressId\":" + progressId
+                    + ",\"value\":" + value
+                    + ",\"readback\":" + readback + "}");
+            return;
+        }
         send(sender, "{\"error\":\"unknown station subcommand — try list|info <id>|"
                 + "fuel <id> set|add|use <amount>|add-pad <id> <x> <z> [name]|"
                 + "remove-pad <id> <x> <z>|pads <id>|dock <id> [commit]|"
-                + "undock <id> <x> <z>|set-autoland <id> <x> <z> <bool>\"}");
+                + "undock <id> <x> <z>|set-autoland <id> <x> <z> <bool>|"
+                + "controller-set-target <dim> <x> <y> <z> <id> <value>\"}");
     }
 
     // §5.6 Satellite probes ---------------------------------------------------

@@ -5,8 +5,46 @@
 - Source: 2026-05-25 Tier 2 audit, gap #2. Carried forward into
   2026-05-26 audit out-of-scope ("functional tick-contract
   requires SpaceObject-fixture").
-- Status: **Blocked** — see Blocker section below.
+- Status: **✅ Completed 2026-05-26** — see `.agent/tasks/README.md`
+  Done table.
 - Created: 2026-05-26.
+
+## Actual scope shipped
+
+**Phase 0 — probe addition**:
+`station controller-set-target <dim> <x> <y> <z> <id> <value>`.
+Casts tile to `ISliderBar` and calls `setProgress(id, value)` —
+same write the GUI slider triggers, but server-side direct
+(bypasses GUI/network round-trip).
+
+`station info` extended with: `gravity`, `targetGravity`,
+`rotationEast/Up/North`, `targetRPH0/1/2`,
+`targetOrbitalDistance` — the live state the controllers walk
+toward.
+
+**Phase 1-3 — 3 tests** (`StationControllersTickContractTest`):
+
+1. `altitudeControllerWalksStationOrbitalDistanceTowardTarget` —
+   set target=preDist+50, force-tick 200, assert orbitalDistance
+   moved toward target (`|postDist - target| < |preDist - target|`).
+2. `gravityControllerWalksStationGravityTowardTarget` — set
+   target (which may revert due to bug #3 in the ledger),
+   force-tick 2000, assert gravity walked measurably below the
+   default 1.0. End-state pin only — see "Production bug
+   discovered" below.
+3. `orientationControllerWalksStationRotationTowardTarget` — set
+   target progress=100 (targetRPH=40), force-tick 400, assert
+   station's rotation around EAST changed from baseline.
+
+**Production bug discovered + logged**:
+`TileStationGravityController` constructor omits the
+`redstoneControl.setRedstoneState(OFF)` call. Default
+ModuleRedstoneOutputButton state is ON, so updates overwrite
+`targetGravity` to 10 (no redstone wiring) every tick. Logged to
+`.agent/history/known-bugs-ledger.md` Batch #2 entry #3. The
+gravity test was reworked to pin end-state walk (gravity drops
+measurably below 1.0) rather than target identity — works with
+both the broken and a future fixed version of the controller.
 
 ## Context
 

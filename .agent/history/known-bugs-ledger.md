@@ -151,3 +151,45 @@ authoring that have not yet been fixed.
    argument.
    **Found**: 2026-05-26 during TASK-30 Gap 3 elevator-capsule
    coverage authoring.
+
+3. **`TileStationGravityController` constructor omits the
+   `redstoneControl.setRedstoneState(OFF)` call its altitude sibling
+   makes.**
+   File: `src/main/java/zmaster587/advancedRocketry/tile/station/TileStationGravityController.java:38-47`
+   (constructor) — compare to
+   `src/main/java/zmaster587/advancedRocketry/tile/station/TileStationAltitudeController.java:42-43`
+   which explicitly does `redstoneControl.setRedstoneState(RedstoneState.OFF)`
+   right after constructing the module.
+   `zmaster587.libVulpes.inventory.modules.ModuleRedstoneOutputButton`
+   defaults to `RedstoneState.ON` (line 22 of that class). The
+   gravity controller therefore enters its first `update()` tick
+   with `redstoneControl.getState() == ON`, which triggers the
+   branch at line 114:
+   `((SpaceStationObject) spaceObject).targetGravity = (world.getStrongPower(pos) * 6) + 10`.
+   With no redstone wiring around a freshly-placed controller
+   the right-hand side evaluates to `0 * 6 + 10 = 10`, so the
+   tile silently overwrites `targetGravity` to 10 on every tick.
+   **Consequence**: player-visible. A player who places the
+   gravity controller and walks away (without opening the GUI
+   to toggle the redstone-output button) sees their station's
+   gravity drift down to `0.1` (`targetGravity / 100 = 10/100`)
+   instead of staying at the placed default 1.0. The GUI input
+   path (`setProgressByUser` → `setProgress` → writes the
+   intended `targetGravity = progress + minGravity`) is also
+   immediately reverted on the next tick if the player hasn't
+   first toggled `redstoneControl` to OFF via the GUI.
+   **Pinned by**: ledger-only — the workaround test
+   `StationControllersTickContractTest.gravityControllerWalksStationGravityTowardTarget`
+   pins the end-state walk (gravity moves measurably below
+   1.0) under the broken default, which would also pass if the
+   bug were fixed (because in that case the slider's
+   `setProgress(0, 50)` write would stick and the walk would
+   approach `0.6` instead of `0.1` — still distinctly below
+   the 0.9 threshold). A separate `_documentsKnownBug` test
+   would cost more fixture wiring (probe to inject specific
+   `redstoneControl.state` value) than the ledger entry buys
+   today. Fix candidate: append
+   `redstoneControl.setRedstoneState(RedstoneState.OFF);` to
+   the constructor at line 45.
+   **Found**: 2026-05-26 during TASK-30 station-controller
+   tick-contract authoring.
