@@ -125,3 +125,29 @@ authoring that have not yet been fixed.
    either return `new SatelliteDefunct()` from
    `getNewSatellite:97`, or null-guard at every caller.
    **Found**: 2026-05-25 during coverage-audit (Gap 4).
+
+2. **`EntityElevatorCapsule.setStandTime(int time)` ignores its
+   parameter and writes the `standTime` field instead.**
+   File: `src/main/java/zmaster587/advancedRocketry/entity/EntityElevatorCapsule.java:83-85`.
+   The body reads
+   `this.dataManager.set(standTimeCounter, standTime);` — the
+   `time` argument is never consulted; the dataManager always
+   receives the value of the field by the same name.
+   **Consequence**: invisible today because the only caller
+   ({@code onEntityUpdate} line 399) invokes
+   `setStandTime(standTime)`, passing the field value, which is
+   exactly what the buggy body reads. Any future caller (e.g.
+   external mod, a refactor that resets via `setStandTime(0)`,
+   a sibling tile-entity hook) will silently lose the requested
+   value and overwrite with the stale field. The dataManager
+   would then desynchronize from the field on the next read
+   path.
+   **Pinned by**: ledger-only (deferred — the bug sits behind a
+   single safe caller; a `_documentsKnownBug` test would cost
+   more in fixture wiring than the ledger entry buys today). Fix
+   candidates: change body to
+   `this.dataManager.set(standTimeCounter, time); this.standTime = time;`
+   so both the field and the dataManager update from the
+   argument.
+   **Found**: 2026-05-26 during TASK-30 Gap 3 elevator-capsule
+   coverage authoring.

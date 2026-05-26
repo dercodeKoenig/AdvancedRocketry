@@ -8354,7 +8354,189 @@ public class TestProbeCommand extends CommandBase {
             send(sender, b.toString());
             return;
         }
-        send(sender, "{\"error\":\"unknown entity subcommand — try spawn <dim> <x> <y> <z> <name> [block-id] | info <dim> <entityId> | tick <dim> <entityId> [count] | scan-items <dim> <cx> <cy> <cz> <radius>\"}");
+        // ── TASK-30 Gap 3: EntityElevatorCapsule probes ──────────────────
+        //
+        // The elevator capsule exposes four motion-state methods used by
+        // RenderElevatorCapsule (client) and TileSpaceElevator (controller):
+        // isAscending / isDescending / isInMotion / getStandTime. These
+        // probes let testServer pin the contract that setCapsuleMotion(N)
+        // → flags reflect, plus that NBT round-trip preserves motionDir +
+        // dst/src tile coordinates. Bridges what entity spawn + tick +
+        // info already provide.
+        if (args.length >= 3 && "capsule-state".equalsIgnoreCase(args[0])) {
+            int dim = parseIntOr(args[1], Integer.MIN_VALUE);
+            int id = parseIntOr(args[2], -1);
+            net.minecraft.world.WorldServer world = server.getWorld(dim);
+            if (world == null) {
+                send(sender, "{\"error\":\"world not loaded\",\"dim\":" + dim + "}");
+                return;
+            }
+            net.minecraft.entity.Entity entity = world.getEntityByID(id);
+            if (!(entity instanceof zmaster587.advancedRocketry.entity.EntityElevatorCapsule)) {
+                send(sender, "{\"error\":\"entity not an EntityElevatorCapsule\",\"entityId\":" + id + "}");
+                return;
+            }
+            zmaster587.advancedRocketry.entity.EntityElevatorCapsule cap =
+                    (zmaster587.advancedRocketry.entity.EntityElevatorCapsule) entity;
+            send(sender, "{\"ok\":true,\"entityId\":" + id
+                    + ",\"isAscending\":" + cap.isAscending()
+                    + ",\"isDescending\":" + cap.isDescending()
+                    + ",\"isInMotion\":" + cap.isInMotion()
+                    + ",\"standTime\":" + cap.getStandTime() + "}");
+            return;
+        }
+        if (args.length >= 4 && "capsule-set-motion".equalsIgnoreCase(args[0])) {
+            int dim = parseIntOr(args[1], Integer.MIN_VALUE);
+            int id = parseIntOr(args[2], -1);
+            int motion = parseIntOr(args[3], 0);
+            net.minecraft.world.WorldServer world = server.getWorld(dim);
+            if (world == null) {
+                send(sender, "{\"error\":\"world not loaded\",\"dim\":" + dim + "}");
+                return;
+            }
+            net.minecraft.entity.Entity entity = world.getEntityByID(id);
+            if (!(entity instanceof zmaster587.advancedRocketry.entity.EntityElevatorCapsule)) {
+                send(sender, "{\"error\":\"entity not an EntityElevatorCapsule\",\"entityId\":" + id + "}");
+                return;
+            }
+            zmaster587.advancedRocketry.entity.EntityElevatorCapsule cap =
+                    (zmaster587.advancedRocketry.entity.EntityElevatorCapsule) entity;
+            cap.setCapsuleMotion(motion);
+            send(sender, "{\"ok\":true,\"entityId\":" + id
+                    + ",\"motion\":" + motion + "}");
+            return;
+        }
+        if (args.length >= 7 && "capsule-set-dst".equalsIgnoreCase(args[0])) {
+            // capsule-set-dst <dim> <entityId> <dstDim> <dstX> <dstY> <dstZ>
+            int dim = parseIntOr(args[1], Integer.MIN_VALUE);
+            int id = parseIntOr(args[2], -1);
+            int dstDim = parseIntOr(args[3], 0);
+            int dstX = parseIntOr(args[4], 0);
+            int dstY = parseIntOr(args[5], 0);
+            int dstZ = parseIntOr(args[6], 0);
+            net.minecraft.world.WorldServer world = server.getWorld(dim);
+            if (world == null) {
+                send(sender, "{\"error\":\"world not loaded\",\"dim\":" + dim + "}");
+                return;
+            }
+            net.minecraft.entity.Entity entity = world.getEntityByID(id);
+            if (!(entity instanceof zmaster587.advancedRocketry.entity.EntityElevatorCapsule)) {
+                send(sender, "{\"error\":\"entity not an EntityElevatorCapsule\",\"entityId\":" + id + "}");
+                return;
+            }
+            zmaster587.advancedRocketry.entity.EntityElevatorCapsule cap =
+                    (zmaster587.advancedRocketry.entity.EntityElevatorCapsule) entity;
+            cap.setDst(new zmaster587.advancedRocketry.util.DimensionBlockPosition(
+                    dstDim,
+                    new zmaster587.libVulpes.util.HashedBlockPosition(dstX, dstY, dstZ)));
+            send(sender, "{\"ok\":true,\"entityId\":" + id
+                    + ",\"dstDim\":" + dstDim
+                    + ",\"dstX\":" + dstX + ",\"dstY\":" + dstY + ",\"dstZ\":" + dstZ + "}");
+            return;
+        }
+        if (args.length >= 7 && "capsule-set-src".equalsIgnoreCase(args[0])) {
+            int dim = parseIntOr(args[1], Integer.MIN_VALUE);
+            int id = parseIntOr(args[2], -1);
+            int srcDim = parseIntOr(args[3], 0);
+            int srcX = parseIntOr(args[4], 0);
+            int srcY = parseIntOr(args[5], 0);
+            int srcZ = parseIntOr(args[6], 0);
+            net.minecraft.world.WorldServer world = server.getWorld(dim);
+            if (world == null) {
+                send(sender, "{\"error\":\"world not loaded\",\"dim\":" + dim + "}");
+                return;
+            }
+            net.minecraft.entity.Entity entity = world.getEntityByID(id);
+            if (!(entity instanceof zmaster587.advancedRocketry.entity.EntityElevatorCapsule)) {
+                send(sender, "{\"error\":\"entity not an EntityElevatorCapsule\",\"entityId\":" + id + "}");
+                return;
+            }
+            zmaster587.advancedRocketry.entity.EntityElevatorCapsule cap =
+                    (zmaster587.advancedRocketry.entity.EntityElevatorCapsule) entity;
+            cap.setSourceTile(new zmaster587.advancedRocketry.util.DimensionBlockPosition(
+                    srcDim,
+                    new zmaster587.libVulpes.util.HashedBlockPosition(srcX, srcY, srcZ)));
+            send(sender, "{\"ok\":true,\"entityId\":" + id
+                    + ",\"srcDim\":" + srcDim
+                    + ",\"srcX\":" + srcX + ",\"srcY\":" + srcY + ",\"srcZ\":" + srcZ + "}");
+            return;
+        }
+        if (args.length >= 3 && "capsule-nbt-roundtrip".equalsIgnoreCase(args[0])) {
+            // Writes the capsule's current state via writeEntityToNBT into a
+            // fresh NBTTagCompound, then constructs a peer capsule and reads
+            // the NBT back. Emits the readback state so a test can assert
+            // motionDir + dst/src survive the save/load cycle.
+            int dim = parseIntOr(args[1], Integer.MIN_VALUE);
+            int id = parseIntOr(args[2], -1);
+            net.minecraft.world.WorldServer world = server.getWorld(dim);
+            if (world == null) {
+                send(sender, "{\"error\":\"world not loaded\",\"dim\":" + dim + "}");
+                return;
+            }
+            net.minecraft.entity.Entity entity = world.getEntityByID(id);
+            if (!(entity instanceof zmaster587.advancedRocketry.entity.EntityElevatorCapsule)) {
+                send(sender, "{\"error\":\"entity not an EntityElevatorCapsule\",\"entityId\":" + id + "}");
+                return;
+            }
+            zmaster587.advancedRocketry.entity.EntityElevatorCapsule src =
+                    (zmaster587.advancedRocketry.entity.EntityElevatorCapsule) entity;
+            net.minecraft.nbt.NBTTagCompound nbt = new net.minecraft.nbt.NBTTagCompound();
+            // writeEntityToNBT / readEntityFromNBT are protected on
+            // EntityElevatorCapsule (vanilla Entity contract) — invoke
+            // via reflection so we can drive a save/load cycle from this
+            // probe without leaking a public hook into production.
+            zmaster587.advancedRocketry.entity.EntityElevatorCapsule peer =
+                    new zmaster587.advancedRocketry.entity.EntityElevatorCapsule(world);
+            try {
+                java.lang.reflect.Method write = net.minecraft.entity.Entity.class
+                        .getDeclaredMethod("writeEntityToNBT", net.minecraft.nbt.NBTTagCompound.class);
+                write.setAccessible(true);
+                write.invoke(src, nbt);
+                java.lang.reflect.Method read = net.minecraft.entity.Entity.class
+                        .getDeclaredMethod("readEntityFromNBT", net.minecraft.nbt.NBTTagCompound.class);
+                read.setAccessible(true);
+                read.invoke(peer, nbt);
+            } catch (ReflectiveOperationException e) {
+                send(sender, "{\"error\":\"reflective NBT round-trip failed: "
+                        + escapeJson(e.getClass().getSimpleName() + ": " + e.getMessage())
+                        + "\"}");
+                return;
+            }
+            StringBuilder b = new StringBuilder("{\"ok\":true,\"entityId\":")
+                    .append(id)
+                    .append(",\"nbtKeys\":[");
+            java.util.Set<String> keys = nbt.getKeySet();
+            int ki = 0;
+            for (String k : keys) {
+                if (ki++ > 0) b.append(',');
+                b.append('"').append(escapeJson(k)).append('"');
+            }
+            b.append("]")
+                    .append(",\"peerIsAscending\":").append(peer.isAscending())
+                    .append(",\"peerIsDescending\":").append(peer.isDescending())
+                    .append(",\"peerIsInMotion\":").append(peer.isInMotion())
+                    .append(",\"hasDstKey\":").append(nbt.hasKey("dstDimid"))
+                    .append(",\"hasSrcKey\":").append(nbt.hasKey("srcDimid"))
+                    .append(",\"motionDirNbt\":").append(nbt.getByte("motionDir"));
+            if (nbt.hasKey("dstDimid")) {
+                int[] dstLoc = nbt.getIntArray("dstLoc");
+                b.append(",\"dstDim\":").append(nbt.getInteger("dstDimid"))
+                        .append(",\"dstX\":").append(dstLoc[0])
+                        .append(",\"dstY\":").append(dstLoc[1])
+                        .append(",\"dstZ\":").append(dstLoc[2]);
+            }
+            if (nbt.hasKey("srcDimid")) {
+                int[] srcLoc = nbt.getIntArray("srcLoc");
+                b.append(",\"srcDim\":").append(nbt.getInteger("srcDimid"))
+                        .append(",\"srcX\":").append(srcLoc[0])
+                        .append(",\"srcY\":").append(srcLoc[1])
+                        .append(",\"srcZ\":").append(srcLoc[2]);
+            }
+            b.append('}');
+            send(sender, b.toString());
+            return;
+        }
+        send(sender, "{\"error\":\"unknown entity subcommand — try spawn <dim> <x> <y> <z> <name> [block-id] | info <dim> <entityId> | tick <dim> <entityId> [count] | scan-items <dim> <cx> <cy> <cz> <radius> | capsule-state <dim> <id> | capsule-set-motion <dim> <id> <value> | capsule-set-dst <dim> <id> <dstDim> <x> <y> <z> | capsule-set-src <dim> <id> <srcDim> <x> <y> <z> | capsule-nbt-roundtrip <dim> <id>\"}");
     }
 
     /**

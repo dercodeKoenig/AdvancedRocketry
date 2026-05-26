@@ -14,21 +14,26 @@ Bug-ledger history lives in
 
 ## Current state
 
-- **Pyramid**: 763 (testUnit 257 / testIntegration 81 /
-  testServer 370 / testClient **55**). +66 on 2026-05-25 from
-  TASK-19 (11) + TASK-23 (2) + TASK-22 (4) + TASK-24 (3) +
-  Tier 1 audit gaps (10) + Tier 2/3 audit gaps (27) +
+- **Pyramid**: 770 (testUnit 257 / testIntegration 81 /
+  testServer **375** / testClient **57**). +7 on 2026-05-26 from
+  TASK-30 Gap 3 elevator capsule (5 server + 2 client). Previous
+  +66 on 2026-05-25 from TASK-19 (11) + TASK-23 (2) + TASK-22 (4) +
+  TASK-24 (3) + Tier 1 audit gaps (10) + Tier 2/3 audit gaps (27) +
   TASK-20 hovercraft (4) + TASK-21 /ar player-equipped (5).
   Counter regenerated via
   `grep -rc '@Test$' src/test/java/.../{unit,integration,server,client}/`.
 - **testServer wall time**: 8m 27s (50 % faster than pre-B2).
-- **Bug ledger**: 1 live bug (Batch #2 opened 2026-05-25).
-  Batch #1 fully drained by TASK-12 on 2026-05-23. New entry:
-  `SatelliteRegistry.getNewSatellite` returns `null` for unknown
+- **Bug ledger**: 2 live bugs (Batch #2 opened 2026-05-25).
+  Batch #1 fully drained by TASK-12 on 2026-05-23. Entries:
+  (1) `SatelliteRegistry.getNewSatellite` returns `null` for unknown
   types instead of the documented `SatelliteDefunct` fallback —
   pinned by `SatelliteRegistryFallbackTest._documentsKnownBug` pair.
-  Found during coverage-audit Gap 4. See
-  `.agent/history/known-bugs-ledger.md` Batch #2.
+  Found during coverage-audit Gap 4.
+  (2) `EntityElevatorCapsule.setStandTime(int)` ignores its
+  argument and writes the `standTime` field — masked today because
+  the single caller passes the field value. Ledger-only.
+  Found during TASK-30 Gap 3 authoring (2026-05-26).
+  See `.agent/history/known-bugs-ledger.md` Batch #2.
 
 ## Done
 
