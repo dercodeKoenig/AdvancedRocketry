@@ -83,6 +83,14 @@ entry is an actionable TASK with a defined plan + acceptance.
 |---|---|---|---|
 | [TASK-15](TASK-15-visual-regression.md) | Visual regression infrastructure for Minecraft client | 👁 Watching | 4 explicit promotion triggers in task file (GUI refactor / modpack-report / JEI rework / texture-pipeline bump). Revisit + consider Obsolete if no trigger in 6 months. |
 | [TASK-16](TASK-16-test-stability-flake-watch.md) | Test-stability flake watch — investigation deliverable. Three flake shapes root-caused; shape #3 mitigated in TASK-26 via kit retry; #1+#2 split into TASK-27; #4 (worldgen sampling) confirmed across 3 sightings, promoted to TASK-28 F7. | 🟡 Investigation complete | Investigation done 2026-05-23. |
+| [TASK-29](TASK-29-scanning-satellite-tick-contracts.md) | Scanning satellite tick behaviour (6 types: OreMapping / Density / Composition / MassScanner / Optical / SpyTelescope) | Backlog | None — ready to ship (~4-5h). |
+| [TASK-30](TASK-30-station-controller-tick-contracts.md) | Station controller tick contracts (Altitude / Gravity / Orientation) | Blocked | Needs `station controller-set-target` probe verb (Phase 0 ~2h). |
+| [TASK-31](TASK-31-rocket-event-payload-contracts.md) | RocketLanded / RocketDismantle / RocketDeOrbiting external-subscriber payload contracts | Backlog | None — RocketEventRecorder already exposes the needed counters. |
+| [TASK-32](TASK-32-tier3-misc-coverage.md) | Tier 3 misc — ItemPackedStructure deploy + custom atmosphereType NBT + MonitoringStation comparatorOverride | Backlog | None — three small contracts grouped for index efficiency. |
+| [TASK-33](TASK-33-satellitebuilder-real-construction.md) | SatelliteBuilder real end-to-end construction (full GUI flow) | Blocked | Needs `bot().click()` audit for `ModuleBuildButton` or new `gui press-build-button` probe (Phase 0 ~2h). |
+| [TASK-34](TASK-34-fuel-loader-active-transfer.md) | Fuel loader active fluid transfer (loader + unloader, both directions) | Blocked | Storage chunk capability loss — Phase 0 investigation may flip this to Obsolete. |
+| [TASK-35](TASK-35-ar-fetch-two-bot-harness.md) | `/ar fetch` positive coverage (two-player verb) | Blocked | Needs `player spawn-fake-player` probe to provide a second resolvable player (Phase 0 ~3h). |
+| [TASK-36](TASK-36-terraforming-and-service-station-depth.md) | Deeper contracts — TerraformingTerminal biome-mutation + ServiceStation repair cycle | Blocked | 36a needs `item make-biomechanger-chip` probe; 36b needs `service-station inject-broken-part` probe. |
 
 ## Conscious non-goals
 
@@ -102,9 +110,12 @@ deferred work:
   explosion branch, the test flips polarity — no new task needed
   until then.
 
-No other open work. Future deferrals must land here as TASK files —
-free-form bullet lists in this README are forbidden (see
-`task-lifecycle.md`).
+TASK-29 through TASK-36 promoted 2026-05-26 from the 2026-05-25
+Tier 1/2/3 audit deferrals + 2026-05-26 audit out-of-scope list —
+each prior free-form bullet is now an actionable TASK with
+defined plan + blocker per `task-lifecycle.md`. Future deferrals
+must land here as TASK files; free-form bullet lists in this
+README are forbidden.
 
 ## Dependency graph
 
