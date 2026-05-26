@@ -87,3 +87,35 @@ Medium. FakePlayer registration with the PlayerList has historical
 gotchas (Forge's `FakePlayerFactory` is the standard tool but its
 return value isn't trivially treated as a real online player by
 all server systems).
+
+## Phase 0 audit findings (2026-05-26)
+
+**Verdict: FakePlayer path BLOCKED — must use real EntityPlayerMP.**
+
+- `WorldCommand.commandFetch:361` calls
+  `getPlayerByName(:992)` which iterates each world's
+  `world.getPlayerEntityByName(name)` — only real `EntityPlayerMP`
+  instances in the world entity list. FakePlayer is NOT registered
+  there.
+- No existing `FakePlayerFactory` usage in the AR codebase
+  (verified by grep).
+- `TestProbeCommand.java:8755+` `handlePlayer` already exists but
+  only operates on already-connected EntityPlayerMPs.
+
+**Path chosen (user decision 2026-05-26): spawn real EntityPlayerMP.**
+
+Probe shape:
+`/artest player spawn-real <name> <dim> <x> <y> <z>` —
+constructs a minimal EntityPlayerMP with synthesised GameProfile
++ stub NetHandlerPlayServer, registers in
+`server.getPlayerList().getPlayers()` so
+`WorldServer.getPlayerEntityByName(name)` resolves.
+
+Risk: stub NetHandlerPlayServer construction is historically flake-
+prone (NetworkManager requires Channel; can be no-op stub but every
+packet send must be guarded). Budget +1h flake-investigation if
+the test goes intermittent.
+
+Alternate considered + rejected:
+- Patch `commandFetch` to accept entity-id fallback — violates
+  CLAUDE.md "no production logic changes" rule.

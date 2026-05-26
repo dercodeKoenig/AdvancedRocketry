@@ -94,3 +94,27 @@ may need an additional `gui press-build-button` probe.
 Medium-high. testClient bot stability + xvfb harness (per the
 recurring DISPLAY=:77 / LWJGL flake history) increases the chance
 of intermittent failures.
+
+## Phase 0 audit findings (2026-05-26)
+
+**Verdict: FEASIBLE without xvfb dependency.**
+
+- `TileSatelliteBuilder.onInventoryButtonPressed(int buttonId)` at
+  `:208-219`: `buttonId=0 → assembleSatellite()`, `buttonId=1 →
+  copyChip()`. Client side sends via `PacketHandler.sendToServer(new
+  PacketMachine(this, (byte)(buttonId + 100)))` — server packet
+  dispatch.
+- `bot().clickButtonById()` is proven working in
+  `RocketBuilderGuiE2ETest:70,78` (paired with
+  `ClientGuiTestSupport.java:38-55`).
+
+**Cleanest probe (avoids xvfb):**
+`/artest satellite-builder build <dim> <x> <y> <z>` — server-side
+subcommand that directly calls
+`((TileSatelliteBuilder) tile).onInventoryButtonPressed(0)` (or
+equivalently sends the equivalent PacketMachine). Avoids client-bot
+flake history. Mirrors `bot().clickButtonById()` test-client path
+on the server side.
+
+Tests become **testServer**, not testClient — cuts xvfb risk
+entirely.

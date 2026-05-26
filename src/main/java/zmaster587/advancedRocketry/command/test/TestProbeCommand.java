@@ -5155,7 +5155,108 @@ public class TestProbeCommand extends CommandBase {
                     + ",\"comparatorOverride\":" + comparatorOverride + "}");
             return;
         }
-        send(sender, "{\"error\":\"unknown infra subcommand — try info <dim> <x> <y> <z> | link <dim> <x> <y> <z> <entityId> | unlink <dim> <x> <y> <z> <entityId> | monitor-info <dim> <x> <y> <z>\"}");
+        if (args.length >= 3 && "inject-broken-part".equalsIgnoreCase(args[0])) {
+            // TASK-36b — mark a TileBrokenPart inside a rocket's StorageChunk
+            // as worn (stage > 0). Production grows TileBrokenPart#stage via
+            // wear-on-use (StorageChunk.shouldBreak → block-specific wear
+            // path); this probe is the test-only fast-path equivalent.
+            //
+            // Behaviour: locate rocket by entityId, walk
+            // {@code storage.getTileEntityList()} looking for the first
+            // TileBrokenPart whose stage is 0, call setStage(stage). If no
+            // unworn TileBrokenPart exists (rocket has no IBrokenPartBlock
+            // blocks, or all such blocks already worn), returns an error
+            // with diagnostic tile-class list.
+            //
+            // Note: TileBrokenPart instances pre-exist in
+            // {@code rocket.storage.tileEntities} because every IBrokenPart-
+            // Block (BlockRocketMotor / BlockAdvancedRocketMotor / etc.)
+            // returns a TileBrokenPart from createTileEntity, which is then
+            // copied into the rocket's StorageChunk by cutWorldBB on
+            // assemble. No allocation needed here.
+            int entityId = parseIntOr(args[1], Integer.MIN_VALUE);
+            int stage = parseIntOr(args[2], 0);
+            EntityRocket rocket = findRocket(server, entityId);
+            if (rocket == null) {
+                send(sender, "{\"error\":\"rocket not found\",\"entityId\":" + entityId + "}");
+                return;
+            }
+            if (rocket.storage == null) {
+                send(sender, "{\"error\":\"rocket has no storage\",\"entityId\":" + entityId + "}");
+                return;
+            }
+            zmaster587.advancedRocketry.tile.TileBrokenPart victim = null;
+            for (TileEntity te : rocket.storage.getTileEntityList()) {
+                if (te instanceof zmaster587.advancedRocketry.tile.TileBrokenPart
+                        && ((zmaster587.advancedRocketry.tile.TileBrokenPart) te).getStage() == 0) {
+                    victim = (zmaster587.advancedRocketry.tile.TileBrokenPart) te;
+                    break;
+                }
+            }
+            if (victim == null) {
+                // Diagnostic: list distinct tile classes so the caller can
+                // see why no IBrokenPartBlock-derived tile is present.
+                java.util.Set<String> classes = new java.util.LinkedHashSet<>();
+                for (TileEntity te : rocket.storage.getTileEntityList()) {
+                    classes.add(te.getClass().getName());
+                }
+                StringBuilder sb = new StringBuilder("[");
+                boolean first = true;
+                for (String c : classes) {
+                    if (!first) sb.append(",");
+                    sb.append("\"").append(escapeJson(c)).append("\"");
+                    first = false;
+                }
+                sb.append("]");
+                send(sender, "{\"error\":\"no unworn TileBrokenPart in rocket storage\",\"tileClasses\":"
+                        + sb + "}");
+                return;
+            }
+            victim.setStage(stage);
+            BlockPos vp = victim.getPos();
+            send(sender, "{\"ok\":true,\"entityId\":" + entityId
+                    + ",\"partPos\":[" + vp.getX() + "," + vp.getY() + "," + vp.getZ() + "]"
+                    + ",\"stage\":" + victim.getStage() + "}");
+            return;
+        }
+        if (args.length >= 5 && "service-relink".equalsIgnoreCase(args[0])) {
+            // TASK-36b — force a {@code TileRocketServiceStation} to re-scan
+            // its linkedRocket's broken parts without unlinking first.
+            // {@code linkRocket()} calls {@code updateRepairList()}; we
+            // expose the same effect for tests that mutate the rocket's
+            // storage (via inject-broken-part) AFTER linking.
+            int dim = parseIntOr(args[1], Integer.MIN_VALUE);
+            int x = parseIntOr(args[2], 0);
+            int y = parseIntOr(args[3], 0);
+            int z = parseIntOr(args[4], 0);
+            net.minecraft.world.WorldServer world = server.getWorld(dim);
+            if (world == null) {
+                send(sender, "{\"error\":\"world not loaded\",\"dim\":" + dim + "}");
+                return;
+            }
+            TileEntity tile = world.getTileEntity(new BlockPos(x, y, z));
+            if (!(tile instanceof zmaster587.advancedRocketry.tile.infrastructure
+                    .TileRocketServiceStation)) {
+                send(sender, "{\"error\":\"not a TileRocketServiceStation\",\"tile\":\""
+                        + (tile == null ? "null" : tile.getClass().getName()) + "\"}");
+                return;
+            }
+            zmaster587.advancedRocketry.tile.infrastructure.TileRocketServiceStation station =
+                    (zmaster587.advancedRocketry.tile.infrastructure.TileRocketServiceStation) tile;
+            try {
+                java.lang.reflect.Method m = station.getClass()
+                        .getDeclaredMethod("updateRepairList");
+                m.setAccessible(true);
+                m.invoke(station);
+                send(sender, "{\"ok\":true}");
+            } catch (ReflectiveOperationException e) {
+                send(sender, "{\"error\":\"updateRepairList invocation failed\","
+                        + "\"detail\":\"" + escapeJson(
+                                e.getClass().getSimpleName() + ": " + e.getMessage()) + "\"}");
+            }
+            return;
+        }
+        send(sender, "{\"error\":\"unknown infra subcommand — try info <dim> <x> <y> <z> | link <dim> <x> <y> <z> <entityId> | unlink <dim> <x> <y> <z> <entityId> | monitor-info <dim> <x> <y> <z> | inject-broken-part <entityId> <stage> | service-relink <dim> <x> <y> <z>\"}");
     }
 
     // §9.2 Fixture-building primitives -----------------------------------------

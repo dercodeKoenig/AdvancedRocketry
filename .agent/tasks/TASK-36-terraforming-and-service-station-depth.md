@@ -5,9 +5,31 @@
 - Source: 2026-05-25 Tier 1+2 audits. Both deferred at the time
   because of fixture work; carried forward into 2026-05-26 audit
   out-of-scope.
-- Status: **Blocked** — see Blocker section below; each subscope
-  has its own concrete prerequisite.
+- Status: **36b ✅ Completed 2026-05-26 / 36a 🟡 Phase 0 audit complete, awaiting implementation.**
 - Created: 2026-05-26.
+
+## Outcome (36b)
+
+Shipped `ServiceStationBrokenPartScanContractTest` (3 server tests) +
+2 new probe verbs (`/artest infra inject-broken-part` and
+`/artest infra service-relink`). Pinned contracts:
+- Inject + link → scan finds it (1 worn part surfaces).
+- Multi-part scan (2 worn parts surface, not just first).
+- Post-link injection requires explicit re-scan
+  (`service-relink`) — `updateRepairList` is link-time, not
+  tick-time.
+
+Implementation insight that cut probe cost from ~30-50 LOC to ~15
+LOC of actual logic: `TileBrokenPart` instances pre-exist in
+`rocket.storage.tileEntities` because every IBrokenPartBlock
+(BlockRocketMotor / BlockAdvancedRocketMotor / etc.) returns a
+TileBrokenPart from `createTileEntity`, copied into StorageChunk
+by `cutWorldBB` on assemble. Probe just calls `setStage(stage)` on
+the first stage==0 entry — no construction, no world-wiring.
+
+**Still deferred for 36b**: full repair cycle with
+PrecisionAssembler. Needs an assembler-recipe fixture surface; left
+for a follow-up once that surface is auditable.
 
 ## Context
 
@@ -115,3 +137,52 @@ test.
 
 Low-medium. Both blockers are probe additions — once probes land,
 the tests are mechanical.
+
+## Phase 0 audit findings (2026-05-26)
+
+### 36a — BiomeChanger chip probe
+
+**Verdict: REUSE existing surface — no dedicated probe needed.**
+
+- `ItemBiomeChanger` extends `ItemSatelliteIdentificationChip`
+  (`ItemBiomeChanger.java:35`).
+- NBT contract pinned at `TestProbeCommand.java:9096-9160`
+  (`handleSatellite "item-action"` subcommand). NBT keys:
+  `satelliteName`, `dimId`, `satelliteId` (lines 9129-9131);
+  position list via `posList` int-array (`:9139, :9149`).
+- Existing probe `/artest satellite-builder build <dim> <typeId>`
+  already manufactures + registers `SatelliteBiomeChanger` via
+  reflection (`:9112-9123`).
+
+**Cleanest approach:** extend dispatcher to accept
+`typeId="biomeChanger"` and route through
+`ItemBiomeChanger.setSatellite()` NBT packing already in place.
+
+### 36b — Service-station inject-broken-part probe
+
+**Verdict: FEASIBLE. ~30-50 LOC. THIS IS WHAT WE'RE SHIPPING TODAY.**
+
+- `EntityRocket.storage.getBrokenBlocks() → List<TileBrokenPart>`
+  (`StorageChunk.java:907`).
+- `TileBrokenPart` (`tile/TileBrokenPart.java:10-99`) — TileEntity
+  with NBT keys `stage`, `maxStage`, `transitionProb`.
+- `TileRocketServiceStation.partsToRepair` is a
+  `LinkedList<TileBrokenPart>` (`:69`). Repair loop:
+  `linkRocket → updateRepairList()` scans
+  `rocket.storage.getTileEntityList()` for `TileBrokenPart` with
+  `stage > 0` (`:117-139`).
+- Existing probe `infra service-state` already reads
+  `partsToRepairCount` via reflection at `TestProbeCommand.java:1237-1241`
+  — mirror pattern for write side.
+
+**Probe shape:** `/artest infra inject-broken-part <dim> <x> <y> <z> <stage> <maxStage>`
+— takes service-station pos, locates linkedRocket, picks a block in
+the storage chunk whose Block implements `IBrokenPartBlock`, swaps
+the existing TileEntity with a fresh `TileBrokenPart(stage, maxStage, 0.5f)`,
+then calls `updateRepairList()`. Falls back to a graceful error if
+the linked rocket has no IBrokenPartBlock blocks.
+
+### Recommended batch order
+
+36b cheapest first (this session); 33 + 36a together (shared
+satellite-builder probe extension); 35 last (most flake risk).
