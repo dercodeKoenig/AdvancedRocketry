@@ -14,8 +14,18 @@ Bug-ledger history lives in
 
 ## Current state
 
-- **Pyramid**: 828 (testUnit **288** / testIntegration 81 /
-  testServer **402** / testClient 57). +3 on 2026-05-26 from
+- **Pyramid**: 833 (testUnit **288** / testIntegration 81 /
+  testServer **407** / testClient 57). +5 on 2026-05-26 from
+  TASK-33 + TASK-36a batch: TASK-33 satellite-builder press-build
+  contract (2 server: optical-happy-path + per-type chip rejection
+  for weatherController), new `/artest satellite-builder press-build
+  <dim> <x> <y> <z> <typeId>` probe (drives REAL `onInventoryButtonPressed`
+  path on a placed tile, not the pre-existing fast-path that
+  bypasses TileSatelliteBuilder); TASK-36a terraforming terminal
+  chip-recognition (3 server: valid chip + redstone → enabled,
+  valid chip no redstone → idle, empty slot rejects), new
+  `/artest terraforming terminal-info` + `terminal-load-chip` probes.
+  Earlier same-day batch: +3 from
   TASK-36b partial — service-station broken-part scan contract
   (`ServiceStationBrokenPartScanContractTest` 3 server: positive
   link-time scan + multi-part scan + post-link-injection-needs-rescan).
@@ -128,6 +138,8 @@ Bug-ledger history lives in
 | [TASK-34](TASK-34-fuel-loader-active-transfer.md) | Fluid loader / unloader active transfer — 2 server tests using the existing `with-fluid-cargo` fixture variant (loader oxygen → rocket liquidTanks via real-tick natural transfer, unloader pulls oxygen back into its own tank). 1 new probe verb `rocket storage-fluid-fill` (writes via `FLUID_HANDLER_CAPABILITY` on storage TEs). Phase 0 outcome: NOT Obsolete — capability survives storage chunk round-trip when using `liquidTank` (TileFluidTank) blocks, already proven by MissionGasCompletionTest. | ✅ |
 | [TASK-30](TASK-30-station-controller-tick-contracts.md) | Station controller tick contracts (altitude / gravity / orientation) — 3 server tests. New `station controller-set-target <dim> <x> <y> <z> <id> <value>` probe (calls `ISliderBar.setProgress` directly), `station info` extended with `gravity`, `targetGravity`, `rotationEast/Up/North`, `targetRPH0..2`, `targetOrbitalDistance`. Gravity controller has a redstone-default-state production bug — logged in ledger as Batch #2 entry #3, test workaround pins end-state walk under the broken default. | ✅ |
 | [TASK-36b](TASK-36-terraforming-and-service-station-depth.md) | Service-station broken-part scan contract — 3 server tests (`ServiceStationBrokenPartScanContractTest`: inject + link → scan finds it, multi-part scan, post-link injection needs explicit re-scan). New `/artest infra inject-broken-part <entityId> <stage>` probe (uses pre-existing TileBrokenPart instances copied into rocket storage by `cutWorldBB`, calls setStage — no allocation). New `/artest infra service-relink` probe exposes private `updateRepairList()` for post-link injection scenarios. Repair-cycle WITH PrecisionAssembler still deferred (recipe-surface dependency). TASK-36a (BiomeChanger) still in backlog. | ✅ partial |
+| [TASK-33](TASK-33-satellitebuilder-real-construction.md) | SatelliteBuilder real-construction path — 2 server tests (`SatelliteBuilderPressBuildContractTest`: optical happy-path pinning chassis-consumed + holding slot carries ItemSatellite + chip slot has matching satelliteId; weatherController negative pin for per-type chip override). New `/artest satellite-builder press-build <dim> <x> <y> <z> <typeId>` probe loads slots and invokes `onInventoryButtonPressed(0)` (REAL GUI path, not the fast-path bypass). | ✅ |
+| [TASK-36a](TASK-36-terraforming-and-service-station-depth.md) | TerraformingTerminal chip-recognition + redstone gate — 3 server tests (`TerraformingTerminalChipRecognitionTest`: chip+redstone → wasEnabledLastTick=true + block STATE=true, chip alone idles, empty slot rejects). New `/artest terraforming terminal-info` + `terminal-load-chip <dim> <x> <y> <z> <satId>` probes. Out of scope: biome-mutation inner loop (battery/TerraformingHelper dependencies). | ✅ |
 
 ## Backlog
 
@@ -138,9 +150,7 @@ entry is an actionable TASK with a defined plan + acceptance.
 |---|---|---|---|
 | [TASK-15](TASK-15-visual-regression.md) | Visual regression infrastructure for Minecraft client | 👁 Watching | 4 explicit promotion triggers in task file (GUI refactor / modpack-report / JEI rework / texture-pipeline bump). Revisit + consider Obsolete if no trigger in 6 months. |
 | [TASK-16](TASK-16-test-stability-flake-watch.md) | Test-stability flake watch — investigation deliverable. Three flake shapes root-caused; shape #3 mitigated in TASK-26 via kit retry; #1+#2 split into TASK-27; #4 (worldgen sampling) confirmed across 3 sightings, promoted to TASK-28 F7. | 🟡 Investigation complete | Investigation done 2026-05-23. |
-| [TASK-33](TASK-33-satellitebuilder-real-construction.md) | SatelliteBuilder real end-to-end construction (full GUI flow) | 🟡 Phase 0 audit complete | Phase 0 outcome 2026-05-26: feasible via server-side `/artest satellite-builder build <dim> <x> <y> <z>` (direct `onInventoryButtonPressed(0)` invocation, NO xvfb dependency); tests become testServer not testClient. Plan in task file; estimate revised to ~3h total. |
 | [TASK-35](TASK-35-ar-fetch-two-bot-harness.md) | `/ar fetch` positive coverage (two-player verb) | 🟡 Phase 0 audit complete | Phase 0 outcome 2026-05-26: FakePlayer path BLOCKED (commandFetch uses `world.getPlayerEntityByName` — only real EntityPlayerMP in world entity list). User decision: spawn real EntityPlayerMP via GameProfile + stub NetHandlerPlayServer. Heaviest probe of the original batch; flake risk on NetworkManager stub. |
-| [TASK-36a](TASK-36-terraforming-and-service-station-depth.md) | TerraformingTerminal biome-mutation depth | 🟡 Phase 0 audit complete | Phase 0 outcome 2026-05-26: reuse existing `/artest satellite-builder build <typeId>` (already manufactures+registers SatelliteBiomeChanger via reflection at TestProbeCommand.java:9112-9123) — extend dispatcher to route `typeId="biomeChanger"`. ~10 LOC + 1 test. |
 
 ## Conscious non-goals
 

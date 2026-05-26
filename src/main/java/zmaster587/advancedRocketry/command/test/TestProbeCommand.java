@@ -2654,8 +2654,130 @@ public class TestProbeCommand extends CommandBase {
      * that headless harness can't satisfy.</p>
      */
     private void handleSatelliteBuilder(MinecraftServer server, ICommandSender sender, String[] args) {
+        if (args.length >= 6 && "press-build".equalsIgnoreCase(args[0])) {
+            // TASK-33 — exercise the REAL TileSatelliteBuilder GUI path:
+            // place required items in the four critical slots, then invoke
+            // onInventoryButtonPressed(0) (the "Build" button at modules
+            // ModuleButton(0) in getModules). This is the path a player
+            // takes; the fast-path /artest satellite-builder build
+            // subcommand below bypasses TileSatelliteBuilder entirely and
+            // only constructs+registers the satellite by reflection — it
+            // does NOT exercise canAssembleSatellite() / assembleSatellite()
+            // / chassis slot consumption.
+            //
+            // Required slot contents (per TileSatelliteBuilder slot map):
+            //   chassisSlot (11) — itemSatellite (empty chassis)
+            //   primaryFunctionSlot (0) — itemSatellitePrimaryFunction at
+            //       the meta whose SatelliteProperty.getSatelliteType()
+            //       matches the requested type
+            //   slot 1 (modular function) — itemSatellitePowerSource meta=1
+            //   chipSlot (8) — itemSatelliteIdChip (the controller chip
+            //       the produced satellite accepts via
+            //       isAcceptableControllerItemStack)
+            //
+            // After successful build, production:
+            //   - clears chassisSlot
+            //   - rewrites chipSlot with sat.getControllerItemStack(...) so
+            //     the chip carries the new satelliteId NBT
+            //   - moves the chassis (now an ItemSatellite with NBT) into
+            //     holdingSlot (10)
+            //   - sets completionTime=100 (libVulpes-side; processComplete
+            //     later moves holdingSlot → outputSlot once tick countdown
+            //     finishes)
+            int dim = parseIntOr(args[1], Integer.MIN_VALUE);
+            int x = parseIntOr(args[2], 0);
+            int y = parseIntOr(args[3], 0);
+            int z = parseIntOr(args[4], 0);
+            String typeId = args[5];
+            net.minecraft.world.WorldServer world = server.getWorld(dim);
+            if (world == null) {
+                send(sender, "{\"error\":\"world not loaded\",\"dim\":" + dim + "}");
+                return;
+            }
+            TileEntity tile = world.getTileEntity(new BlockPos(x, y, z));
+            if (!(tile instanceof zmaster587.advancedRocketry.tile.satellite.TileSatelliteBuilder)) {
+                send(sender, "{\"error\":\"tile not TileSatelliteBuilder\",\"tile\":\""
+                        + (tile == null ? "null" : tile.getClass().getName()) + "\"}");
+                return;
+            }
+            zmaster587.advancedRocketry.tile.satellite.TileSatelliteBuilder builder =
+                    (zmaster587.advancedRocketry.tile.satellite.TileSatelliteBuilder) tile;
+            // Resolve primary-function meta the same way the fast-path
+            // build subcommand does — scan up to 16 metas of
+            // itemSatellitePrimaryFunction and match SatelliteType.
+            net.minecraft.item.Item primaryItem =
+                    zmaster587.advancedRocketry.api.AdvancedRocketryItems.itemSatellitePrimaryFunction;
+            int primaryMeta = -1;
+            for (int meta = 0; meta < 16; meta++) {
+                net.minecraft.item.ItemStack candidate = new net.minecraft.item.ItemStack(primaryItem, 1, meta);
+                zmaster587.advancedRocketry.api.satellite.SatelliteProperties sp =
+                        zmaster587.advancedRocketry.api.SatelliteRegistry.getSatelliteProperty(candidate);
+                if (sp != null && typeId.equalsIgnoreCase(sp.getSatelliteType())) {
+                    primaryMeta = meta;
+                    break;
+                }
+            }
+            if (primaryMeta < 0) {
+                send(sender, "{\"error\":\"no primary-function chip meta maps to type\","
+                        + "\"type\":\"" + escapeJson(typeId) + "\"}");
+                return;
+            }
+            net.minecraft.item.ItemStack chassis = new net.minecraft.item.ItemStack(
+                    zmaster587.advancedRocketry.api.AdvancedRocketryItems.itemSatellite, 1, 0);
+            net.minecraft.item.ItemStack primary = new net.minecraft.item.ItemStack(
+                    primaryItem, 1, primaryMeta);
+            net.minecraft.item.ItemStack powerSrc = new net.minecraft.item.ItemStack(
+                    zmaster587.advancedRocketry.api.AdvancedRocketryItems.itemSatellitePowerSource, 1, 1);
+            net.minecraft.item.ItemStack idChip = new net.minecraft.item.ItemStack(
+                    zmaster587.advancedRocketry.api.AdvancedRocketryItems.itemSatelliteIdChip, 1, 0);
+            // chassisSlot=11, primaryFunctionSlot=0, slot 1 = first modular
+            // function (battery/power slot), chipSlot=8.
+            builder.setInventorySlotContents(11, chassis);
+            builder.setInventorySlotContents(0, primary);
+            builder.setInventorySlotContents(1, powerSrc);
+            builder.setInventorySlotContents(8, idChip);
+            boolean canBefore = builder.canAssembleSatellite();
+            if (!canBefore) {
+                send(sender, "{\"error\":\"canAssembleSatellite returned false after slot load\","
+                        + "\"type\":\"" + escapeJson(typeId) + "\",\"primaryMeta\":" + primaryMeta + "}");
+                return;
+            }
+            builder.onInventoryButtonPressed(0);
+            // Snapshot post-state.
+            net.minecraft.item.ItemStack chassisAfter = builder.getStackInSlot(11);
+            net.minecraft.item.ItemStack chipAfter = builder.getStackInSlot(8);
+            net.minecraft.item.ItemStack holdingAfter = builder.getStackInSlot(10);
+            net.minecraft.item.ItemStack outputAfter = builder.getStackInSlot(7);
+            // ItemSatelliteIdentificationChip stores the id under
+            // "satelliteId"; ItemSatellite (via SatelliteProperties.writeToNBT)
+            // stores it under "satId". Two different keys for the same id —
+            // surface both raw so the test can pin equality.
+            long chipSatId = -1;
+            if (!chipAfter.isEmpty() && chipAfter.hasTagCompound()) {
+                chipSatId = chipAfter.getTagCompound().getLong("satelliteId");
+            }
+            long holdingSatId = -1;
+            if (!holdingAfter.isEmpty() && holdingAfter.hasTagCompound()) {
+                holdingSatId = holdingAfter.getTagCompound().getLong("satId");
+            }
+            send(sender, "{\"ok\":true"
+                    + ",\"type\":\"" + escapeJson(typeId) + "\""
+                    + ",\"primaryMeta\":" + primaryMeta
+                    + ",\"chassisEmpty\":" + chassisAfter.isEmpty()
+                    + ",\"chipItem\":\"" + (chipAfter.isEmpty() ? "" :
+                            (chipAfter.getItem().getRegistryName() == null
+                                    ? "null" : chipAfter.getItem().getRegistryName().toString())) + "\""
+                    + ",\"chipSatId\":" + chipSatId
+                    + ",\"holdingItem\":\"" + (holdingAfter.isEmpty() ? "" :
+                            (holdingAfter.getItem().getRegistryName() == null
+                                    ? "null" : holdingAfter.getItem().getRegistryName().toString())) + "\""
+                    + ",\"holdingSatId\":" + holdingSatId
+                    + ",\"outputEmpty\":" + outputAfter.isEmpty()
+                    + "}");
+            return;
+        }
         if (args.length < 3 || !"build".equalsIgnoreCase(args[0])) {
-            send(sender, "{\"error\":\"unknown satellite-builder subcommand — try build <dim> <typeId>\"}");
+            send(sender, "{\"error\":\"unknown satellite-builder subcommand — try build <dim> <typeId> | press-build <dim> <x> <y> <z> <typeId>\"}");
             return;
         }
         int dim = parseIntOr(args[1], Integer.MIN_VALUE);
@@ -4225,7 +4347,107 @@ public class TestProbeCommand extends CommandBase {
                     + ",\"newDensity\":" + props.getAtmosphereDensity() + "}");
             return;
         }
-        send(sender, "{\"error\":\"unknown terraforming subcommand — try info <dim> | set-density <dim> <value>\"}");
+        if (args.length >= 5 && "terminal-info".equalsIgnoreCase(args[0])) {
+            // TASK-36a — surface TileTerraformingTerminal state for tests.
+            // Reads: was_enabled_last_tick (per-tick redstone+chip gate),
+            // BlockTileTerraformer STATE property (player-visible
+            // "is terraforming" block-model variant), hasValidBiomeChanger()
+            // (cached recognition of the loaded chip).
+            int dim = parseIntOr(args[1], Integer.MIN_VALUE);
+            int x = parseIntOr(args[2], 0);
+            int y = parseIntOr(args[3], 0);
+            int z = parseIntOr(args[4], 0);
+            net.minecraft.world.WorldServer world = net.minecraftforge.fml.common
+                    .FMLCommonHandler.instance().getMinecraftServerInstance().getWorld(dim);
+            if (world == null) {
+                send(sender, "{\"error\":\"world not loaded\",\"dim\":" + dim + "}");
+                return;
+            }
+            TileEntity tile = world.getTileEntity(new BlockPos(x, y, z));
+            if (!(tile instanceof zmaster587.advancedRocketry.tile.satellite.TileTerraformingTerminal)) {
+                send(sender, "{\"error\":\"tile not TileTerraformingTerminal\",\"tile\":\""
+                        + (tile == null ? "null" : tile.getClass().getName()) + "\"}");
+                return;
+            }
+            zmaster587.advancedRocketry.tile.satellite.TileTerraformingTerminal terminal =
+                    (zmaster587.advancedRocketry.tile.satellite.TileTerraformingTerminal) tile;
+            boolean wasEnabled = terminal.was_enabled_last_tick;
+            boolean blockStateOn;
+            try {
+                blockStateOn = world.getBlockState(new BlockPos(x, y, z))
+                        .getValue(zmaster587.advancedRocketry.block.BlockTileTerraformer.STATE);
+            } catch (IllegalArgumentException e) {
+                blockStateOn = false;
+            }
+            boolean hasValidChip = terminal.hasValidBiomeChanger();
+            boolean redstone = world.isBlockIndirectlyGettingPowered(new BlockPos(x, y, z)) != 0;
+            send(sender, "{\"ok\":true"
+                    + ",\"wasEnabledLastTick\":" + wasEnabled
+                    + ",\"blockStateOn\":" + blockStateOn
+                    + ",\"hasValidBiomeChanger\":" + hasValidChip
+                    + ",\"redstonePower\":" + redstone + "}");
+            return;
+        }
+        if (args.length >= 6 && "terminal-load-chip".equalsIgnoreCase(args[0])) {
+            // TASK-36a — load a programmed ItemBiomeChanger into a placed
+            // TileTerraformingTerminal's slot 0. Mirrors the player flow:
+            // a biomechanger chip whose NBT points to a registered
+            // SatelliteBiomeChanger on the same dim as the terminal. The
+            // satellite must already exist on the dim — typically created
+            // via `/artest satellite-builder build <dim> biomeChanger`,
+            // which echoes the satellite id this probe takes as `satId`.
+            //
+            // After loading, the terminal's hasValidBiomeChanger() flips
+            // to true on the next tick (gated additionally by redstone
+            // power for was_enabled_last_tick).
+            int dim = parseIntOr(args[1], Integer.MIN_VALUE);
+            int x = parseIntOr(args[2], 0);
+            int y = parseIntOr(args[3], 0);
+            int z = parseIntOr(args[4], 0);
+            long satId = Long.parseLong(args[5]);
+            net.minecraft.world.WorldServer world = net.minecraftforge.fml.common
+                    .FMLCommonHandler.instance().getMinecraftServerInstance().getWorld(dim);
+            if (world == null) {
+                send(sender, "{\"error\":\"world not loaded\",\"dim\":" + dim + "}");
+                return;
+            }
+            TileEntity tile = world.getTileEntity(new BlockPos(x, y, z));
+            if (!(tile instanceof zmaster587.advancedRocketry.tile.satellite.TileTerraformingTerminal)) {
+                send(sender, "{\"error\":\"tile not TileTerraformingTerminal\",\"tile\":\""
+                        + (tile == null ? "null" : tile.getClass().getName()) + "\"}");
+                return;
+            }
+            DimensionProperties props = DimensionManager.getInstance().getDimensionProperties(dim);
+            if (props == null) {
+                send(sender, "{\"error\":\"dim not registered\",\"dim\":" + dim + "}");
+                return;
+            }
+            zmaster587.advancedRocketry.api.satellite.SatelliteBase sat = props.getSatellite(satId);
+            if (sat == null) {
+                send(sender, "{\"error\":\"satellite not registered on dim\","
+                        + "\"dim\":" + dim + ",\"satId\":" + satId + "}");
+                return;
+            }
+            if (!(sat instanceof zmaster587.advancedRocketry.satellite.SatelliteBiomeChanger)) {
+                send(sender, "{\"error\":\"satellite is not a SatelliteBiomeChanger\","
+                        + "\"satClass\":\"" + sat.getClass().getName() + "\"}");
+                return;
+            }
+            net.minecraft.item.Item chip =
+                    zmaster587.advancedRocketry.api.AdvancedRocketryItems.itemBiomeChanger;
+            net.minecraft.item.ItemStack stack = new net.minecraft.item.ItemStack(chip, 1, 0);
+            net.minecraft.nbt.NBTTagCompound nbt = new net.minecraft.nbt.NBTTagCompound();
+            nbt.setString("satelliteName", sat.getName());
+            nbt.setInteger("dimId", dim);
+            nbt.setLong("satelliteId", satId);
+            stack.setTagCompound(nbt);
+            ((zmaster587.advancedRocketry.tile.satellite.TileTerraformingTerminal) tile)
+                    .setInventorySlotContents(0, stack);
+            send(sender, "{\"ok\":true,\"satId\":" + satId + ",\"dim\":" + dim
+                    + ",\"chipItem\":\"" + chip.getRegistryName() + "\"}");
+            return;
+        }
+        send(sender, "{\"error\":\"unknown terraforming subcommand — try info <dim> | set-density <dim> <value> | terminal-info <dim> <x> <y> <z> | terminal-load-chip <dim> <x> <y> <z> <satId>\"}");
     }
 
     // §5.8 Worldgen probe -----------------------------------------------------
