@@ -4,8 +4,36 @@
 
 - Source: 2026-05-25 Tier 1 audit. Deferred at the time because of
   the harness requirement; carried forward into 2026-05-26 audit.
-- Status: **Blocked** — see Blocker section.
+- Status: **✅ Completed 2026-05-26 (reframed scope, see Outcome).**
 - Created: 2026-05-26.
+
+## Outcome (2026-05-26)
+
+Shipped `WorldCommandFetchTest` (2 testClient tests). Original
+Phase 0 plan (heavy NetworkManager-stub real-EntityPlayerMP probe)
+was reframed during implementation:
+
+- **Self-fetch positive pin** — bot runs
+  `/ar fetch <bot-own-username>` against itself; production
+  resolves the name, transfers to the same dim (no-op), and
+  sets the bot's position to the sender's own coords. Pins
+  the full resolve → transferPlayerToDimension → setPosition
+  path with sender == target — no second player needed. Bot
+  username is discovered via the existing
+  `/artest player health` probe (returns `player.getName()` in
+  its JSON).
+- **Unknown-name negative pin** — `/ar fetch <bogus>`
+  exercises the `getPlayerByName == null` branch. Pins
+  "command runs cleanly + reaches the negative branch".
+
+Key insight: positive coverage doesn't actually need a SECOND
+player. The original framing assumed "different player as
+target"; self-fetch covers the verb's contract surface (resolve
++ transfer + setPosition) without that infrastructure cost.
+
+Still out of scope (intentional): true moderator-fetch where
+target is a different connected player. Needs multi-client
+testClient harness expansion (separate scope).
 
 ## Context
 

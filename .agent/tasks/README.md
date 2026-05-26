@@ -14,8 +14,16 @@ Bug-ledger history lives in
 
 ## Current state
 
-- **Pyramid**: 833 (testUnit **288** / testIntegration 81 /
-  testServer **407** / testClient 57). +5 on 2026-05-26 from
+- **Pyramid**: 835 (testUnit **288** / testIntegration 81 /
+  testServer **407** / testClient **59**). +2 on 2026-05-26 from
+  TASK-35 — `/ar fetch` coverage without a second player:
+  `WorldCommandFetchTest` (2 testClient — self-fetch positive
+  pinning resolve→transfer→setPosition, unknown-name negative
+  pinning `getPlayerByName==null` branch). Reframes the original
+  Phase 0 plan (heavy NetworkManager-stub real-EntityPlayerMP probe)
+  as unnecessary: self-fetch + bot username from `artest player
+  health` cover the verb's contract surface. Multi-player "moderator
+  fetch" still out of scope. Earlier same-day batch: +5 from
   TASK-33 + TASK-36a batch: TASK-33 satellite-builder press-build
   contract (2 server: optical-happy-path + per-type chip rejection
   for weatherController), new `/artest satellite-builder press-build
@@ -140,6 +148,7 @@ Bug-ledger history lives in
 | [TASK-36b](TASK-36-terraforming-and-service-station-depth.md) | Service-station broken-part scan contract — 3 server tests (`ServiceStationBrokenPartScanContractTest`: inject + link → scan finds it, multi-part scan, post-link injection needs explicit re-scan). New `/artest infra inject-broken-part <entityId> <stage>` probe (uses pre-existing TileBrokenPart instances copied into rocket storage by `cutWorldBB`, calls setStage — no allocation). New `/artest infra service-relink` probe exposes private `updateRepairList()` for post-link injection scenarios. Repair-cycle WITH PrecisionAssembler still deferred (recipe-surface dependency). TASK-36a (BiomeChanger) still in backlog. | ✅ partial |
 | [TASK-33](TASK-33-satellitebuilder-real-construction.md) | SatelliteBuilder real-construction path — 2 server tests (`SatelliteBuilderPressBuildContractTest`: optical happy-path pinning chassis-consumed + holding slot carries ItemSatellite + chip slot has matching satelliteId; weatherController negative pin for per-type chip override). New `/artest satellite-builder press-build <dim> <x> <y> <z> <typeId>` probe loads slots and invokes `onInventoryButtonPressed(0)` (REAL GUI path, not the fast-path bypass). | ✅ |
 | [TASK-36a](TASK-36-terraforming-and-service-station-depth.md) | TerraformingTerminal chip-recognition + redstone gate — 3 server tests (`TerraformingTerminalChipRecognitionTest`: chip+redstone → wasEnabledLastTick=true + block STATE=true, chip alone idles, empty slot rejects). New `/artest terraforming terminal-info` + `terminal-load-chip <dim> <x> <y> <z> <satId>` probes. Out of scope: biome-mutation inner loop (battery/TerraformingHelper dependencies). | ✅ |
+| [TASK-35](TASK-35-ar-fetch-two-bot-harness.md) | `/ar fetch` coverage — 2 testClient tests (`WorldCommandFetchTest`: self-fetch positive resolve→transfer→setPosition path, unknown-name negative `getPlayerByName==null` branch). Phase 0 plan reframed — no NetworkManager-stub real-EntityPlayerMP probe needed; self-fetch (bot fetching itself, name discovered via `artest player health`) closes the resolvable contract surface with no second-player infrastructure. Multi-player "moderator fetch" still out of scope (single-bot harness limit). | ✅ |
 
 ## Backlog
 
@@ -150,7 +159,6 @@ entry is an actionable TASK with a defined plan + acceptance.
 |---|---|---|---|
 | [TASK-15](TASK-15-visual-regression.md) | Visual regression infrastructure for Minecraft client | 👁 Watching | 4 explicit promotion triggers in task file (GUI refactor / modpack-report / JEI rework / texture-pipeline bump). Revisit + consider Obsolete if no trigger in 6 months. |
 | [TASK-16](TASK-16-test-stability-flake-watch.md) | Test-stability flake watch — investigation deliverable. Three flake shapes root-caused; shape #3 mitigated in TASK-26 via kit retry; #1+#2 split into TASK-27; #4 (worldgen sampling) confirmed across 3 sightings, promoted to TASK-28 F7. | 🟡 Investigation complete | Investigation done 2026-05-23. |
-| [TASK-35](TASK-35-ar-fetch-two-bot-harness.md) | `/ar fetch` positive coverage (two-player verb) | 🟡 Phase 0 audit complete | Phase 0 outcome 2026-05-26: FakePlayer path BLOCKED (commandFetch uses `world.getPlayerEntityByName` — only real EntityPlayerMP in world entity list). User decision: spawn real EntityPlayerMP via GameProfile + stub NetHandlerPlayServer. Heaviest probe of the original batch; flake risk on NetworkManager stub. |
 
 ## Conscious non-goals
 
