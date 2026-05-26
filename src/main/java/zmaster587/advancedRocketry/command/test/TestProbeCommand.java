@@ -2123,10 +2123,14 @@ public class TestProbeCommand extends CommandBase {
             zmaster587.advancedRocketry.satellite.SatelliteData sd =
                     (zmaster587.advancedRocketry.satellite.SatelliteData) sat;
             zmaster587.advancedRocketry.api.DataStorage ds = sd.data;
+            // Emit the enum name() (stable identifier) rather than
+            // toString() which returns the "data.<lc>.name" localization
+            // key. Tests pin against the type identity, not the
+            // display string.
             send(sender, "{\"ok\":true,\"id\":" + satId
                     + ",\"data\":" + ds.getData()
                     + ",\"maxData\":" + ds.getMaxData()
-                    + ",\"dataType\":\"" + ds.getDataType() + "\"}");
+                    + ",\"dataType\":\"" + ds.getDataType().name() + "\"}");
             return;
         }
         if ("markers".equalsIgnoreCase(args[0]) && args.length >= 3) {
@@ -5034,11 +5038,19 @@ public class TestProbeCommand extends CommandBase {
             } catch (ReflectiveOperationException ignored) {
                 // Field renamed — surfaces as -1 / "null"; safer than failing.
             }
+            // TASK-32 3c — expose getComparatorOverride() so tests can pin
+            // the 0..15 height-derived comparator output without sniffing
+            // the world's redstone state directly. The override is what
+            // production exposes to vanilla's getComparatorInputOverride
+            // resolver; pinning it here pins the player-visible redstone
+            // contract.
+            int comparatorOverride = monitor.getComparatorOverride();
             send(sender, "{\"ok\":true,\"linkedEntityId\":" + linkedEntityId
                     + ",\"linkedClass\":\"" + escapeJson(linkedClass) + "\""
                     + ",\"maxLinkDistance\":" + monitor.getMaxLinkDistance()
                     + ",\"wasPowered\":" + wasPowered
-                    + ",\"equivalentPower\":" + equivalentPower + "}");
+                    + ",\"equivalentPower\":" + equivalentPower
+                    + ",\"comparatorOverride\":" + comparatorOverride + "}");
             return;
         }
         send(sender, "{\"error\":\"unknown infra subcommand — try info <dim> <x> <y> <z> | link <dim> <x> <y> <z> <entityId> | unlink <dim> <x> <y> <z> <entityId> | monitor-info <dim> <x> <y> <z>\"}");

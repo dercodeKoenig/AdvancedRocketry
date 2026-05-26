@@ -4,8 +4,43 @@
 
 - Source: 2026-05-25 Tier 2/3 audit, gap #1. Carried forward into
   2026-05-26 audit out-of-scope as still-deferred.
-- Status: **Backlog** — ready to ship, no blocker.
+- Status: **✅ Completed 2026-05-26** — see `.agent/tasks/README.md`
+  Done table.
 - Created: 2026-05-26.
+
+## Actual scope shipped
+
+6 server-tier tests in
+`src/test/java/zmaster587/advancedRocketry/test/server/ScanningSatelliteTickContractTest.java`:
+
+1. `opticalPoweredTickEmitsDistanceTypeData` — pins
+   `dataType == DISTANCE` after powered ticks.
+2. `densityPoweredTickEmitsAtmosphereDensityTypeData` — pins
+   `dataType == ATMOSPHEREDENSITY`.
+3. `massScannerPoweredTickEmitsMassTypeData` — pins
+   `dataType == MASS`.
+4. `compositionPoweredTickEmitsCompositionTypeData` — pins
+   `dataType == COMPOSITION` (per-type identity complements the
+   generic-`SatelliteData` accumulation pin in
+   `SatelliteTickBehaviourTest`).
+5. `oreMappingIsNotSatelliteDataAndPoweredTickAccruesBatteryOnly` —
+   pins oreScanner as a non-`SatelliteData` (`isSatelliteData=false`,
+   `satellite data` probe returns error) with battery-only accrual.
+6. `spyTelescopeCannotTickAndDirectTickEntityIsNoOp` — defense-in-
+   depth complement to the existing tickingSatellites-registration
+   pin: even if the registration gate is bypassed, the empty
+   `tickEntity` body produces no battery change.
+
+Probe surface: `satellite data` now emits `dataType.name()` (stable
+enum identifier) rather than `toString()` (which returns the
+`data.<lc>.name` localization key). No other tests rely on the
+field shape.
+
+Phase 2 negative power-gate (scanner with empty battery → no data)
+skipped because production's `getDataCreated` doesn't gate on
+`battery.extractEnergy` return value — `extractEnergy(0)` on a
+zero-storage battery returns 0 unconditionally, so the gate fires
+on world-time alone. Not a contract.
 
 ## Context
 

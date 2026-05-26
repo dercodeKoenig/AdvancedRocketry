@@ -14,9 +14,22 @@ Bug-ledger history lives in
 
 ## Current state
 
-- **Pyramid**: 805 (testUnit **284** / testIntegration 81 /
-  testServer **383** / testClient 57). +35 on 2026-05-26 from
-  the second audit batch: Gap 3 PlanetaryTravelHelper (11 unit),
+- **Pyramid**: 820 (testUnit **288** / testIntegration 81 /
+  testServer **394** / testClient 57). +15 on 2026-05-26 from
+  TASK-29/31/32 batch: TASK-29 scanning satellite tick contracts
+  (6 server — per-type DataType pins for Optical/Density/Mass/Composition,
+  oreScanner non-SatelliteData pin, SpyTelescope no-op-tick pin),
+  TASK-31 rocket lifecycle event payloads (3 server — Landed +
+  DeOrbiting + ReachesOrbit entity-id + dim payload pins, extending
+  RocketEventPayloadContractTest to cover the full 6-event surface),
+  TASK-32 Tier 3 misc (2 unit + 2 server — ItemPackedStructure
+  null-gate + hasSubtypes, custom AtmosphereType registry+NBT
+  round-trip, MonitoringStation comparator-override unlinked=0 +
+  monotonic-with-posY). Probe surface: `satellite data` emits
+  `dataType.name()` (stable enum identifier, not the localization
+  key), `infra monitor-info` exposes `comparatorOverride`.
+  Earlier same-day batches: +35 from the second audit batch:
+  Gap 3 PlanetaryTravelHelper (11 unit),
   Gap 1 RocketLoader polarity (6 unit), Gap 7 GravityHandler (6 unit),
   Gap 4 SatelliteWeatherController NBT (2 unit), Gap 8 SatelliteMicrowave
   teir NBT (2 unit), Gap 6 FluidTank stacked-fill (2 server),
@@ -73,6 +86,9 @@ Bug-ledger history lives in
 | [TASK-24](TASK-24-spacearmor-chest-route.md) | SpaceArmor CHEST sub-inventory drain (testClient) — 3 testClient tests pinning vacuum-drain through `ItemSpaceChest.decrementAir` (component-walking + FluidStack drain in embedded pressure tank). 2 new probes (`player equip-space-chest`, `player held-air-component-route`). testClient harness requires `xvfb-run` wrapper on headless dev boxes. Phase 2 (Suit Workstation drive-through) deferred. | ✅ |
 | [TASK-20](TASK-20-hovercraft-ride-coverage.md) | Hovercraft ride / mount / throttle / motion (testClient) — 4 client tests: mount via startRiding probe, dismount, throttle-via-drive-ridden-entity probe (composite that re-applies moveForward inline to defeat CPacketInput reset), unmounted hovercraft doesn't drift. Phase 3 fuel reframed as documentation — production has zero fuel logic; documented so future addition forces a contract pin. 5 new probes. | ✅ partial |
 | [TASK-21](TASK-21-ar-player-equipped-positives.md) | `/ar` player-equipped positive paths (testClient) — 5 client tests: goto dim, goto station, giveStation chip, addTorch, addSolidBlockOverride. New `player exec-as-player` probe (bot-as-sender via commandManager) + op-self/deop-self + inventory-contains + give-held probes. `/ar fetch` deferred (needs two-bot harness); `/ar fillData` covered transitively by satellite-construction flow. | ✅ partial |
+| [TASK-29](TASK-29-scanning-satellite-tick-contracts.md) | Scanning satellite tick contracts — 6 server-tier tests pinning per-type DataType identity (Optical→DISTANCE, Density→ATMOSPHEREDENSITY, Mass→MASS, Composition→COMPOSITION), oreScanner non-SatelliteData + battery-only accrual, SpyTelescope no-op-tick defense-in-depth. Probe `satellite data` updated to emit `dataType.name()` (stable enum, not localization key). | ✅ |
+| [TASK-31](TASK-31-rocket-event-payload-contracts.md) | Rocket lifecycle event payloads — 3 server-tier tests extending RocketEventPayloadContractTest: RocketLandedEvent (real-tick descent), RocketDeOrbitingEvent (`ticksExisted == 20` branch), RocketReachesOrbitEvent (via `force-orbit-reached` probe). Together with the pre-existing Dismantle + PreLaunch pins, all 6 RocketEvent subtypes now have entity-id + dim payload coverage. | ✅ |
+| [TASK-32](TASK-32-tier3-misc-coverage.md) | Tier 3 misc — 4 tests across testUnit + testServer. 3a ItemPackedStructure unit pins (null-gate + hasSubtypes flag — full setStructure round-trip requires runtime profiler, deferred to existing server-tier coverage). 3b custom AtmosphereType registry + NBT round-trip (2 unit tests). 3c MonitoringStation comparator override (2 server: unlinked-returns-0 + monotonic-with-posY); new `infra monitor-info comparatorOverride` field on the probe. | ✅ |
 
 ## Backlog
 
@@ -83,10 +99,7 @@ entry is an actionable TASK with a defined plan + acceptance.
 |---|---|---|---|
 | [TASK-15](TASK-15-visual-regression.md) | Visual regression infrastructure for Minecraft client | 👁 Watching | 4 explicit promotion triggers in task file (GUI refactor / modpack-report / JEI rework / texture-pipeline bump). Revisit + consider Obsolete if no trigger in 6 months. |
 | [TASK-16](TASK-16-test-stability-flake-watch.md) | Test-stability flake watch — investigation deliverable. Three flake shapes root-caused; shape #3 mitigated in TASK-26 via kit retry; #1+#2 split into TASK-27; #4 (worldgen sampling) confirmed across 3 sightings, promoted to TASK-28 F7. | 🟡 Investigation complete | Investigation done 2026-05-23. |
-| [TASK-29](TASK-29-scanning-satellite-tick-contracts.md) | Scanning satellite tick behaviour (6 types: OreMapping / Density / Composition / MassScanner / Optical / SpyTelescope) | Backlog | None — ready to ship (~4-5h). |
 | [TASK-30](TASK-30-station-controller-tick-contracts.md) | Station controller tick contracts (Altitude / Gravity / Orientation) | Blocked | Needs `station controller-set-target` probe verb (Phase 0 ~2h). |
-| [TASK-31](TASK-31-rocket-event-payload-contracts.md) | RocketLanded / RocketDismantle / RocketDeOrbiting external-subscriber payload contracts | Backlog | None — RocketEventRecorder already exposes the needed counters. |
-| [TASK-32](TASK-32-tier3-misc-coverage.md) | Tier 3 misc — ItemPackedStructure deploy + custom atmosphereType NBT + MonitoringStation comparatorOverride | Backlog | None — three small contracts grouped for index efficiency. |
 | [TASK-33](TASK-33-satellitebuilder-real-construction.md) | SatelliteBuilder real end-to-end construction (full GUI flow) | Blocked | Needs `bot().click()` audit for `ModuleBuildButton` or new `gui press-build-button` probe (Phase 0 ~2h). |
 | [TASK-34](TASK-34-fuel-loader-active-transfer.md) | Fuel loader active fluid transfer (loader + unloader, both directions) | Blocked | Storage chunk capability loss — Phase 0 investigation may flip this to Obsolete. |
 | [TASK-35](TASK-35-ar-fetch-two-bot-harness.md) | `/ar fetch` positive coverage (two-player verb) | Blocked | Needs `player spawn-fake-player` probe to provide a second resolvable player (Phase 0 ~3h). |

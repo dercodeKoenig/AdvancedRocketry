@@ -7,8 +7,67 @@
   Plus 2026-05-26 audit out-of-scope:
   `TileRocketMonitoringStation.getComparatorOverride` (comparator
   signal 0-15 from rocket height — needs flying rocket).
-- Status: **Backlog** — ready to ship, no blocker.
+- Status: **✅ Completed 2026-05-26 partial** — see
+  `.agent/tasks/README.md` Done table. 3a downscoped at unit tier;
+  see "Actual scope" below.
 - Created: 2026-05-26.
+
+## Actual scope shipped
+
+**3a — ItemPackedStructure** (`testUnit`,
+`ItemPackedStructureNbtRoundTripTest`):
+
+- `getStructureOnStackWithoutNbtReturnsNull` — pin the null-gate
+  consumers (`TileSatelliteHatch`, `TileRocketAssemblingMachine`)
+  use to skip blank items.
+- `itemPackedStructureDeclaresHasSubtypes` — pin the constructor's
+  `hasSubtypes=true` flag, required for `itemSpaceStation`'s
+  per-meta variant rendering.
+
+The full `setStructure` → `getStructure` round-trip pin was
+deferred: `StorageChunk`'s constructor reaches
+`FMLCommonHandler.getMinecraftServerInstance().profiler` via
+`CommonProxy.getProfiler` which NPEs at unit tier. The
+round-trip contract is already exercised at server tier by the
+existing rocket-assembly + station-assembly suites that feed
+through `ItemPackedStructure` end-to-end.
+
+**3b — custom AtmosphereType** (`testUnit`,
+`CustomAtmosphereTypeNbtRoundTripTest`):
+
+- `customAtmosphereResolvesByUnlocalizedNameViaRegistry` — register
+  a fresh `AtmosphereType`, resolve via
+  `AtmosphereRegister.getAtmosphere(name)`, assert SAME instance
+  (not a copy — production code compares atmospheres with `==`).
+- `customAtmosphereSurvivesNbtNameRoundTripThroughRegistry` —
+  mirror the `TileAtmosphereDetector.writeToNBT`/`readFromNBT` loop
+  (write `atmName=getUnlocalizedName()`, read back, lookup) on a
+  custom-registered type. Pins the companion-mod save-compat
+  contract.
+
+**3c — MonitoringStation comparator override** (`testServer`,
+`MonitoringStationComparatorOverrideTest`):
+
+- `unlinkedMonitorReportsZeroComparatorOverride` — pin the
+  `return 0` null-rocket branch.
+- `linkedMonitorComparatorOutputRisesWithRocketPosY` — link a
+  rocket, set `posY=68` (low) → read comparator; set `posY=5000`
+  (high) → read; assert strict monotonicity. Doesn't pin exact
+  values (depends on `getTopBlock` + `getEntryHeight` which are
+  not part of the player-visible contract).
+
+Probe surface: extended `infra monitor-info` to also return
+`comparatorOverride` (option 1 of the original plan — directly
+expose the live `getComparatorOverride()` call). Option 2
+(probe to manipulate rocket position) was not needed —
+`rocket set-state posY=...` already exists.
+
+## Out-of-scope items confirmed deferred
+
+- ItemPackedStructure full setStructure round-trip — exercised
+  transitively by the rocket-assembly / station-assembly suites.
+- ItemPackedStructure capture path (player → assembler) — that's
+  the assembler suite's domain, not 3a's.
 
 ## Context
 

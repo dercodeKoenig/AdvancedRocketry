@@ -5,8 +5,36 @@
 - Source: 2026-05-25 Tier 2 audit, gap #3 (RocketLandedEvent /
   RocketDismantleEvent / RocketDeOrbiting payload). Carried
   forward into 2026-05-26 audit out-of-scope.
-- Status: **Backlog** — ready to ship, no blocker.
+- Status: **✅ Completed 2026-05-26** — see `.agent/tasks/README.md`
+  Done table.
 - Created: 2026-05-26.
+
+## Actual scope shipped
+
+Three new tests appended to
+`src/test/java/zmaster587/advancedRocketry/test/server/RocketEventPayloadContractTest.java`:
+
+1. `rocketLandedEventCarriesRocketEntityAndWorld` — driven by the
+   real-tick descent + collision pattern from `RocketDescentLandingTest`.
+   Asserts both the counter advanced AND `lastLandedEntityId ==
+   rocketId`, `lastLandedDim == 0`.
+2. `rocketDeOrbitingEventCarriesRocketEntityAndWorld` — sets
+   `ticksExisted=18 + orbit=true`, waits 3 ticks for the
+   `ticksExisted == 20` branch in `EntityRocket.onUpdate` to fire.
+3. `rocketReachesOrbitEventCarriesRocketEntityAndWorld` — uses
+   `force-orbit-reached` probe to drive the production
+   `onOrbitReached()` codepath; pins payload identity for the
+   sixth and last `RocketEvent` subtype.
+
+The pre-existing `RocketDismantleEvent` + `RocketPreLaunchEvent`
+payload tests in the same class already covered the dismantle leg
+of the TASK; together the file now pins entity-id + dim payload
+for all six `api.RocketEvent` subtypes — the companion-mod-facing
+surface is complete.
+
+No new probe verbs needed (RocketEventRecorder already exposes
+`lastXxxEntityId` / `lastXxxDim` fields, and the existing rocket
+state-mutation + chunk-forceload probes cover the harness side).
 
 ## Context
 
