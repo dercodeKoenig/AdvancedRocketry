@@ -166,6 +166,9 @@ public class TestProbeCommand extends CommandBase {
                 case "entity":
                     handleEntity(server, sender, tail(args));
                     break;
+                case "docking-port":
+                    handleDockingPort(server, sender, tail(args));
+                    break;
                 case "block":
                     handleBlock(server, sender, tail(args));
                     break;
@@ -5006,6 +5009,8 @@ public class TestProbeCommand extends CommandBase {
                     (zmaster587.advancedRocketry.tile.infrastructure.TileRocketMonitoringStation) tile;
             int linkedEntityId = -1;
             String linkedClass = "null";
+            boolean wasPowered = false;
+            boolean equivalentPower = false;
             try {
                 java.lang.reflect.Field f = zmaster587.advancedRocketry.tile.infrastructure
                         .TileRocketMonitoringStation.class.getDeclaredField("linkedRocket");
@@ -5015,12 +5020,25 @@ public class TestProbeCommand extends CommandBase {
                     linkedEntityId = ((Entity) linked).getEntityId();
                     linkedClass = linked.getClass().getName();
                 }
+                // Gap 2 — surface the was_powered guard flag so a test
+                // can observe rising/falling-edge transitions.
+                java.lang.reflect.Field wp = zmaster587.advancedRocketry.tile.infrastructure
+                        .TileRocketMonitoringStation.class.getDeclaredField("was_powered");
+                wp.setAccessible(true);
+                wasPowered = wp.getBoolean(monitor);
+                // Also surface the live getEquivalentPower() read so a
+                // test that places a redstone source can confirm the
+                // redstone is actually reaching the tile before
+                // tick-checking the gate.
+                equivalentPower = monitor.getEquivalentPower();
             } catch (ReflectiveOperationException ignored) {
                 // Field renamed — surfaces as -1 / "null"; safer than failing.
             }
             send(sender, "{\"ok\":true,\"linkedEntityId\":" + linkedEntityId
                     + ",\"linkedClass\":\"" + escapeJson(linkedClass) + "\""
-                    + ",\"maxLinkDistance\":" + monitor.getMaxLinkDistance() + "}");
+                    + ",\"maxLinkDistance\":" + monitor.getMaxLinkDistance()
+                    + ",\"wasPowered\":" + wasPowered
+                    + ",\"equivalentPower\":" + equivalentPower + "}");
             return;
         }
         send(sender, "{\"error\":\"unknown infra subcommand — try info <dim> <x> <y> <z> | link <dim> <x> <y> <z> <entityId> | unlink <dim> <x> <y> <z> <entityId> | monitor-info <dim> <x> <y> <z>\"}");
@@ -11060,5 +11078,133 @@ public class TestProbeCommand extends CommandBase {
             lastDeOrbitingEntityId = e.getEntity() == null ? -1 : e.getEntity().getEntityId();
             lastDeOrbitingDim = e.world == null ? Integer.MIN_VALUE : e.world.provider.getDimension();
         }
+    }
+
+    // ── TileDockingPort probes (Gap 5 — NBT + network packet round-trip) ──
+    //
+    // TileDockingPort stores two strings (myIdStr, targetIdStr) that
+    // identify the local port + the dock-target it pairs with. The
+    // strings are persisted via writeToNBT and shipped to/from the
+    // client via writeDataToNetwork (id=0 → myId, id=1 → targetId).
+    // None of the production setters is server-callable from a
+    // testServer probe without going through GUI events, so we drive
+    // the fields reflectively here and observe the persistence /
+    // packet schema through dedicated subcommands.
+    private void handleDockingPort(MinecraftServer server, ICommandSender sender,
+                                   String[] args) {
+        if (args.length >= 6 && "set-ids".equalsIgnoreCase(args[0])) {
+            // set-ids <dim> <x> <y> <z> <myIdStr> [<targetIdStr>]
+            int dim = parseIntOr(args[1], Integer.MIN_VALUE);
+            int x = parseIntOr(args[2], 0);
+            int y = parseIntOr(args[3], 0);
+            int z = parseIntOr(args[4], 0);
+            String myId = args[5];
+            String targetId = args.length >= 7 ? args[6] : "";
+            zmaster587.advancedRocketry.tile.station.TileDockingPort tile =
+                    requireDockingPort(server, sender, dim, x, y, z);
+            if (tile == null) return;
+            try {
+                java.lang.reflect.Field myF = zmaster587.advancedRocketry.tile.station
+                        .TileDockingPort.class.getDeclaredField("myIdStr");
+                myF.setAccessible(true);
+                myF.set(tile, myId);
+                java.lang.reflect.Field tF = zmaster587.advancedRocketry.tile.station
+                        .TileDockingPort.class.getDeclaredField("targetIdStr");
+                tF.setAccessible(true);
+                tF.set(tile, targetId);
+            } catch (ReflectiveOperationException e) {
+                send(sender, "{\"error\":\"reflective set failed: "
+                        + escapeJson(e.getMessage()) + "\"}");
+                return;
+            }
+            send(sender, "{\"ok\":true,\"myId\":\"" + escapeJson(myId)
+                    + "\",\"targetId\":\"" + escapeJson(targetId) + "\"}");
+            return;
+        }
+        if (args.length >= 5 && "info".equalsIgnoreCase(args[0])) {
+            int dim = parseIntOr(args[1], Integer.MIN_VALUE);
+            int x = parseIntOr(args[2], 0);
+            int y = parseIntOr(args[3], 0);
+            int z = parseIntOr(args[4], 0);
+            zmaster587.advancedRocketry.tile.station.TileDockingPort tile =
+                    requireDockingPort(server, sender, dim, x, y, z);
+            if (tile == null) return;
+            send(sender, "{\"ok\":true"
+                    + ",\"myId\":\"" + escapeJson(tile.getMyId()) + "\""
+                    + ",\"targetId\":\"" + escapeJson(tile.getTargetId()) + "\"}");
+            return;
+        }
+        if (args.length >= 5 && "nbt-roundtrip".equalsIgnoreCase(args[0])) {
+            // Drive a write/read cycle through a peer tile and report
+            // the peer's observed state + whether the optional NBT
+            // keys were written.
+            int dim = parseIntOr(args[1], Integer.MIN_VALUE);
+            int x = parseIntOr(args[2], 0);
+            int y = parseIntOr(args[3], 0);
+            int z = parseIntOr(args[4], 0);
+            zmaster587.advancedRocketry.tile.station.TileDockingPort tile =
+                    requireDockingPort(server, sender, dim, x, y, z);
+            if (tile == null) return;
+            net.minecraft.nbt.NBTTagCompound nbt = new net.minecraft.nbt.NBTTagCompound();
+            tile.writeToNBT(nbt);
+            zmaster587.advancedRocketry.tile.station.TileDockingPort peer =
+                    new zmaster587.advancedRocketry.tile.station.TileDockingPort();
+            // readFromNBT pulls strings off the compound. setWorld is
+            // not invoked on the peer — we never let it run lifecycle
+            // hooks (invalidate/onLoad), only the NBT decode.
+            peer.readFromNBT(nbt);
+            send(sender, "{\"ok\":true"
+                    + ",\"hasMyIdKey\":" + nbt.hasKey("myId")
+                    + ",\"hasTargetIdKey\":" + nbt.hasKey("targetId")
+                    + ",\"peerMyId\":\"" + escapeJson(peer.getMyId()) + "\""
+                    + ",\"peerTargetId\":\"" + escapeJson(peer.getTargetId()) + "\"}");
+            return;
+        }
+        if (args.length >= 6 && "packet-roundtrip".equalsIgnoreCase(args[0])) {
+            // Drive writeDataToNetwork → readDataFromNetwork → observe
+            // the decoded "id" string. Packet id 0 carries myIdStr,
+            // packet id 1 carries targetIdStr.
+            int dim = parseIntOr(args[1], Integer.MIN_VALUE);
+            int x = parseIntOr(args[2], 0);
+            int y = parseIntOr(args[3], 0);
+            int z = parseIntOr(args[4], 0);
+            byte packetId = (byte) parseIntOr(args[5], 0);
+            zmaster587.advancedRocketry.tile.station.TileDockingPort tile =
+                    requireDockingPort(server, sender, dim, x, y, z);
+            if (tile == null) return;
+            io.netty.buffer.ByteBuf buf = io.netty.buffer.Unpooled.buffer();
+            tile.writeDataToNetwork(buf, packetId);
+            zmaster587.advancedRocketry.tile.station.TileDockingPort peer =
+                    new zmaster587.advancedRocketry.tile.station.TileDockingPort();
+            net.minecraft.nbt.NBTTagCompound nbt = new net.minecraft.nbt.NBTTagCompound();
+            peer.readDataFromNetwork(buf, packetId, nbt);
+            send(sender, "{\"ok\":true"
+                    + ",\"packetId\":" + packetId
+                    + ",\"bytes\":" + buf.readerIndex()
+                    + ",\"decodedId\":\"" + escapeJson(nbt.getString("id")) + "\"}");
+            return;
+        }
+        send(sender, "{\"error\":\"unknown docking-port subcommand — try "
+                + "set-ids <dim> <x> <y> <z> <myId> [<targetId>] | "
+                + "info <dim> <x> <y> <z> | "
+                + "nbt-roundtrip <dim> <x> <y> <z> | "
+                + "packet-roundtrip <dim> <x> <y> <z> <packetId>\"}");
+    }
+
+    private zmaster587.advancedRocketry.tile.station.TileDockingPort
+            requireDockingPort(MinecraftServer server, ICommandSender sender,
+                               int dim, int x, int y, int z) {
+        net.minecraft.world.WorldServer world = server.getWorld(dim);
+        if (world == null) {
+            send(sender, "{\"error\":\"world not loaded\",\"dim\":" + dim + "}");
+            return null;
+        }
+        TileEntity te = world.getTileEntity(new BlockPos(x, y, z));
+        if (!(te instanceof zmaster587.advancedRocketry.tile.station.TileDockingPort)) {
+            send(sender, "{\"error\":\"tile is not a TileDockingPort\",\"pos\":["
+                    + x + "," + y + "," + z + "]}");
+            return null;
+        }
+        return (zmaster587.advancedRocketry.tile.station.TileDockingPort) te;
     }
 }

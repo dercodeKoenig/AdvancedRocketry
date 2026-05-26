@@ -14,9 +14,15 @@ Bug-ledger history lives in
 
 ## Current state
 
-- **Pyramid**: 770 (testUnit 257 / testIntegration 81 /
-  testServer **375** / testClient **57**). +7 on 2026-05-26 from
-  TASK-30 Gap 3 elevator capsule (5 server + 2 client). Previous
+- **Pyramid**: 805 (testUnit **284** / testIntegration 81 /
+  testServer **383** / testClient 57). +35 on 2026-05-26 from
+  the second audit batch: Gap 3 PlanetaryTravelHelper (11 unit),
+  Gap 1 RocketLoader polarity (6 unit), Gap 7 GravityHandler (6 unit),
+  Gap 4 SatelliteWeatherController NBT (2 unit), Gap 8 SatelliteMicrowave
+  teir NBT (2 unit), Gap 6 FluidTank stacked-fill (2 server),
+  Gap 5 TileDockingPort NBT+packet (4 server), Gap 2 MonitoringStation
+  redstone trigger (2 server). Earlier same-day batch: +7 from
+  TASK-30 Gap 3 elevator capsule (5 server + 2 client).
   +66 on 2026-05-25 from TASK-19 (11) + TASK-23 (2) + TASK-22 (4) +
   TASK-24 (3) + Tier 1 audit gaps (10) + Tier 2/3 audit gaps (27) +
   TASK-20 hovercraft (4) + TASK-21 /ar player-equipped (5).
