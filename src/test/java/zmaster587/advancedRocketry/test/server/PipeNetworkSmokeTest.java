@@ -173,32 +173,6 @@ public class PipeNetworkSmokeTest extends AbstractSharedServerTest {
                 stored.contains("\"amount\":" + amount));
     }
 
-    /**
-     * §7.17 SMART placeholder — data pipe routing. The
-     * {@code advancedrocketry:dataPipe} block is deprecated upstream
-     * (commit {@code 48610953} — "deprecating pipes, added wireless
-     * transciever, closes #1075 #1034 #771 #757") and intentionally NOT
-     * re-registered. Player-facing data networks are pinned by
-     * {@link WirelessTransceiverContractTest} via the
-     * {@code TileWirelessTransciever} replacement. Marker stays here so
-     * the SMART §16 report reflects an honest "intentionally retired"
-     * rather than missing coverage.
-     */
-    @org.junit.Ignore("blockDataPipe deprecated upstream (48610953) — replaced by wireless transceiver; see WirelessTransceiverContractTest")
-    @Test
-    public void dataPipeRoutesPacketsBetweenEndpoints() {}
-
-    /** §7.17 — see {@link #dataPipeRoutesPacketsBetweenEndpoints}. */
-    @org.junit.Ignore("blockFluidPipe deprecated upstream (48610953) — replaced by wireless transceiver; see WirelessTransceiverContractTest")
-    @Test
-    public void liquidPipeTransfersFluidAcrossChunkBoundary() {}
-
-    /** §7.17 — TileDataBus is registered as a tile entity but never as a
-     * placeable block in AR. Without a block, no scenario can place it. */
-    @org.junit.Ignore("TileDataBus has no placeable block in AR — only TE-registered (line 376)")
-    @Test
-    public void dataBusBridgesAdjacentInventories() {}
-
     private static long parseLong(Pattern p, String s) {
         Matcher m = p.matcher(s);
         return m.find() ? Long.parseLong(m.group(1)) : -1L;
