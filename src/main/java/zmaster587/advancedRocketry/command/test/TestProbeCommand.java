@@ -5478,7 +5478,46 @@ public class TestProbeCommand extends CommandBase {
             }
             return;
         }
-        send(sender, "{\"error\":\"unknown infra subcommand — try info <dim> <x> <y> <z> | link <dim> <x> <y> <z> <entityId> | unlink <dim> <x> <y> <z> <entityId> | monitor-info <dim> <x> <y> <z> | inject-broken-part <entityId> <stage> | service-relink <dim> <x> <y> <z>\"}");
+        if (args.length >= 5 && "service-scan-assemblers".equalsIgnoreCase(args[0])) {
+            // TASK-36b extension — force a TileRocketServiceStation to
+            // invoke its private scanForAssemblers() right now, bypassing
+            // the canPerformFunction (worldTime % 20 == 0) + power-rising-
+            // edge gates that production uses to schedule the scan. Tests
+            // that want to pin "scan finds the placed assembler tile" need
+            // this side-channel because /artest tile force-tick doesn't
+            // advance world time.
+            int dim = parseIntOr(args[1], Integer.MIN_VALUE);
+            int x = parseIntOr(args[2], 0);
+            int y = parseIntOr(args[3], 0);
+            int z = parseIntOr(args[4], 0);
+            net.minecraft.world.WorldServer world = server.getWorld(dim);
+            if (world == null) {
+                send(sender, "{\"error\":\"world not loaded\",\"dim\":" + dim + "}");
+                return;
+            }
+            TileEntity tile = world.getTileEntity(new BlockPos(x, y, z));
+            if (!(tile instanceof zmaster587.advancedRocketry.tile.infrastructure
+                    .TileRocketServiceStation)) {
+                send(sender, "{\"error\":\"not a TileRocketServiceStation\",\"tile\":\""
+                        + (tile == null ? "null" : tile.getClass().getName()) + "\"}");
+                return;
+            }
+            zmaster587.advancedRocketry.tile.infrastructure.TileRocketServiceStation station =
+                    (zmaster587.advancedRocketry.tile.infrastructure.TileRocketServiceStation) tile;
+            try {
+                java.lang.reflect.Method m = station.getClass()
+                        .getDeclaredMethod("scanForAssemblers");
+                m.setAccessible(true);
+                m.invoke(station);
+                send(sender, "{\"ok\":true}");
+            } catch (ReflectiveOperationException e) {
+                send(sender, "{\"error\":\"scanForAssemblers invocation failed\","
+                        + "\"detail\":\"" + escapeJson(
+                                e.getClass().getSimpleName() + ": " + e.getMessage()) + "\"}");
+            }
+            return;
+        }
+        send(sender, "{\"error\":\"unknown infra subcommand — try info <dim> <x> <y> <z> | link <dim> <x> <y> <z> <entityId> | unlink <dim> <x> <y> <z> <entityId> | monitor-info <dim> <x> <y> <z> | inject-broken-part <entityId> <stage> | service-relink <dim> <x> <y> <z> | service-scan-assemblers <dim> <x> <y> <z>\"}");
     }
 
     // §9.2 Fixture-building primitives -----------------------------------------
@@ -9842,6 +9881,80 @@ public class TestProbeCommand extends CommandBase {
                     + ",\"playerPosX\":" + player.posX
                     + ",\"playerPosY\":" + player.posY
                     + ",\"playerPosZ\":" + player.posZ + "}");
+            return;
+        }
+        if ("exec-as-named".equals(sub) && args.length >= 3) {
+            // /artest player exec-as-named <playerName> <cmd...>
+            //
+            // Multi-client variant of exec-as-player — runs <cmd> with the
+            // EntityPlayerMP named <playerName> as the command sender,
+            // rather than the implicit players.get(0). Required for
+            // moderator-fetch testing where the verb must be issued by a
+            // specific connected player (the op moderator), not whoever
+            // joined the server first.
+            String targetName = args[1];
+            net.minecraft.entity.player.EntityPlayerMP target =
+                    server.getPlayerList().getPlayerByUsername(targetName);
+            if (target == null) {
+                send(sender, "{\"error\":\"no such player\",\"name\":\""
+                        + escapeJson(targetName) + "\"}");
+                return;
+            }
+            StringBuilder cmd = new StringBuilder();
+            for (int i = 2; i < args.length; i++) {
+                if (i > 2) cmd.append(' ');
+                cmd.append(args[i]);
+            }
+            int result = server.getCommandManager().executeCommand(target, cmd.toString());
+            send(sender, "{\"ok\":true"
+                    + ",\"player\":\"" + escapeJson(targetName) + "\""
+                    + ",\"command\":\"" + escapeJson(cmd.toString()) + "\""
+                    + ",\"result\":" + result
+                    + ",\"playerDim\":" + target.world.provider.getDimension()
+                    + ",\"playerPosX\":" + target.posX
+                    + ",\"playerPosY\":" + target.posY
+                    + ",\"playerPosZ\":" + target.posZ + "}");
+            return;
+        }
+        if ("position-of".equals(sub) && args.length >= 2) {
+            // /artest player position-of <playerName>
+            //
+            // Observability companion to exec-as-named — read a named
+            // player's dim + coords without dispatching any command.
+            // Used in moderator-fetch tests to verify the FETCH TARGET's
+            // post-fetch position (the moderator's own position is
+            // visible via exec-as-named's response payload).
+            String targetName = args[1];
+            net.minecraft.entity.player.EntityPlayerMP target =
+                    server.getPlayerList().getPlayerByUsername(targetName);
+            if (target == null) {
+                send(sender, "{\"error\":\"no such player\",\"name\":\""
+                        + escapeJson(targetName) + "\"}");
+                return;
+            }
+            send(sender, "{\"ok\":true"
+                    + ",\"player\":\"" + escapeJson(targetName) + "\""
+                    + ",\"playerDim\":" + target.world.provider.getDimension()
+                    + ",\"playerPosX\":" + target.posX
+                    + ",\"playerPosY\":" + target.posY
+                    + ",\"playerPosZ\":" + target.posZ + "}");
+            return;
+        }
+        if ("op-named".equals(sub) && args.length >= 2) {
+            // /artest player op-named <playerName> — elevate a specific
+            // connected player to op level 4 by name. Multi-client
+            // sibling of op-self (which always ops players.get(0)).
+            String targetName = args[1];
+            net.minecraft.entity.player.EntityPlayerMP target =
+                    server.getPlayerList().getPlayerByUsername(targetName);
+            if (target == null) {
+                send(sender, "{\"error\":\"no such player\",\"name\":\""
+                        + escapeJson(targetName) + "\"}");
+                return;
+            }
+            server.getPlayerList().addOp(target.getGameProfile());
+            send(sender, "{\"ok\":true,\"opped\":true,\"playerName\":\""
+                    + escapeJson(target.getName()) + "\"}");
             return;
         }
         if ("op-self".equals(sub)) {

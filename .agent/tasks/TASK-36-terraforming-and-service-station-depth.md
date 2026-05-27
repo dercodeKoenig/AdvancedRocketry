@@ -27,9 +27,29 @@ TileBrokenPart from `createTileEntity`, copied into StorageChunk
 by `cutWorldBB` on assemble. Probe just calls `setStage(stage)` on
 the first stage==0 entry — no construction, no world-wiring.
 
-**Still deferred for 36b**: full repair cycle with
-PrecisionAssembler. Needs an assembler-recipe fixture surface; left
-for a follow-up once that surface is auditable.
+**36b extension shipped 2026-05-26**: 2 additional server tests
+in `ServiceStationAssemblerScanTest` pinning the assembler-discovery
+half of the cycle:
+- `scanForAssemblers` picks up a nearby `TilePrecisionAssembler`
+  block (5-block radius, instanceof check — formed multiblock not
+  required).
+- No-assembler-no-progress: with no nearby assembler, broken parts
+  stay in `partsToRepair` across tick windows (giveWorkToAssemblers
+  loop is safe under empty list — no NPE, no silent dequeue).
+
+New probe `/artest infra service-scan-assemblers` bypasses the
+`canPerformFunction` `worldTime % 20 == 0` gate that
+`tile force-tick` can't satisfy (force-tick doesn't advance world
+time).
+
+**Still deferred (true full cycle)**: broken part fed to FORMED
+PrecisionAssembler multiblock → assembler completes recipe →
+"rocket"-named output item → service station's
+`processAssemblerResult` restores part at stage 0 to rocket
+storage. This needs a precision-assembler multiblock-fixture
+probe (TASK-26 territory — wildcard-machine fixtures are
+explicitly out of scope for the existing
+`MachineRecipeEndToEndKit`).
 
 ## Context
 

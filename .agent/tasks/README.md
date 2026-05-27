@@ -14,8 +14,27 @@ Bug-ledger history lives in
 
 ## Current state
 
-- **Pyramid**: 835 (testUnit **288** / testIntegration 81 /
-  testServer **407** / testClient **59**). +2 on 2026-05-26 from
+- **Pyramid**: 838 (testUnit **288** / testIntegration 81 /
+  testServer **409** / testClient **60**). +3 on 2026-05-26 from
+  TASK-36b extension + multi-client moderator-fetch batch:
+  TASK-36b extension `ServiceStationAssemblerScanTest` (2 server:
+  scanForAssemblers picks up nearby PrecisionAssembler block,
+  no-assembler-no-progress invariant); new `/artest infra
+  service-scan-assemblers` reflection probe bypasses the
+  canPerformFunction (worldTime % 20 == 0) gate that force-tick
+  can't satisfy. Multi-client moderator-fetch:
+  `WorldCommandFetchModeratorTest` (1 testClient — bot1 op fetches
+  bot2 across positions). Required ForgeTestFramework changes:
+  new `RealClientHarness.start(server, username)` overload + moved
+  `--username` + `--uuid` out of the `legacyArgs` block so FG6
+  `legacydev.MainClient` honours them (without that, FG6 generates
+  random "Player###" names breaking name-resolution probes). AR
+  probes added: `player exec-as-named <name> <cmd>`,
+  `player position-of <name>`, `player op-named <name>` — multi-
+  client variants of the existing single-bot verbs that hardcode
+  `players.get(0)`. testClient now requires
+  `-PuseLocalFramework=true` if the modified framework hasn't been
+  published to mavenLocal. Earlier same-day batch: +2 from
   TASK-35 — `/ar fetch` coverage without a second player:
   `WorldCommandFetchTest` (2 testClient — self-fetch positive
   pinning resolve→transfer→setPosition, unknown-name negative
@@ -149,6 +168,8 @@ Bug-ledger history lives in
 | [TASK-33](TASK-33-satellitebuilder-real-construction.md) | SatelliteBuilder real-construction path — 2 server tests (`SatelliteBuilderPressBuildContractTest`: optical happy-path pinning chassis-consumed + holding slot carries ItemSatellite + chip slot has matching satelliteId; weatherController negative pin for per-type chip override). New `/artest satellite-builder press-build <dim> <x> <y> <z> <typeId>` probe loads slots and invokes `onInventoryButtonPressed(0)` (REAL GUI path, not the fast-path bypass). | ✅ |
 | [TASK-36a](TASK-36-terraforming-and-service-station-depth.md) | TerraformingTerminal chip-recognition + redstone gate — 3 server tests (`TerraformingTerminalChipRecognitionTest`: chip+redstone → wasEnabledLastTick=true + block STATE=true, chip alone idles, empty slot rejects). New `/artest terraforming terminal-info` + `terminal-load-chip <dim> <x> <y> <z> <satId>` probes. Out of scope: biome-mutation inner loop (battery/TerraformingHelper dependencies). | ✅ |
 | [TASK-35](TASK-35-ar-fetch-two-bot-harness.md) | `/ar fetch` coverage — 2 testClient tests (`WorldCommandFetchTest`: self-fetch positive resolve→transfer→setPosition path, unknown-name negative `getPlayerByName==null` branch). Phase 0 plan reframed — no NetworkManager-stub real-EntityPlayerMP probe needed; self-fetch (bot fetching itself, name discovered via `artest player health`) closes the resolvable contract surface with no second-player infrastructure. Multi-player "moderator fetch" still out of scope (single-bot harness limit). | ✅ |
+| [TASK-36b ext](TASK-36-terraforming-and-service-station-depth.md) | Service-station assembler-scan + no-progress-without-assembler — 2 server tests (`ServiceStationAssemblerScanTest`). New `/artest infra service-scan-assemblers` reflection probe (bypasses canPerformFunction's `worldTime % 20 == 0` gate that `tile force-tick` can't satisfy). Full repair-cycle with FORMED PrecisionAssembler multiblock still deferred (requires recipe-fixture infrastructure for wildcard machines — TASK-26 territory). | ✅ partial |
+| [TASK-35 ext](TASK-35-ar-fetch-two-bot-harness.md) | Multi-client testClient harness + moderator-fetch — 1 testClient test (`WorldCommandFetchModeratorTest`). ForgeTestFramework `RealClientHarness.start(server, username)` overload + per-username `--username`/`--uuid` propagation (also fixes FG6 legacydev that previously generated random `Player###` names). New AR probes: `player exec-as-named`, `player position-of`, `player op-named`. testClient runs require `-PuseLocalFramework=true` until the framework change is published. | ✅ |
 
 ## Backlog
 

@@ -35,6 +35,41 @@ Still out of scope (intentional): true moderator-fetch where
 target is a different connected player. Needs multi-client
 testClient harness expansion (separate scope).
 
+## Outcome — Multi-client moderator-fetch (2026-05-26)
+
+Shipped `WorldCommandFetchModeratorTest` (1 testClient test) +
+multi-client harness support in ForgeTestFramework.
+
+### Framework changes
+`RealClientHarness.start(server, username)` new overload — was
+hardcoded `CLIENT_USERNAME = "ForgeTestClient"`. Additionally
+moved `--username` and `--uuid` arg propagation OUT of the
+`legacyArgs` block, since AR's test setup uses FG6's
+`net.minecraftforge.legacydev.MainClient` (legacyArgs=false) which
+WAS skipping the username arg → FG6's `MainClient.getDefaultArguments`
+seeded username=null → random `Player###` names that broke
+PlayerList name resolution.
+
+### AR probes added
+- `/artest player exec-as-named <name> <cmd>` — runs command with
+  the named player as sender (the existing `exec-as-player` hard-
+  codes `players.get(0)`).
+- `/artest player position-of <name>` — read named player's
+  dim/coords.
+- `/artest player op-named <name>` — op a specific named player.
+
+### Test design
+- Two bots `ModBot1` (op) + `ModBot2` started sequentially (~60-90s
+  each). Both connect to the same dedicated server.
+- Bots `/tp`'d to (100,80,100) and (200,80,200) respectively.
+- `/ar fetch ModBot2` issued as ModBot1 → ModBot2's post-fetch
+  position must equal ModBot1's pre-fetch position (±1.5 blocks for
+  same-dim transferPlayerToDimension nudging).
+- Wallclock ~3-4 min, ~7 GB RAM.
+
+testClient now requires `-PuseLocalFramework=true` until the
+framework change is published.
+
 ## Context
 
 `WorldCommand.commandFetch` (`/ar fetch <player>`) teleports a
