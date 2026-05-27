@@ -1249,6 +1249,19 @@ public class TestProbeCommand extends CommandBase {
             int asmCount = (asmList instanceof java.util.Collection<?>)
                     ? ((java.util.Collection<?>) asmList).size() : -1;
             info.put("assemblersCount", asmCount);
+            // TASK-36b deep — count non-null partsProcessing slots so the
+            // full-repair-cycle test can pin the consumePartToRepair side-
+            // effect (part moves from partsToRepair to partsProcessing[i]).
+            java.lang.reflect.Field procF = tile.getClass().getDeclaredField("partsProcessing");
+            procF.setAccessible(true);
+            Object procArr = procF.get(tile);
+            int procCount = 0;
+            if (procArr instanceof Object[]) {
+                for (Object o : (Object[]) procArr) {
+                    if (o != null) procCount++;
+                }
+            }
+            info.put("partsProcessingCount", procCount);
         } catch (ReflectiveOperationException e) {
             info.put("reflectionError",
                     e.getClass().getSimpleName() + ": " + e.getMessage());
@@ -5475,6 +5488,42 @@ public class TestProbeCommand extends CommandBase {
                 send(sender, "{\"error\":\"updateRepairList invocation failed\","
                         + "\"detail\":\"" + escapeJson(
                                 e.getClass().getSimpleName() + ": " + e.getMessage()) + "\"}");
+            }
+            return;
+        }
+        if (args.length >= 5 && "service-perform-function".equalsIgnoreCase(args[0])) {
+            // TASK-36b deep — invoke TileRocketServiceStation.performFunction()
+            // directly, bypassing the canPerformFunction (worldTime % 20 == 0)
+            // gate that production uses to schedule work. performFunction
+            // itself still requires redstone power (getEquivalentPower) and
+            // a linkedRocket — those preconditions stay in production hands.
+            // Used by full-repair-cycle tests that need to drive
+            // consumePartToRepair + processAssemblerResult deterministically
+            // on a test-thread tick.
+            int dim = parseIntOr(args[1], Integer.MIN_VALUE);
+            int x = parseIntOr(args[2], 0);
+            int y = parseIntOr(args[3], 0);
+            int z = parseIntOr(args[4], 0);
+            net.minecraft.world.WorldServer world = server.getWorld(dim);
+            if (world == null) {
+                send(sender, "{\"error\":\"world not loaded\",\"dim\":" + dim + "}");
+                return;
+            }
+            TileEntity tile = world.getTileEntity(new BlockPos(x, y, z));
+            if (!(tile instanceof zmaster587.advancedRocketry.tile.infrastructure
+                    .TileRocketServiceStation)) {
+                send(sender, "{\"error\":\"not a TileRocketServiceStation\",\"tile\":\""
+                        + (tile == null ? "null" : tile.getClass().getName()) + "\"}");
+                return;
+            }
+            try {
+                ((zmaster587.advancedRocketry.tile.infrastructure
+                        .TileRocketServiceStation) tile).performFunction();
+                send(sender, "{\"ok\":true}");
+            } catch (RuntimeException e) {
+                send(sender, "{\"error\":\"performFunction threw\",\"detail\":\""
+                        + escapeJson(e.getClass().getSimpleName() + ": " + e.getMessage())
+                        + "\"}");
             }
             return;
         }

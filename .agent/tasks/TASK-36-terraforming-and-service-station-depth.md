@@ -42,14 +42,53 @@ New probe `/artest infra service-scan-assemblers` bypasses the
 `tile force-tick` can't satisfy (force-tick doesn't advance world
 time).
 
-**Still deferred (true full cycle)**: broken part fed to FORMED
-PrecisionAssembler multiblock → assembler completes recipe →
-"rocket"-named output item → service station's
-`processAssemblerResult` restores part at stage 0 to rocket
-storage. This needs a precision-assembler multiblock-fixture
-probe (TASK-26 territory — wildcard-machine fixtures are
-explicitly out of scope for the existing
-`MachineRecipeEndToEndKit`).
+**36b deep shipped 2026-05-27**: full repair cycle with formed
+PrecisionAssembler multiblock pinned in
+`ServiceStationFullRepairCycleTest` (1 server test).
+
+The earlier deferral was based on a misread of
+`MachineRecipeEndToEndKit`'s "Out of scope: wildcard-based
+machines" caveat — that note refers to the kit's RECIPE end-to-end
+helper, not the underlying fixture probe. TASK-26 had already
+landed the wildcard-overlay support in
+`/artest fixture machine precision-assembler` via
+`lookupWildcardMachineOverrides` (overlays I/O/P hatches onto the
+three front-row wildcards at structure[2][0][1..3]).
+
+Test path:
+1. `fixture machine precision-assembler` → builds + forms the
+   multiblock, returns I/O/P hatch positions.
+2. Rocket fixture + assemble in a separate lane.
+3. `infra inject-broken-part rocketId 5` → mark one motor worn.
+4. Place service station within 5 blocks of the assembler
+   controller, link rocket, apply redstone.
+5. `infra service-perform-function` #1 → `!was_powered` rising
+   edge triggers `scanForAssemblers`, then
+   `giveWorkToAssemblers` → `consumePartToRepair` moves part to
+   `partsProcessing[0]`.
+6. `hatch fill <outputPos> 0 advancedrocketry:advrocketmotor 1`
+   → injects a "rocket"-named item into the assembler output.
+   `InventoryUtil.hasItemInInventory` does case-insensitive
+   substring match on `getUnlocalizedName`, so
+   "tile.advrocketmotor" satisfies the "rocket" filter.
+7. `infra service-perform-function` #2 → observes the output
+   item, runs `processAssemblerResult` which clears
+   `partsProcessing[0]`, calls `te.setStage(0)`, and re-adds the
+   tile to the rocket's StorageChunk at its original blockState.
+8. Post-cycle pin: `inject-broken-part rocketId 7` succeeds —
+   proving rocket storage still has a stage-0 TileBrokenPart
+   available (the repaired motor would have been lost if Phase 2
+   misfired).
+
+New probes:
+- `/artest infra service-perform-function <dim> <x> <y> <z>` —
+  calls `TileRocketServiceStation.performFunction()` directly,
+  bypassing the `canPerformFunction` `worldTime % 20 == 0` gate
+  (force-tick can't advance world time). performFunction itself
+  still requires `getEquivalentPower()` and a `linkedRocket` —
+  those preconditions remain in production hands.
+- `service-state` extended with `partsProcessingCount` (counts
+  non-null entries in the `partsProcessing` reflection array).
 
 ## Context
 

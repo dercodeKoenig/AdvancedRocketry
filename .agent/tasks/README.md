@@ -14,8 +14,20 @@ Bug-ledger history lives in
 
 ## Current state
 
-- **Pyramid**: 838 (testUnit **288** / testIntegration 81 /
-  testServer **409** / testClient **60**). +3 on 2026-05-26 from
+- **Pyramid**: 839 (testUnit **288** / testIntegration 81 /
+  testServer **410** / testClient **60**). +1 on 2026-05-27 from
+  TASK-36b deep — full repair cycle with formed PrecisionAssembler
+  multiblock (`ServiceStationFullRepairCycleTest`): phase 1
+  (consumePartToRepair moves part to partsProcessing), phase 2
+  (processAssemblerResult clears slot + restores part at stage 0
+  to rocket storage). Reuses TASK-26 `/artest fixture machine
+  precision-assembler` wildcard-overlay probe (was already in
+  place — `MachineRecipeEndToEndKit`'s "wildcard machines out of
+  scope" caveat misled prior deferral). New `/artest infra
+  service-perform-function` reflection-bypass probe (calls public
+  performFunction direct, sidesteps canPerformFunction's
+  `worldTime % 20 == 0` gate); `service-state` extended with
+  `partsProcessingCount`. Earlier same-day batch: +3 from
   TASK-36b extension + multi-client moderator-fetch batch:
   TASK-36b extension `ServiceStationAssemblerScanTest` (2 server:
   scanForAssemblers picks up nearby PrecisionAssembler block,
@@ -169,6 +181,7 @@ Bug-ledger history lives in
 | [TASK-36a](TASK-36-terraforming-and-service-station-depth.md) | TerraformingTerminal chip-recognition + redstone gate — 3 server tests (`TerraformingTerminalChipRecognitionTest`: chip+redstone → wasEnabledLastTick=true + block STATE=true, chip alone idles, empty slot rejects). New `/artest terraforming terminal-info` + `terminal-load-chip <dim> <x> <y> <z> <satId>` probes. Out of scope: biome-mutation inner loop (battery/TerraformingHelper dependencies). | ✅ |
 | [TASK-35](TASK-35-ar-fetch-two-bot-harness.md) | `/ar fetch` coverage — 2 testClient tests (`WorldCommandFetchTest`: self-fetch positive resolve→transfer→setPosition path, unknown-name negative `getPlayerByName==null` branch). Phase 0 plan reframed — no NetworkManager-stub real-EntityPlayerMP probe needed; self-fetch (bot fetching itself, name discovered via `artest player health`) closes the resolvable contract surface with no second-player infrastructure. Multi-player "moderator fetch" still out of scope (single-bot harness limit). | ✅ |
 | [TASK-36b ext](TASK-36-terraforming-and-service-station-depth.md) | Service-station assembler-scan + no-progress-without-assembler — 2 server tests (`ServiceStationAssemblerScanTest`). New `/artest infra service-scan-assemblers` reflection probe (bypasses canPerformFunction's `worldTime % 20 == 0` gate that `tile force-tick` can't satisfy). Full repair-cycle with FORMED PrecisionAssembler multiblock still deferred (requires recipe-fixture infrastructure for wildcard machines — TASK-26 territory). | ✅ partial |
+| [TASK-36b deep](TASK-36-terraforming-and-service-station-depth.md) | Full repair cycle with FORMED PrecisionAssembler multiblock — 1 server test (`ServiceStationFullRepairCycleTest`). Phase 1 pins consumePartToRepair (part moves from partsToRepair to partsProcessing on first powered performFunction); Phase 2 pins processAssemblerResult (with a "rocket"-named item injected into the assembler output port, the part is cleared from partsProcessing and restored at stage 0 in rocket storage). Reuses TASK-26 `/artest fixture machine precision-assembler` wildcard-overlay probe + new `/artest infra service-perform-function` probe; `service-state` extended with `partsProcessingCount`. | ✅ |
 | [TASK-35 ext](TASK-35-ar-fetch-two-bot-harness.md) | Multi-client testClient harness + moderator-fetch — 1 testClient test (`WorldCommandFetchModeratorTest`). ForgeTestFramework `RealClientHarness.start(server, username)` overload + per-username `--username`/`--uuid` propagation (also fixes FG6 legacydev that previously generated random `Player###` names). New AR probes: `player exec-as-named`, `player position-of`, `player op-named`. testClient runs require `-PuseLocalFramework=true` until the framework change is published. | ✅ |
 
 ## Backlog
