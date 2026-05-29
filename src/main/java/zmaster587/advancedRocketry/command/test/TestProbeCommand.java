@@ -952,6 +952,93 @@ public class TestProbeCommand extends CommandBase {
                     + ",\"totalFilled\":" + totalFilled + "}");
             return;
         }
+        if ("storage-item-fill".equalsIgnoreCase(args[0]) && args.length >= 4) {
+            // TASK-40 Gap E — mirror of `storage-fluid-fill` for items.
+            // Iterates rocket.storage.getInventoryTiles() and inserts up to
+            // <count> items of <itemRegistryName> into the first slot that
+            // accepts them, via ITEM_HANDLER_CAPABILITY (UP facing, matching
+            // the TileRocketUnloader.update() scan direction) or via
+            // IInventory.setInventorySlotContents as fallback. Returns the
+            // total items actually placed across all tiles + per-tile count.
+            int entityId = parseIntOr(args[1], Integer.MIN_VALUE);
+            String itemId = args[2];
+            int count = parseIntOr(args[3], 0);
+            EntityRocket rocket = findRocket(server, entityId);
+            if (rocket == null) {
+                send(sender, "{\"error\":\"rocket not found\",\"entityId\":" + entityId + "}");
+                return;
+            }
+            if (rocket.storage == null) {
+                send(sender, "{\"error\":\"rocket has no storage\",\"entityId\":" + entityId + "}");
+                return;
+            }
+            net.minecraft.item.Item item =
+                    ForgeRegistries.ITEMS.getValue(new ResourceLocation(itemId));
+            if (item == null) {
+                send(sender, "{\"error\":\"unknown item id\",\"id\":\""
+                        + escapeJson(itemId) + "\"}");
+                return;
+            }
+            int totalPlaced = 0;
+            int tilesWithCapability = 0;
+            int remaining = count;
+            for (TileEntity te : rocket.storage.getInventoryTiles()) {
+                if (remaining <= 0) break;
+                // Match production iteration semantics:
+                // TileRocketLoader.update / TileRocketUnloader.update both skip
+                // TileGuidanceComputer explicitly ("if(tile instanceof
+                // TileGuidanceComputer) continue;"). Mirror that filter here
+                // so tests pre-loading rocket cargo land in the same tiles the
+                // loaders/unloaders actually iterate.
+                if (te instanceof zmaster587.advancedRocketry.tile.TileGuidanceComputer) {
+                    continue;
+                }
+                // PREFER IInventory cast — that's the path TileRocketLoader /
+                // TileRocketUnloader.update() actually iterates. Writing via
+                // the Forge ITEM_HANDLER wrapper (SidedInvWrapper for chests)
+                // hits the same backing store, but the IInventory path also
+                // calls markDirty + leaves the chest's "loot table" lazy-load
+                // intact for vanilla TileEntityChest.
+                if (te instanceof net.minecraft.inventory.IInventory) {
+                    net.minecraft.inventory.IInventory inv =
+                            (net.minecraft.inventory.IInventory) te;
+                    tilesWithCapability++;
+                    for (int i = 0; i < inv.getSizeInventory() && remaining > 0; i++) {
+                        if (inv.getStackInSlot(i).isEmpty()) {
+                            int put = Math.min(remaining, item.getItemStackLimit(
+                                    new net.minecraft.item.ItemStack(item)));
+                            inv.setInventorySlotContents(i,
+                                    new net.minecraft.item.ItemStack(item, put));
+                            totalPlaced += put;
+                            remaining -= put;
+                        }
+                    }
+                    inv.markDirty();
+                } else if (te.hasCapability(net.minecraftforge.items.CapabilityItemHandler
+                        .ITEM_HANDLER_CAPABILITY, net.minecraft.util.EnumFacing.UP)) {
+                    net.minecraftforge.items.IItemHandler h =
+                            te.getCapability(net.minecraftforge.items.CapabilityItemHandler
+                                    .ITEM_HANDLER_CAPABILITY, net.minecraft.util.EnumFacing.UP);
+                    if (h == null) continue;
+                    tilesWithCapability++;
+                    net.minecraft.item.ItemStack stack =
+                            new net.minecraft.item.ItemStack(item, remaining);
+                    for (int i = 0; i < h.getSlots() && remaining > 0; i++) {
+                        net.minecraft.item.ItemStack leftover = h.insertItem(i, stack, false);
+                        int placed = stack.getCount() - leftover.getCount();
+                        totalPlaced += placed;
+                        remaining -= placed;
+                        stack = leftover;
+                        if (stack.isEmpty()) break;
+                    }
+                }
+            }
+            send(sender, "{\"ok\":true,\"entityId\":" + entityId
+                    + ",\"tilesWithCapability\":" + tilesWithCapability
+                    + ",\"totalPlaced\":" + totalPlaced
+                    + ",\"remaining\":" + remaining + "}");
+            return;
+        }
         if ("find-by-uuid".equalsIgnoreCase(args[0]) && args.length >= 2) {
             // TASK-07 Phase 3: find a rocket by its persistent UUID across all
             // loaded dimensions. Needed after EntityRocket.changeDimension()
@@ -5781,7 +5868,354 @@ public class TestProbeCommand extends CommandBase {
             }
             return;
         }
-        send(sender, "{\"error\":\"unknown infra subcommand — try info <dim> <x> <y> <z> | link <dim> <x> <y> <z> <entityId> | unlink <dim> <x> <y> <z> <entityId> | monitor-info <dim> <x> <y> <z> | inject-broken-part <entityId> <stage> | service-relink <dim> <x> <y> <z> | service-scan-assemblers <dim> <x> <y> <z>\"}");
+        if (args.length >= 5 && "unloader-debug".equalsIgnoreCase(args[0])) {
+            // TASK-40 Gap E debug — dumps state inside TileRocketUnloader's
+            // `if (!world.isRemote && rocket != null)` body so the test can
+            // pinpoint which gate of update() blocks the transfer.
+            int dim = parseIntOr(args[1], Integer.MIN_VALUE);
+            int x = parseIntOr(args[2], 0);
+            int y = parseIntOr(args[3], 0);
+            int z = parseIntOr(args[4], 0);
+            net.minecraft.world.WorldServer world = server.getWorld(dim);
+            if (world == null) {
+                send(sender, "{\"error\":\"world not loaded\",\"dim\":" + dim + "}");
+                return;
+            }
+            TileEntity tile = world.getTileEntity(new BlockPos(x, y, z));
+            if (!(tile instanceof zmaster587.advancedRocketry.tile
+                    .infrastructure.TileRocketUnloader)) {
+                send(sender, "{\"error\":\"not a TileRocketUnloader\",\"tile\":\""
+                        + (tile == null ? "null" : tile.getClass().getName()) + "\"}");
+                return;
+            }
+            try {
+                java.lang.reflect.Field rf = zmaster587.advancedRocketry.tile
+                        .infrastructure.TileRocketLoader.class.getDeclaredField("rocket");
+                rf.setAccessible(true);
+                Object rocketRef = rf.get(tile);
+                StringBuilder sb = new StringBuilder("{\"ok\":true,\"rocketLinked\":");
+                sb.append(rocketRef != null);
+                if (rocketRef instanceof zmaster587.advancedRocketry.entity.EntityRocket) {
+                    zmaster587.advancedRocketry.entity.EntityRocket r =
+                            (zmaster587.advancedRocketry.entity.EntityRocket) rocketRef;
+                    sb.append(",\"rocketEntityId\":").append(r.getEntityId());
+                    sb.append(",\"storageNonNull\":").append(r.storage != null);
+                    if (r.storage != null) {
+                        java.util.List<TileEntity> tiles = r.storage.getInventoryTiles();
+                        sb.append(",\"inventoryTilesCount\":").append(tiles.size());
+                        sb.append(",\"tiles\":[");
+                        boolean first = true;
+                        for (TileEntity t : tiles) {
+                            if (!first) sb.append(',');
+                            first = false;
+                            sb.append("{\"class\":\"").append(escapeJson(t.getClass().getName()))
+                                    .append("\",\"isIInventory\":")
+                                    .append(t instanceof net.minecraft.inventory.IInventory);
+                            if (t instanceof net.minecraft.inventory.IInventory) {
+                                net.minecraft.inventory.IInventory ii =
+                                        (net.minecraft.inventory.IInventory) t;
+                                sb.append(",\"size\":").append(ii.getSizeInventory());
+                                sb.append(",\"slot0\":\"");
+                                net.minecraft.item.ItemStack s0 = ii.getStackInSlot(0);
+                                if (s0.isEmpty()) {
+                                    sb.append("empty");
+                                } else {
+                                    ResourceLocation rn = s0.getItem().getRegistryName();
+                                    sb.append(escapeJson(rn == null ? "null" : rn.toString()))
+                                            .append(":").append(s0.getCount());
+                                }
+                                sb.append('\"');
+                            }
+                            sb.append('}');
+                        }
+                        sb.append(']');
+                    }
+                }
+                // Unloader's own inventory state.
+                zmaster587.advancedRocketry.tile.infrastructure.TileRocketUnloader u =
+                        (zmaster587.advancedRocketry.tile.infrastructure.TileRocketUnloader) tile;
+                sb.append(",\"unloaderSize\":").append(u.getSizeInventory());
+                sb.append(",\"unloaderSlots\":[");
+                for (int i = 0; i < u.getSizeInventory(); i++) {
+                    if (i > 0) sb.append(',');
+                    net.minecraft.item.ItemStack s = u.getStackInSlot(i);
+                    if (s.isEmpty()) {
+                        sb.append("\"empty\"");
+                    } else {
+                        ResourceLocation rn = s.getItem().getRegistryName();
+                        sb.append('\"').append(escapeJson(rn == null ? "null" : rn.toString()))
+                                .append(":").append(s.getCount()).append('\"');
+                    }
+                }
+                sb.append(']');
+                sb.append(",\"worldIsRemote\":").append(u.getWorld().isRemote);
+                sb.append('}');
+                send(sender, sb.toString());
+            } catch (ReflectiveOperationException e) {
+                send(sender, "{\"error\":\"unloader-debug reflection failed\","
+                        + "\"detail\":\"" + escapeJson(
+                                e.getClass().getSimpleName() + ": " + e.getMessage()) + "\"}");
+            }
+            return;
+        }
+        if (args.length >= 6 && "railgun-receive-cargo".equalsIgnoreCase(args[0])) {
+            // TASK-40 Gap A — pin the receiver-side cargo contract on
+            // TileRailgun. The full firing path (attemptCargoTransfer)
+            // requires TWO paired railguns across linked positions — out of
+            // reach for a single-multiblock fixture. The receiver-side
+            // contract (onReceiveCargo deposits the item in the railgun's
+            // output ports) is the player-visible endpoint: cargo emitted
+            // by the source arrives at the destination's output port.
+            // This probe calls onReceiveCargo on a SOLO assembled railgun,
+            // then scans itemOutPorts to count how many of <itemRegistryName>
+            // landed.
+            int dim = parseIntOr(args[1], Integer.MIN_VALUE);
+            int x = parseIntOr(args[2], 0);
+            int y = parseIntOr(args[3], 0);
+            int z = parseIntOr(args[4], 0);
+            String itemId = args[5];
+            int count = args.length >= 7 ? parseIntOr(args[6], 1) : 1;
+            net.minecraft.world.WorldServer world = server.getWorld(dim);
+            if (world == null) {
+                send(sender, "{\"error\":\"world not loaded\",\"dim\":" + dim + "}");
+                return;
+            }
+            TileEntity tile = world.getTileEntity(new BlockPos(x, y, z));
+            if (!(tile instanceof zmaster587.advancedRocketry.tile.multiblock
+                    .TileRailgun)) {
+                send(sender, "{\"error\":\"not a TileRailgun\",\"tile\":\""
+                        + (tile == null ? "null" : tile.getClass().getName()) + "\"}");
+                return;
+            }
+            net.minecraft.item.Item item =
+                    ForgeRegistries.ITEMS.getValue(new ResourceLocation(itemId));
+            if (item == null) {
+                send(sender, "{\"error\":\"unknown item id\",\"id\":\""
+                        + escapeJson(itemId) + "\"}");
+                return;
+            }
+            zmaster587.advancedRocketry.tile.multiblock.TileRailgun rg =
+                    (zmaster587.advancedRocketry.tile.multiblock.TileRailgun) tile;
+            net.minecraft.item.ItemStack stack =
+                    new net.minecraft.item.ItemStack(item, count);
+            // canReceiveCargo gate must pass — itemOutPorts must have an
+            // empty slot. Report the gate result so failing tests can
+            // distinguish "no output port" from "stack rejected".
+            boolean canReceive = rg.canReceiveCargo(stack);
+            if (canReceive) {
+                rg.onReceiveCargo(stack);
+            }
+            // Walk itemOutPorts via reflection and count matching stacks.
+            int matchedCount = 0;
+            int outPortCount = 0;
+            int outPortSlotsTotal = 0;
+            try {
+                // itemOutPorts is declared on TileMultiBlock (the libVulpes
+                // grandparent of TileRailgun), not TileMultiblockMachine.
+                java.lang.reflect.Field f = zmaster587.libVulpes.tile.multiblock
+                        .TileMultiBlock.class.getDeclaredField("itemOutPorts");
+                f.setAccessible(true);
+                Object obj = f.get(rg);
+                if (obj instanceof java.util.List) {
+                    for (Object inv : (java.util.List<?>) obj) {
+                        if (!(inv instanceof net.minecraft.inventory.IInventory)) continue;
+                        net.minecraft.inventory.IInventory ii =
+                                (net.minecraft.inventory.IInventory) inv;
+                        outPortCount++;
+                        outPortSlotsTotal += ii.getSizeInventory();
+                        for (int i = 0; i < ii.getSizeInventory(); i++) {
+                            net.minecraft.item.ItemStack s = ii.getStackInSlot(i);
+                            if (!s.isEmpty() && s.getItem() == item) {
+                                matchedCount += s.getCount();
+                            }
+                        }
+                    }
+                }
+            } catch (ReflectiveOperationException e) {
+                send(sender, "{\"error\":\"itemOutPorts reflection failed\","
+                        + "\"detail\":\"" + escapeJson(
+                                e.getClass().getSimpleName() + ": " + e.getMessage()) + "\"}");
+                return;
+            }
+            send(sender, "{\"ok\":true,\"canReceive\":" + canReceive
+                    + ",\"outPortCount\":" + outPortCount
+                    + ",\"outPortSlotsTotal\":" + outPortSlotsTotal
+                    + ",\"matchedCount\":" + matchedCount + "}");
+            return;
+        }
+        if (args.length >= 5 && "astrobody-set-research".equalsIgnoreCase(args[0])) {
+            // TASK-40 Gap D — reshape note: the audit's "PlanetAnalyser /
+            // SatelliteData scan output" framing was wrong. The actual class
+            // (TileAstrobodyDataProcessor) increments per-DataType counters
+            // on an ItemAsteroidChip when (1) chip is in slot 0 with non-null
+            // UUID, (2) researchingX private flag is true, (3) a connected
+            // TileDataBus has data of that type. This probe + the sibling
+            // verbs below let a test wire the three preconditions without
+            // touching production.
+            //
+            // bits: 1=Atmosphere(=COMPOSITION), 2=Distance, 4=Mass.
+            int dim = parseIntOr(args[1], Integer.MIN_VALUE);
+            int x = parseIntOr(args[2], 0);
+            int y = parseIntOr(args[3], 0);
+            int z = parseIntOr(args[4], 0);
+            int bits = args.length >= 6 ? parseIntOr(args[5], 0) : 0;
+            net.minecraft.world.WorldServer world = server.getWorld(dim);
+            if (world == null) {
+                send(sender, "{\"error\":\"world not loaded\",\"dim\":" + dim + "}");
+                return;
+            }
+            TileEntity tile = world.getTileEntity(new BlockPos(x, y, z));
+            if (!(tile instanceof zmaster587.advancedRocketry.tile.multiblock
+                    .TileAstrobodyDataProcessor)) {
+                send(sender, "{\"error\":\"not a TileAstrobodyDataProcessor\",\"tile\":\""
+                        + (tile == null ? "null" : tile.getClass().getName()) + "\"}");
+                return;
+            }
+            try {
+                Class<?> cls = zmaster587.advancedRocketry.tile.multiblock
+                        .TileAstrobodyDataProcessor.class;
+                java.lang.reflect.Field fa = cls.getDeclaredField("researchingAtmosphere");
+                java.lang.reflect.Field fd = cls.getDeclaredField("researchingDistance");
+                java.lang.reflect.Field fm = cls.getDeclaredField("researchingMass");
+                fa.setAccessible(true);
+                fd.setAccessible(true);
+                fm.setAccessible(true);
+                fa.setBoolean(tile, (bits & 1) != 0);
+                fd.setBoolean(tile, (bits & 2) != 0);
+                fm.setBoolean(tile, (bits & 4) != 0);
+                // attemptAllResearchStart populates progress fields so the
+                // first powered tick actually advances per-data progress
+                // (otherwise progress stays at -1 and ticks no-op).
+                java.lang.reflect.Method m = cls.getDeclaredMethod("attemptAllResearchStart");
+                m.setAccessible(true);
+                m.invoke(tile);
+                send(sender, "{\"ok\":true,\"bits\":" + bits + "}");
+            } catch (ReflectiveOperationException e) {
+                send(sender, "{\"error\":\"reflection failed\","
+                        + "\"detail\":\"" + escapeJson(
+                                e.getClass().getSimpleName() + ": " + e.getMessage()) + "\"}");
+            }
+            return;
+        }
+        if (args.length >= 5 && "astrobody-load-chip".equalsIgnoreCase(args[0])) {
+            // TASK-40 Gap D — place an ItemAsteroidChip with UUID=1L
+            // directly into slot 0 of the analyser controller. Bypasses the
+            // input-hatch transfer (which has its own GUI-driven onInventoryUpdated
+            // flow) to keep the test focused on the research increment contract.
+            int dim = parseIntOr(args[1], Integer.MIN_VALUE);
+            int x = parseIntOr(args[2], 0);
+            int y = parseIntOr(args[3], 0);
+            int z = parseIntOr(args[4], 0);
+            net.minecraft.world.WorldServer world = server.getWorld(dim);
+            if (world == null) {
+                send(sender, "{\"error\":\"world not loaded\",\"dim\":" + dim + "}");
+                return;
+            }
+            TileEntity tile = world.getTileEntity(new BlockPos(x, y, z));
+            if (!(tile instanceof zmaster587.advancedRocketry.tile.multiblock
+                    .TileAstrobodyDataProcessor)) {
+                send(sender, "{\"error\":\"not a TileAstrobodyDataProcessor\",\"tile\":\""
+                        + (tile == null ? "null" : tile.getClass().getName()) + "\"}");
+                return;
+            }
+            zmaster587.advancedRocketry.item.ItemAsteroidChip chip =
+                    (zmaster587.advancedRocketry.item.ItemAsteroidChip)
+                            zmaster587.advancedRocketry.api.AdvancedRocketryItems.itemAsteroidChip;
+            net.minecraft.item.ItemStack stack = new net.minecraft.item.ItemStack(chip, 1);
+            chip.setUUID(stack, 1L);
+            // maxData starts at 0 → isFull(stack, *) returns true → research
+            // path is blocked in attemptAllResearchStart. Production sets it
+            // via the scanning-satellite output flow; tests set it directly
+            // to a generous 30 (≥ 3 research cycles worth of headroom).
+            chip.setMaxData(stack, 30);
+            ((zmaster587.advancedRocketry.tile.multiblock.TileAstrobodyDataProcessor) tile)
+                    .setInventorySlotContents(0, stack);
+            send(sender, "{\"ok\":true,\"uuid\":1,\"maxData\":30}");
+            return;
+        }
+        if (args.length >= 5 && "astrobody-chip-data".equalsIgnoreCase(args[0])) {
+            // TASK-40 Gap D — read the chip in slot 0 of the analyser,
+            // return per-DataType current values + max. Used by the test to
+            // assert "composition rose by 1 after a research cycle".
+            int dim = parseIntOr(args[1], Integer.MIN_VALUE);
+            int x = parseIntOr(args[2], 0);
+            int y = parseIntOr(args[3], 0);
+            int z = parseIntOr(args[4], 0);
+            net.minecraft.world.WorldServer world = server.getWorld(dim);
+            if (world == null) {
+                send(sender, "{\"error\":\"world not loaded\",\"dim\":" + dim + "}");
+                return;
+            }
+            TileEntity tile = world.getTileEntity(new BlockPos(x, y, z));
+            if (!(tile instanceof zmaster587.advancedRocketry.tile.multiblock
+                    .TileAstrobodyDataProcessor)) {
+                send(sender, "{\"error\":\"not a TileAstrobodyDataProcessor\",\"tile\":\""
+                        + (tile == null ? "null" : tile.getClass().getName()) + "\"}");
+                return;
+            }
+            net.minecraft.item.ItemStack stack =
+                    ((zmaster587.advancedRocketry.tile.multiblock.TileAstrobodyDataProcessor) tile)
+                            .getStackInSlot(0);
+            if (stack.isEmpty()
+                    || !(stack.getItem() instanceof zmaster587.advancedRocketry.item.ItemAsteroidChip)) {
+                send(sender, "{\"error\":\"slot 0 is not an AsteroidChip\","
+                        + "\"empty\":" + stack.isEmpty() + "}");
+                return;
+            }
+            zmaster587.advancedRocketry.item.ItemAsteroidChip chip =
+                    (zmaster587.advancedRocketry.item.ItemAsteroidChip) stack.getItem();
+            int composition = chip.getData(stack,
+                    zmaster587.advancedRocketry.api.DataStorage.DataType.COMPOSITION);
+            int distance = chip.getData(stack,
+                    zmaster587.advancedRocketry.api.DataStorage.DataType.DISTANCE);
+            int mass = chip.getData(stack,
+                    zmaster587.advancedRocketry.api.DataStorage.DataType.MASS);
+            int max = chip.getMaxData(stack);
+            send(sender, "{\"ok\":true,\"composition\":" + composition
+                    + ",\"distance\":" + distance
+                    + ",\"mass\":" + mass
+                    + ",\"max\":" + max + "}");
+            return;
+        }
+        if (args.length >= 7 && "databus-set-data".equalsIgnoreCase(args[0])) {
+            // TASK-40 Gap D — directly call TileDataBus.setData on a placed
+            // data hatch (block at <dim>:<x>:<y>:<z>, meta 0 of
+            // advancedrocketry:loader). Used to seed COMPOSITION / DISTANCE /
+            // MASS data for the analyser's research loop without having to
+            // run an entire scanning-satellite scenario.
+            int dim = parseIntOr(args[1], Integer.MIN_VALUE);
+            int x = parseIntOr(args[2], 0);
+            int y = parseIntOr(args[3], 0);
+            int z = parseIntOr(args[4], 0);
+            String typeName = args[5];
+            int amount = parseIntOr(args[6], 0);
+            net.minecraft.world.WorldServer world = server.getWorld(dim);
+            if (world == null) {
+                send(sender, "{\"error\":\"world not loaded\",\"dim\":" + dim + "}");
+                return;
+            }
+            TileEntity tile = world.getTileEntity(new BlockPos(x, y, z));
+            if (!(tile instanceof zmaster587.advancedRocketry.tile.hatch.TileDataBus)) {
+                send(sender, "{\"error\":\"not a TileDataBus\",\"tile\":\""
+                        + (tile == null ? "null" : tile.getClass().getName()) + "\"}");
+                return;
+            }
+            zmaster587.advancedRocketry.api.DataStorage.DataType type;
+            try {
+                type = zmaster587.advancedRocketry.api.DataStorage.DataType
+                        .valueOf(typeName.toUpperCase(java.util.Locale.ROOT));
+            } catch (IllegalArgumentException e) {
+                send(sender, "{\"error\":\"unknown data type\",\"name\":\""
+                        + escapeJson(typeName) + "\"}");
+                return;
+            }
+            ((zmaster587.advancedRocketry.tile.hatch.TileDataBus) tile)
+                    .setData(amount, type);
+            send(sender, "{\"ok\":true,\"type\":\"" + type.name()
+                    + "\",\"amount\":" + amount + "}");
+            return;
+        }
+        send(sender, "{\"error\":\"unknown infra subcommand — try info <dim> <x> <y> <z> | link <dim> <x> <y> <z> <entityId> | unlink <dim> <x> <y> <z> <entityId> | monitor-info <dim> <x> <y> <z> | inject-broken-part <entityId> <stage> | service-relink <dim> <x> <y> <z> | service-scan-assemblers <dim> <x> <y> <z> | railgun-receive-cargo <dim> <x> <y> <z> <itemId> [count] | astrobody-set-research <dim> <x> <y> <z> <bits> | astrobody-load-chip <dim> <x> <y> <z> | astrobody-chip-data <dim> <x> <y> <z> | databus-set-data <dim> <x> <y> <z> <type> <amount>\"}");
     }
 
     // §9.2 Fixture-building primitives -----------------------------------------

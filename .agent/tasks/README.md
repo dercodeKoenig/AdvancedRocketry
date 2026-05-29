@@ -14,8 +14,13 @@ Bug-ledger history lives in
 
 ## Current state
 
-- **Pyramid**: 843 (testUnit **288** / testIntegration 81 /
-  testServer **414** / testClient **60**). +7 on 2026-05-27 from
+- **Pyramid**: 846 (testUnit **288** / testIntegration 81 /
+  testServer **417** / testClient **60**). +3 on 2026-05-29 from
+  TASK-40 Batch 1 (audit Gaps E/A/D from 2026-05-27 audit):
+  `RocketItemUnloaderActiveTransferTest` (1) +
+  `RailgunCargoReceiveContractTest` (1) +
+  `PlanetAnalyserResearchContractTest` (1) + 7 new probe verbs.
+  +7 on 2026-05-27 from
   the TASK-37/38/39 batch (audit Gaps P/Q/R from
   `.agent/audits/2026-05-27-full-coverage-audit.md`):
   TASK-37 nuclear engine rocket-assembly (2 server —
@@ -204,6 +209,7 @@ Bug-ledger history lives in
 | [TASK-37](TASK-37-nuclear-engine-rocket-assembly.md) | Nuclear engine rocket-assembly thrust aggregation — 2 server tests (`NuclearEngineRocketAssemblyTest`) pinning IRocketNuclearCore cohesion check (core-above-motor → thrust>0; misplaced → NOENGINES). 2 new `/artest fixture rocket` variants. From audit Gap P. | ✅ |
 | [TASK-38](TASK-38-mining-drill-rocket-assembly.md) | IMiningDrill rocket-assembly stat aggregation — 1 server test (`RocketAssemblerMiningDrillStatTest`) pinning placed drill → `stats.drillingPower > 0` chain. `with-mining-drill` fixture variant + `drillingPower` field on `rocket info`. From audit Gap Q. | ✅ |
 | [TASK-39](TASK-39-satellite-terminal-chip-recognition.md) | TileSatelliteTerminal chip recognition + erase button — 4 server tests (`SatelliteTerminalChipRecognitionTest`) pinning status 0/1/3 ladder + destructive erase removes sat from dim properties + blanks chip NBT. New `/artest satellite-terminal {info\|load-chip\|press-erase}` subcommand group. From audit Gap R. | ✅ |
+| [TASK-40](TASK-40-batch1-rocket-loader-railgun-analyser.md) | Batch 1 of 2026-05-27 audit close-out: Gap E (rocket item unloader active transfer — 1 server) + Gap A (railgun receiver-side cargo contract via `onReceiveCargo` — 1 server) + Gap D (TileAstrobodyDataProcessor chip-data increment from DataBus — 1 server). 7 new probe verbs (`rocket storage-item-fill`, `infra unloader-debug`, `infra railgun-receive-cargo`, `infra astrobody-{set-research\|load-chip\|chip-data}`, `infra databus-set-data`). Reshapes for D (asteroid chip not planet chip) and A (cargo transport not weapon firing) documented in task doc. | ✅ |
 
 ## Backlog
 
