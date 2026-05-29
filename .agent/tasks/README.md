@@ -142,7 +142,7 @@ Bug-ledger history lives in
   Counter regenerated via
   `grep -rc '@Test$' src/test/java/.../{unit,integration,server,client}/`.
 - **testServer wall time**: 8m 27s (50 % faster than pre-B2).
-- **Bug ledger**: 3 live bugs (Batch #2 opened 2026-05-25).
+- **Bug ledger**: 4 live bugs (Batch #2 opened 2026-05-25; entry #4 added 2026-05-29).
   Batch #1 fully drained by TASK-12 on 2026-05-23. Entries:
   (1) `SatelliteRegistry.getNewSatellite` returns `null` for unknown
   types instead of the documented `SatelliteDefunct` fallback —
@@ -166,6 +166,22 @@ Bug-ledger history lives in
   `_documentsKnownBug` test — the workaround test already
   inherits the contract polarity. Found during TASK-30
   authoring (2026-05-26).
+  (4) `mixins.advancedrocketry.json:AccessorWorld` mixin apply
+  fails during `./gradlew runClient` launch (any DISPLAY) with
+  `InvalidAccessorException: No candidates were found matching
+  field_72986_A:Lnet/minecraft/world/storage/WorldInfo;
+  in net/minecraft/world/World`, underneath which is
+  `ClassNotFoundException: net.minecraft.world.World`. Mixin
+  transformer scans for the target class before launchwrapper
+  has Minecraft on its classpath, so the field-lookup pass
+  reports "no candidates". Confirmed independent of LWJGL /
+  DISPLAY (reproduces on both `:99` and `:100`). The testClient
+  harness uses a different launchwrapper classpath / mixin-config
+  assembly and is NOT affected. Player-visible: any developer who
+  runs `./gradlew runClient` for live mod debug gets an immediate
+  crash. Pinned by `.agent/tasks/TASK-41-runclient-mixin-accessorworld-bug.md`
+  (open, first-priority next session). Found by user during the
+  2026-05-29 TASK-40 close-out review.
   See `.agent/history/known-bugs-ledger.md` Batch #2.
 
 ## Done
@@ -220,6 +236,7 @@ Bug-ledger history lives in
 | [TASK-40c](TASK-40c-batch3-phase-0-heavy.md) | Batch 3 of 2026-05-27 audit close-out — Phase-0-heavy sweep across 10 gaps. Shipped: Gap F.1 (CO2Scrubber comparator output — 2 server) + Gap J (ItemUpgrade slot eligibility per-meta — 6 server). 2 new probe verbs (`infra comparator-override`, `infra item-armor-slot`). Phase-0 outcomes for the rest: F.4 (TilePump) ⏸ @Ignore pending real-source-water probe; F.3 / H / M / G / I ❌ dropped (impl-only or audit framing off); B / S ❌ deferred to a possible TASK-41 (real contracts but heavy fixture cost). ~28 h saved vs audit estimate via aggressive collapse discipline. | ✅ partial |
 | [TASK-40d](TASK-40d-batch4-forcefield-lasergun.md) | Batch 4 of 2026-05-27 audit close-out: Gap L (TileForceFieldProjector projects + retracts force field along facing — 1 server). 1 new probe verb (`infra forcefield-tick`, leverages production's pre-existing public `onIntermittentUpdate` refactor for deterministic extension/retraction). Gap K (ItemBasicLaserGun firing) deferred — testClient territory, blocked alongside Batch 2 until harness fix. | ✅ partial |
 | [TASK-40e](TASK-40e-batch5-asteroid-and-laser-deferrals.md) | Batch 5 of 2026-05-27 audit close-out — closing-doc deferral for Gap N (asteroid worldgen) and Gap K (laser gun firing). Both gaps' contracts are real per SOP litmus but fixture cost exceeds tail-batch budget; deferred to a possible TASK-41 cluster. Neither is a rewrite blocker per 2026-05-29 delta-audit ⚠ classification. | ❌ deferred |
+| [TASK-41](TASK-41-runclient-mixin-accessorworld-bug.md) | `./gradlew runClient` mixin AccessorWorld apply error — `ClassNotFoundException: net.minecraft.world.World` underneath; testClient harness path unaffected. Blocks live-client mod debugging. Approach options: (C) `@Mixin(targets="...")` string-target, (B) swap to access transformer, (A) classpath fix. **First-priority next session.** | 🟥 Open |
 
 ## Backlog
 
