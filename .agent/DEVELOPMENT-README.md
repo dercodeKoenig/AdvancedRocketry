@@ -46,6 +46,22 @@ on every run after the first if you don't.
 If your retry budget exceeds 5 s and the failure rate is still
 > 5 %, the fix is structural, not timed.
 
+### Before using `mcp__intellij__*` tools
+
+**[SOP: MCP IntelliJ usage](./sops/development/mcp-intellij-usage.md)** —
+read once per session that plans to use the IntelliJ MCP server.
+
+**TL;DR**: the IDE is opened at **`/workspace`**, not at
+`/workspace/AdvancedRocketry` — every MCP `path` argument resolves
+from the IDE root, so AR files need the `AdvancedRocketry/`
+prefix. MCP wins for symbol lookup, find-usages, and searching
+decompiled Minecraft/Forge/libVulpes classes (no `.java` on
+disk → `Grep` can't see them). Built-ins (`Read`, `Edit`, `Grep`,
+`Glob`) win for our own sources. **Never** use
+`execute_run_configuration` for tests (bypasses
+flake-diagnosis cache-bust); never `rename_refactoring` registry
+IDs / NBT keys / lang keys (breaks saves).
+
 ### Before closing a TASK (status → Completed / Obsolete / Blocked)
 
 **[SOP: Task lifecycle](./sops/development/task-lifecycle.md)** —
