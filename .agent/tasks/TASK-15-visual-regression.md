@@ -1,13 +1,21 @@
 # TASK-15: Visual regression infrastructure for Minecraft client
 
+**Status: ❌ Not planned (closed 2026-05-29)**
+
 ## Ticket
 
 - Source: TASK-02 Phase 10 deferral (own proposal at the time),
   promoted into a tracked task on 2026-05-23 during the SSOT cleanup.
-- Status: **👁 Backlog (watching)** — speculative infrastructure;
-  promote on one of the triggers below. Re-classified from plain
-  Backlog on 2026-05-23 after honest cost/benefit review.
-- Created: 2026-05-23.
+- Status: **❌ Not planned (closed 2026-05-29)**. Speculative
+  infrastructure with no live trigger and high build cost — the
+  user explicitly closed it during the 2026-05-29 audit-delta pass
+  rather than continue carrying it as `👁 Backlog (watching)`.
+  State-tier tests continue to catch the functional half of any
+  regression that manifests both visually AND functionally; the
+  visual-only half remains implicitly uncovered. Re-open via a new
+  TASK file if any of the original promotion triggers fires
+  (see below — kept for future reference).
+- Created: 2026-05-23. Closed: 2026-05-29.
 
 ## Promotion triggers
 

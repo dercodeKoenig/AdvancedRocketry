@@ -212,7 +212,7 @@ entry is an actionable TASK with a defined plan + acceptance.
 
 | ID | Title | Status | Blocker / trigger |
 |---|---|---|---|
-| [TASK-15](TASK-15-visual-regression.md) | Visual regression infrastructure for Minecraft client | 👁 Watching | 4 explicit promotion triggers in task file (GUI refactor / modpack-report / JEI rework / texture-pipeline bump). Revisit + consider Obsolete if no trigger in 6 months. |
+| [TASK-15](TASK-15-visual-regression.md) | Visual regression infrastructure for Minecraft client | ❌ Not planned | Closed 2026-05-29 — speculative infra with no live trigger and high build cost. Original 4 promotion triggers retained in task file; re-open via a new TASK if any fires. |
 | [TASK-16](TASK-16-test-stability-flake-watch.md) | Test-stability flake watch — investigation deliverable. Three flake shapes root-caused; shape #3 mitigated in TASK-26 via kit retry; #1+#2 split into TASK-27; #4 (worldgen sampling) confirmed across 3 sightings, promoted to TASK-28 F7. | 🟡 Investigation complete | Investigation done 2026-05-23. |
 
 ## Conscious non-goals
@@ -253,7 +253,7 @@ TASK-03 ──┬─► TASK-04  (multiblock)
 
 TASK-13 ✅ — independent (closed 2026-05-23)
 TASK-14 ❌ — independent (closed Obsolete 2026-05-23)
-TASK-15 👁 — independent, watching for 4 triggers
+TASK-15 ❌ — independent, closed Not planned 2026-05-29
 TASK-16 👁 — independent, watches flake pattern from TASK-12 close-out
 
 Audit-2026-05-23 backlog (all independent of each other):

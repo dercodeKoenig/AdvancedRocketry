@@ -1,5 +1,7 @@
 # TASK-10: TASK-03 deferred tail — A2 remainder + B3 suite-grouping
 
+**Status: ✅ Completed (2026-05-19; index sync 2026-05-21)**
+
 > **History (2026-05-19)**: an earlier draft of this task included a
 > "FakePlayer probe" (Phases 1-2) for player-behaviour coverage on the
 > headless dedicated-server harness. That direction was rejected — the
