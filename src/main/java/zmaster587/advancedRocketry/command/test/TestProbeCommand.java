@@ -9973,6 +9973,27 @@ public class TestProbeCommand extends CommandBase {
                     + ",\"mainHandAir\":" + mainHandAir + "}");
             return;
         }
+        if ("set-fall-distance".equals(sub) && args.length >= 2) {
+            // TASK-40 Gap C — set the player's server-side fallDistance field.
+            // Used to set up a non-zero baseline so AreaGravityController's
+            // update() loop (which resets fallDistance=0 for any in-range
+            // entity unconditionally on line 190) has something to reset.
+            float amt;
+            try {
+                amt = Float.parseFloat(args[1]);
+            } catch (NumberFormatException e) {
+                send(sender, "{\"error\":\"bad amount\",\"raw\":\""
+                        + escapeJson(args[1]) + "\"}");
+                return;
+            }
+            player.fallDistance = amt;
+            send(sender, "{\"ok\":true,\"fallDistance\":" + player.fallDistance + "}");
+            return;
+        }
+        if ("get-fall-distance".equals(sub)) {
+            send(sender, "{\"ok\":true,\"fallDistance\":" + player.fallDistance + "}");
+            return;
+        }
         if ("set-health".equals(sub) && args.length >= 2) {
             float newHealth = (float) parseDoubleOr(args[1], 20.0);
             player.setHealth(newHealth);
