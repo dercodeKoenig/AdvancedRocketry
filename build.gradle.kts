@@ -158,6 +158,23 @@ tasks.compileJava {
     outputs.file(mixinRefmapFile)
 }
 
+// Stage the AP-generated refmap into the main resources output directory so
+// `runClient` / `runServer` — which load classes directly off
+// build/classes + build/resources (NOT the packaged jar) — can find it on the
+// runtime classpath under the name declared in mixins.advancedrocketry.json
+// ("refmap": "mixins.advancedrocketry.refmap.json"). Without this, Mixin
+// silently falls through to SRG names in a dev (MCP-named) launchwrapper and
+// every @Accessor / @Inject against a renamed field fails to bind (TASK-41).
+val stageMixinRefmapForRun by tasks.registering(Copy::class) {
+    dependsOn(tasks.compileJava)
+    from(mixinRefmapFile)
+    into(layout.buildDirectory.dir("resources/main"))
+}
+
+tasks.named("classes") {
+    dependsOn(stageMixinRefmapForRun)
+}
+
 
 minecraft {
     mappings("snapshot", "20171003-1.12")

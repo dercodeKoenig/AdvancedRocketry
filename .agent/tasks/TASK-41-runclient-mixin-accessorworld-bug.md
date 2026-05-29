@@ -1,6 +1,88 @@
 # TASK-41 — Fix runClient AccessorWorld mixin apply error
 
-**Status: 🟥 Open (2026-05-29) — first-priority next session**
+**Status: ✅ Completed 2026-05-29.**
+
+## Actual fix (what shipped)
+
+**Option B** (access transformer) — the recommended fallback. Option C
+(string-target `@Mixin`) was tried first and produced the same
+`InvalidAccessorException`, confirming the bug was not about
+class-target resolution timing but about Mixin's refmap-driven
+SRG-name lookup misfiring in a dev-classpath (MCP-named) launchwrapper.
+
+Changes:
+
+1. `src/main/resources/META-INF/accessTransformer.cfg` — added
+   `public net.minecraft.world.World field_72986_A # worldInfo`.
+   ATs widen visibility at class-load time, independent of refmap
+   state, and work in both dev (MCP) and reobf (SRG) classloaders.
+2. `src/main/java/zmaster587/advancedRocketry/mixin/AccessorWorld.java` — **deleted**.
+3. `src/main/resources/mixins.advancedrocketry.json` — removed
+   `"AccessorWorld"` from the mixin list.
+4. `src/main/java/zmaster587/advancedRocketry/world/weather/PlanetWeatherManager.java` —
+   replaced both `accessor.ar$setWorldInfo(...)` call sites with
+   direct `world.worldInfo = ...` assignment. Removed the
+   `AccessorWorld` import.
+5. `build.gradle.kts` — added a `stageMixinRefmapForRun` task that
+   copies `build/refmaps/mixins.advancedrocketry.refmap.json` into
+   `build/resources/main/`, wired to the `classes` lifecycle. The
+   AP-generated refmap was packaged in the jar but missing from the
+   runtime classpath that `runClient` / `runServer` use (they load
+   from `build/classes/java/main` + `build/resources/main`, not the
+   jar). Kept even after AccessorWorld removal so future @Inject
+   mixins against rename'd MC methods don't trip the same gap.
+
+## What surprised us during Phase 0
+
+The actual root cause was **not** the hypothesis (class-load
+ordering / launchwrapper missing MC at mixin-scan time). Evidence:
+
+- The trace cited `ClassNotFoundException: net.minecraft.world.World`,
+  but `World.class` IS reachable — `net.minecraft.client.main.Main`
+  references it directly and JVM tries to resolve it on the launchwrapper
+  classloader. The CNFE is a downstream effect of the mixin transformer
+  failing during `World.class` load (it propagates as CNFE on the class
+  whose load triggered the transformation).
+- Option C (string-target `@Mixin(targets = "net.minecraft.world.World")`)
+  failed identically — proving target-class lookup timing was a red
+  herring. The real failure was at the *field* lookup step
+  (`AccessorInfo.findTarget`), looking for SRG name
+  `field_72986_A` in a class whose runtime field is MCP `worldInfo`.
+
+`testClient`'s harness path was not affected because it depends on
+`jar` (which packages the refmap at jar root) AND merges
+`build/resources/main` into `build/classes/java/main` — the live
+client jar uses reobfed SRG-named MC classes where the refmap's
+forward mapping IS correct.
+
+## Validation
+
+1. `./gradlew runClient` (DISPLAY=:100) — Mixin apply phase passes,
+   FML loads 9 mods, libVulpes registers recipes, JEI starts, client
+   reaches main menu. (Build exits via SIGTERM after 75 s timeout;
+   no FATAL / Mixin* in log.)
+2. `./gradlew testUnit testIntegration -PuseLocalFramework=true` —
+   all green.
+3. `./gradlew testServer -PuseLocalFramework=true` — 427 tests run,
+   423 PASS, 1 SKIPPED, 3 PRE-EXISTING failures (Electrolyser /
+   PrecisionAssembler / PrecisionLaserEtcher recipe-registration —
+   verified identical on baseline `HEAD` without TASK-41 changes;
+   logged as bug ledger entry #5, NOT caused by this task).
+   RocketDeOrbitingEvent was a flake — passed on re-run.
+4. testClient not re-run this session — TASK-41 changes are dev/AT
+   only; testClient path was already green at session start.
+
+## Closure
+
+Bug ledger entry #4 (`README.md`) marked ✅ FIXED. Entry #5 added
+for the pre-existing recipe-registration failures, candidate for a
+follow-up TASK-42 investigation.
+
+---
+
+## Original ticket (for history)
+
+**Status: 🟥 Open (2026-05-29) — first-priority next session** _(superseded by ✅ above)_
 
 ## Ticket
 

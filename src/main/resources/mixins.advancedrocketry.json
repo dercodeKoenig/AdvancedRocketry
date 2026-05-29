@@ -5,7 +5,6 @@
   "compatibilityLevel": "JAVA_8",
   "refmap": "mixins.advancedrocketry.refmap.json",
   "mixins": [
-    "AccessorWorld",
     "MixinEntityGravity",
     "MixinEntityPlayerInventoryAccess",
     "MixinEntityPlayerMPInventoryAccess",

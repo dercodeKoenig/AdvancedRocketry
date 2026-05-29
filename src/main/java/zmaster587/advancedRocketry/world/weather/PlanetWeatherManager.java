@@ -13,7 +13,6 @@ import net.minecraftforge.common.DimensionManager;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import zmaster587.advancedRocketry.api.ARConfiguration;
-import zmaster587.advancedRocketry.mixin.AccessorWorld;
 
 import java.util.HashSet;
 import java.util.Set;
@@ -25,7 +24,8 @@ import java.util.Set;
  *       the overworld's {@link MapStorage}),</li>
  *   <li>decides which dimensions are eligible for the wrapper,</li>
  *   <li>installs / removes {@link ARWeatherWorldInfo} on a {@link WorldServer}
- *       via {@link AccessorWorld},</li>
+ *       via direct assignment to {@link World#worldInfo} (widened to public by
+ *       AR's access transformer — see {@code META-INF/accessTransformer.cfg}),</li>
  *   <li>syncs weather to clients via vanilla {@link SPacketChangeGameState}
  *       packets.</li>
  * </ul>
@@ -168,8 +168,7 @@ public final class PlanetWeatherManager {
         ARWeatherWorldInfo wrapped = new ARWeatherWorldInfo(current, state,
                 () -> markDirty(world));
 
-        AccessorWorld accessor = (AccessorWorld) (Object) world;
-        accessor.ar$setWorldInfo(wrapped);
+        world.worldInfo = wrapped;
 
         if (ARConfiguration.getCurrentConfig().logPlanetWeatherWrapping) {
             LOGGER.info("Wrapped WorldInfo for AR planet dim={} provider={}",
@@ -183,8 +182,7 @@ public final class PlanetWeatherManager {
         WorldInfo current = world.getWorldInfo();
         if (current instanceof ARWeatherWorldInfo) {
             ARWeatherWorldInfo wrapped = (ARWeatherWorldInfo) current;
-            AccessorWorld accessor = (AccessorWorld) (Object) world;
-            accessor.ar$setWorldInfo(wrapped.getDelegate());
+            world.worldInfo = wrapped.getDelegate();
         }
     }
 

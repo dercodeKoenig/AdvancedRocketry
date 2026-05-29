@@ -142,7 +142,8 @@ Bug-ledger history lives in
   Counter regenerated via
   `grep -rc '@Test$' src/test/java/.../{unit,integration,server,client}/`.
 - **testServer wall time**: 8m 27s (50 % faster than pre-B2).
-- **Bug ledger**: 4 live bugs (Batch #2 opened 2026-05-25; entry #4 added 2026-05-29).
+- **Bug ledger**: 4 live bugs (Batch #2 opened 2026-05-25; entry #4 fixed by
+  TASK-41 on 2026-05-29; entry #5 added 2026-05-29).
   Batch #1 fully drained by TASK-12 on 2026-05-23. Entries:
   (1) `SatelliteRegistry.getNewSatellite` returns `null` for unknown
   types instead of the documented `SatelliteDefunct` fallback —
@@ -166,22 +167,39 @@ Bug-ledger history lives in
   `_documentsKnownBug` test — the workaround test already
   inherits the contract polarity. Found during TASK-30
   authoring (2026-05-26).
-  (4) `mixins.advancedrocketry.json:AccessorWorld` mixin apply
-  fails during `./gradlew runClient` launch (any DISPLAY) with
+  (4) ✅ **FIXED 2026-05-29 by TASK-41.**
+  `mixins.advancedrocketry.json:AccessorWorld` mixin apply
+  failed during `./gradlew runClient` with
   `InvalidAccessorException: No candidates were found matching
-  field_72986_A:Lnet/minecraft/world/storage/WorldInfo;
-  in net/minecraft/world/World`, underneath which is
-  `ClassNotFoundException: net.minecraft.world.World`. Mixin
-  transformer scans for the target class before launchwrapper
-  has Minecraft on its classpath, so the field-lookup pass
-  reports "no candidates". Confirmed independent of LWJGL /
-  DISPLAY (reproduces on both `:99` and `:100`). The testClient
-  harness uses a different launchwrapper classpath / mixin-config
-  assembly and is NOT affected. Player-visible: any developer who
-  runs `./gradlew runClient` for live mod debug gets an immediate
-  crash. Pinned by `.agent/tasks/TASK-41-runclient-mixin-accessorworld-bug.md`
-  (open, first-priority next session). Found by user during the
-  2026-05-29 TASK-40 close-out review.
+  field_72986_A:Lnet/minecraft/world/storage/WorldInfo;`. Root cause:
+  the AP-generated refmap was written to `build/refmaps/` (jar-only),
+  not staged into `build/resources/main/` where the runClient
+  launchwrapper classpath reads it from — and even with the refmap
+  staged, the SRG-name lookup the AP records is wrong for the dev
+  classloader (MCP-named MC classes). Switched to an access transformer
+  (`public net.minecraft.world.World field_72986_A`) which widens
+  `worldInfo` to public at classload time, independent of refmap state,
+  in both dev and reobf environments. `PlanetWeatherManager` now sets
+  `world.worldInfo = wrapped` directly; `AccessorWorld` mixin deleted.
+  Also added `stageMixinRefmapForRun` task copying the refmap into
+  `build/resources/main/` so future @Inject mixins against rename'd
+  MC methods don't trip the same dev-classpath gap.
+  (5) `testServer` recipe-registration tests fail intermittently on
+  `feature/tests` HEAD: `ElectrolyserRecipeEndToEndTest`,
+  `PrecisionAssemblerRecipeEndToEndTest`, and
+  `PrecisionLaserEtcherRecipeEndToEndTest` all assert
+  `recipe-info errored ... "no recipes registered"` at
+  `MachineRecipeEndToEndKit.resolveFirstRecipe:196`. Verified
+  pre-existing on `HEAD` baseline (without TASK-41 changes) on
+  2026-05-29 — same 3 fail. NOT caused by TASK-41's AT migration.
+  Likely a flake shape similar to TASK-28 F9 (post-load recipe
+  registration race) or a regression introduced between the previous
+  session's all-green run and 2026-05-29 HEAD. Player-visible:
+  these machines may briefly report "no recipes registered" right
+  after a chunk-load tick before the recipe registry settles.
+  Ledger-only — needs an investigation task (TASK-42 candidate) to
+  decide between flake mitigation and a registration-order fix.
+  Found during TASK-41 validation sweep.
   See `.agent/history/known-bugs-ledger.md` Batch #2.
 
 ## Done
@@ -236,7 +254,7 @@ Bug-ledger history lives in
 | [TASK-40c](TASK-40c-batch3-phase-0-heavy.md) | Batch 3 of 2026-05-27 audit close-out — Phase-0-heavy sweep across 10 gaps. Shipped: Gap F.1 (CO2Scrubber comparator output — 2 server) + Gap J (ItemUpgrade slot eligibility per-meta — 6 server). 2 new probe verbs (`infra comparator-override`, `infra item-armor-slot`). Phase-0 outcomes for the rest: F.4 (TilePump) ⏸ @Ignore pending real-source-water probe; F.3 / H / M / G / I ❌ dropped (impl-only or audit framing off); B / S ❌ deferred to a possible TASK-41 (real contracts but heavy fixture cost). ~28 h saved vs audit estimate via aggressive collapse discipline. | ✅ partial |
 | [TASK-40d](TASK-40d-batch4-forcefield-lasergun.md) | Batch 4 of 2026-05-27 audit close-out: Gap L (TileForceFieldProjector projects + retracts force field along facing — 1 server). 1 new probe verb (`infra forcefield-tick`, leverages production's pre-existing public `onIntermittentUpdate` refactor for deterministic extension/retraction). Gap K (ItemBasicLaserGun firing) deferred — testClient territory, blocked alongside Batch 2 until harness fix. | ✅ partial |
 | [TASK-40e](TASK-40e-batch5-asteroid-and-laser-deferrals.md) | Batch 5 of 2026-05-27 audit close-out — closing-doc deferral for Gap N (asteroid worldgen) and Gap K (laser gun firing). Both gaps' contracts are real per SOP litmus but fixture cost exceeds tail-batch budget; deferred to a possible TASK-41 cluster. Neither is a rewrite blocker per 2026-05-29 delta-audit ⚠ classification. | ❌ deferred |
-| [TASK-41](TASK-41-runclient-mixin-accessorworld-bug.md) | `./gradlew runClient` mixin AccessorWorld apply error — `ClassNotFoundException: net.minecraft.world.World` underneath; testClient harness path unaffected. Blocks live-client mod debugging. Approach options: (C) `@Mixin(targets="...")` string-target, (B) swap to access transformer, (A) classpath fix. **First-priority next session.** | 🟥 Open |
+| [TASK-41](TASK-41-runclient-mixin-accessorworld-bug.md) | `./gradlew runClient` mixin AccessorWorld apply error — fixed 2026-05-29 by swapping `@Accessor` for an access transformer (`public net.minecraft.world.World field_72986_A`) and direct `world.worldInfo = ...` assignment in PlanetWeatherManager. AccessorWorld mixin + mixin-config entry deleted. Added `stageMixinRefmapForRun` build task copying the AP-generated refmap into `build/resources/main/` so future @Inject mixins don't trip the same dev-classpath gap. Option C (`@Mixin(targets="...")`) tried first, failed identically — confirmed root cause was refmap-driven SRG-name lookup, not class-load ordering. Validated: runClient boots to main menu, FML loads 9 mods, testUnit + testIntegration green; testServer 423/427 PASS, 3 pre-existing recipe-registration failures unrelated to TASK-41 (logged as ledger entry #5). | ✅ |
 
 ## Backlog
 
