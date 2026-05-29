@@ -106,6 +106,9 @@ public class TestProbeCommand extends CommandBase {
                 case "satellite-builder":
                     handleSatelliteBuilder(server, sender, tail(args));
                     break;
+                case "satellite-terminal":
+                    handleSatelliteTerminal(server, sender, tail(args));
+                    break;
                 case "atmosphere":
                     handleAtmosphere(server, sender, tail(args));
                     break;
@@ -815,6 +818,12 @@ public class TestProbeCommand extends CommandBase {
             info.put("fuel", fuel);
             info.put("thrust", rocket.stats.getThrust());
             info.put("weight_no_fuel", rocket.stats.getWeight_NoFuel());
+            // TASK-37/TASK-38 — expose stats fields that aggregate per-block
+            // contributions during scanRocket. drillingPower sums every
+            // IMiningDrill.getMiningSpeed(); thrust above already reflects
+            // nuclear-engine cohesion (thrust > 0 iff at least one nuclear
+            // core is placed directly above a nuclear motor / core stack).
+            info.put("drillingPower", rocket.stats.getDrillingPower());
             send(sender, jsonMap(info));
             return;
         }
@@ -2880,6 +2889,212 @@ public class TestProbeCommand extends CommandBase {
         info.put("powerStorage", powerStorage + 720);
         info.put("maxData", maxData);
         send(sender, jsonMap(info));
+    }
+
+    /**
+     * TASK-39 (Gap R) — TileSatelliteTerminal probe.
+     *
+     * <p>The Satellite Control Center reads the chip in slot 0 + the local
+     * energy buffer and surfaces a 4-tier status to the GUI on the client
+     * via {@code writeDataToNetwork(packetId 22)}:
+     * <ul>
+     *   <li>{@code status=0} — no link (slot empty or chip's satellite not
+     *       a {@link zmaster587.advancedRocketry.satellite.SatelliteData}).</li>
+     *   <li>{@code status=1} — no power (energy buffer below
+     *       {@code getPowerPerOperation() = 1 RF}).</li>
+     *   <li>{@code status=2} — out of range (chip's satellite dim is NOT in
+     *       the terminal's planetary system per {@link
+     *       zmaster587.advancedRocketry.util.PlanetaryTravelHelper}).</li>
+     *   <li>{@code status=3} — connected. Surfaces
+     *       {@code powerPerTick}, {@code data}, {@code maxData}.</li>
+     * </ul>
+     *
+     * <p>This probe mirrors the server-side branch logic 1:1 so tests can
+     * pin each branch without needing a real client + GUI round-trip.</p>
+     *
+     * <p>Subcommands:
+     * <ul>
+     *   <li>{@code satellite-terminal info <dim> <x> <y> <z>}</li>
+     *   <li>{@code satellite-terminal load-chip <dim> <x> <y> <z> <satId>}
+     *       — programs an ItemSatelliteIdentificationChip with the given
+     *       satellite id and places it in slot 0. Sister of
+     *       {@code terraforming terminal-load-chip}.</li>
+     *   <li>{@code satellite-terminal press-erase <dim> <x> <y> <z>} —
+     *       invokes the production {@code onInventoryButtonPressed(1)} path
+     *       that erases the chip's NBT AND removes the linked satellite
+     *       from its dim's DimensionProperties (the destructive "kill
+     *       satellite" button in the GUI). Returns pre/post chip + dim
+     *       state for assertion.</li>
+     * </ul>
+     */
+    private void handleSatelliteTerminal(MinecraftServer server, ICommandSender sender, String[] args) {
+        if (args.length >= 5 && "info".equalsIgnoreCase(args[0])) {
+            int dim = parseIntOr(args[1], Integer.MIN_VALUE);
+            int x = parseIntOr(args[2], 0);
+            int y = parseIntOr(args[3], 0);
+            int z = parseIntOr(args[4], 0);
+            net.minecraft.world.WorldServer world = server.getWorld(dim);
+            if (world == null) {
+                send(sender, "{\"error\":\"world not loaded\",\"dim\":" + dim + "}");
+                return;
+            }
+            TileEntity tile = world.getTileEntity(new BlockPos(x, y, z));
+            if (!(tile instanceof zmaster587.advancedRocketry.tile.satellite.TileSatelliteTerminal)) {
+                send(sender, "{\"error\":\"tile not TileSatelliteTerminal\",\"tile\":\""
+                        + (tile == null ? "null" : tile.getClass().getName()) + "\"}");
+                return;
+            }
+            zmaster587.advancedRocketry.tile.satellite.TileSatelliteTerminal terminal =
+                    (zmaster587.advancedRocketry.tile.satellite.TileSatelliteTerminal) tile;
+            zmaster587.advancedRocketry.api.satellite.SatelliteBase sat = terminal.getSatelliteFromSlot(0);
+            net.minecraft.item.ItemStack slot0 = terminal.getStackInSlot(0);
+            long slotSatId = -1L;
+            if (!slot0.isEmpty() && slot0.hasTagCompound()) {
+                slotSatId = slot0.getTagCompound().getLong("satelliteId");
+            }
+            net.minecraftforge.energy.IEnergyStorage es = tile.hasCapability(
+                    net.minecraftforge.energy.CapabilityEnergy.ENERGY, null)
+                    ? tile.getCapability(net.minecraftforge.energy.CapabilityEnergy.ENERGY, null)
+                    : null;
+            int energy = es != null ? es.getEnergyStored() : -1;
+            int powerPerOp = terminal.getPowerPerOperation();
+            int status;
+            int powerPerTick = -1, data = -1, maxData = -1;
+            String satName = "";
+            String satClass = "";
+            if (sat == null
+                    || !(sat instanceof zmaster587.advancedRocketry.satellite.SatelliteData)) {
+                status = 0;
+            } else {
+                satClass = sat.getClass().getName();
+                satName = sat.getName();
+                if (energy < powerPerOp) {
+                    status = 1;
+                } else if (!zmaster587.advancedRocketry.util.PlanetaryTravelHelper
+                        .isTravelAnywhereInPlanetarySystem(sat.getDimensionId(),
+                                zmaster587.advancedRocketry.dimension.DimensionManager
+                                        .getEffectiveDimId(world, new BlockPos(x, y, z)).getId())) {
+                    status = 2;
+                } else {
+                    status = 3;
+                    zmaster587.advancedRocketry.satellite.SatelliteData sd =
+                            (zmaster587.advancedRocketry.satellite.SatelliteData) sat;
+                    powerPerTick = sd.getPowerPerTick();
+                    data = sd.data.getData();
+                    maxData = sd.data.getMaxData();
+                }
+            }
+            Map<String, Object> info = new LinkedHashMap<>();
+            info.put("ok", true);
+            info.put("status", status);
+            info.put("slotSatId", slotSatId);
+            info.put("energy", energy);
+            info.put("powerPerOperation", powerPerOp);
+            info.put("satClass", satClass);
+            info.put("satName", satName);
+            info.put("powerPerTick", powerPerTick);
+            info.put("data", data);
+            info.put("maxData", maxData);
+            send(sender, jsonMap(info));
+            return;
+        }
+        if (args.length >= 6 && "load-chip".equalsIgnoreCase(args[0])) {
+            int dim = parseIntOr(args[1], Integer.MIN_VALUE);
+            int x = parseIntOr(args[2], 0);
+            int y = parseIntOr(args[3], 0);
+            int z = parseIntOr(args[4], 0);
+            long satId = Long.parseLong(args[5]);
+            net.minecraft.world.WorldServer world = server.getWorld(dim);
+            if (world == null) {
+                send(sender, "{\"error\":\"world not loaded\",\"dim\":" + dim + "}");
+                return;
+            }
+            TileEntity tile = world.getTileEntity(new BlockPos(x, y, z));
+            if (!(tile instanceof zmaster587.advancedRocketry.tile.satellite.TileSatelliteTerminal)) {
+                send(sender, "{\"error\":\"tile not TileSatelliteTerminal\",\"tile\":\""
+                        + (tile == null ? "null" : tile.getClass().getName()) + "\"}");
+                return;
+            }
+            zmaster587.advancedRocketry.api.satellite.SatelliteBase sat =
+                    zmaster587.advancedRocketry.dimension.DimensionManager.getInstance().getSatellite(satId);
+            if (sat == null) {
+                send(sender, "{\"error\":\"satellite not registered globally\",\"satId\":" + satId + "}");
+                return;
+            }
+            net.minecraft.item.Item chipItem =
+                    zmaster587.advancedRocketry.api.AdvancedRocketryItems.itemSatelliteIdChip;
+            if (!(chipItem instanceof zmaster587.advancedRocketry.item.ItemSatelliteIdentificationChip)) {
+                send(sender, "{\"error\":\"itemSatelliteIdChip not registered\"}");
+                return;
+            }
+            zmaster587.advancedRocketry.item.ItemSatelliteIdentificationChip chip =
+                    (zmaster587.advancedRocketry.item.ItemSatelliteIdentificationChip) chipItem;
+            net.minecraft.item.ItemStack stack = new net.minecraft.item.ItemStack(chip);
+            chip.setSatellite(stack, sat);
+            ((zmaster587.advancedRocketry.tile.satellite.TileSatelliteTerminal) tile)
+                    .setInventorySlotContents(0, stack);
+            send(sender, "{\"ok\":true,\"satId\":" + satId + ",\"dim\":" + dim
+                    + ",\"chipItem\":\"" + chip.getRegistryName() + "\""
+                    + ",\"satDim\":" + sat.getDimensionId() + "}");
+            return;
+        }
+        if (args.length >= 5 && "press-erase".equalsIgnoreCase(args[0])) {
+            int dim = parseIntOr(args[1], Integer.MIN_VALUE);
+            int x = parseIntOr(args[2], 0);
+            int y = parseIntOr(args[3], 0);
+            int z = parseIntOr(args[4], 0);
+            net.minecraft.world.WorldServer world = server.getWorld(dim);
+            if (world == null) {
+                send(sender, "{\"error\":\"world not loaded\",\"dim\":" + dim + "}");
+                return;
+            }
+            TileEntity tile = world.getTileEntity(new BlockPos(x, y, z));
+            if (!(tile instanceof zmaster587.advancedRocketry.tile.satellite.TileSatelliteTerminal)) {
+                send(sender, "{\"error\":\"tile not TileSatelliteTerminal\",\"tile\":\""
+                        + (tile == null ? "null" : tile.getClass().getName()) + "\"}");
+                return;
+            }
+            zmaster587.advancedRocketry.tile.satellite.TileSatelliteTerminal terminal =
+                    (zmaster587.advancedRocketry.tile.satellite.TileSatelliteTerminal) tile;
+            net.minecraft.item.ItemStack pre = terminal.getStackInSlot(0);
+            long preSatId = pre.hasTagCompound() ? pre.getTagCompound().getLong("satelliteId") : -1L;
+            int preSatDim = -1;
+            boolean preSatRegistered = false;
+            if (preSatId >= 0) {
+                zmaster587.advancedRocketry.api.satellite.SatelliteBase preSat =
+                        zmaster587.advancedRocketry.dimension.DimensionManager.getInstance().getSatellite(preSatId);
+                if (preSat != null) {
+                    preSatDim = preSat.getDimensionId();
+                    DimensionProperties props = zmaster587.advancedRocketry.dimension.DimensionManager
+                            .getInstance().getDimensionProperties(preSatDim);
+                    preSatRegistered = props != null && props.getSatellite(preSatId) != null;
+                }
+            }
+            // Server-side direct invocation — onInventoryButtonPressed(1)
+            // runs the production erase path: removes satellite from
+            // DimensionProperties, blanks NBT via chip.erase(stack).
+            terminal.onInventoryButtonPressed(1);
+            net.minecraft.item.ItemStack post = terminal.getStackInSlot(0);
+            boolean postNbtNull = !post.hasTagCompound();
+            boolean postSlotEmpty = post.isEmpty();
+            boolean postSatStillRegistered = false;
+            if (preSatId >= 0) {
+                DimensionProperties props = zmaster587.advancedRocketry.dimension.DimensionManager
+                        .getInstance().getDimensionProperties(preSatDim);
+                postSatStillRegistered = props != null && props.getSatellite(preSatId) != null;
+            }
+            Map<String, Object> info = new LinkedHashMap<>();
+            info.put("ok", true);
+            info.put("preSatId", preSatId);
+            info.put("preSatDim", preSatDim);
+            info.put("preSatRegistered", preSatRegistered);
+            info.put("postSlotEmpty", postSlotEmpty);
+            info.put("postNbtNull", postNbtNull);
+            info.put("postSatRegistered", postSatStillRegistered);
+            send(sender, jsonMap(info));
+            return;
+        }
+        send(sender, "{\"error\":\"unknown satellite-terminal subcommand — try info <dim> <x> <y> <z> | load-chip <dim> <x> <y> <z> <satId> | press-erase <dim> <x> <y> <z>\"}");
     }
 
     /**
@@ -5757,6 +5972,29 @@ public class TestProbeCommand extends CommandBase {
             // MissionGasCollection.onMissionComplete can fill them.
             // Production NOFUEL gate needs >=1 fuel tank; 4 remain.
             boolean includeFluidCargo = "with-fluid-cargo".equals(variant);
+            // TASK-37 (nuclear engine family — Gap P) — two paired variants
+            // share the same nuclear motor stack (replacing the simple advRocketmotor
+            // engines) and differ only in the core placement, so the resulting
+            // stats.thrust delta isolates the IRocketNuclearCore cohesion check
+            // (StorageChunk.recalculateStats line 222: core below must be
+            // IRocketEngine or IRocketNuclearCore for its getMaxThrust() to
+            // count toward thrustNuclearReactorLimit).
+            //   with-nuclear-stack    — 2 nuclear cores placed directly above
+            //                           the 2 nuclear motors → both contribute,
+            //                           stats.thrust > 0 (a positive 35 floor
+            //                           per BlockNuclearRocketMotor.getThrust).
+            //   with-nuclear-misplaced — 1 nuclear core placed center-column
+            //                           where below = air → does NOT contribute,
+            //                           thrustNuclearReactorLimit = 0,
+            //                           min(nozzle, 0) = 0, stats.thrust = 0.
+            boolean includeNuclearStack = "with-nuclear-stack".equals(variant);
+            boolean includeNuclearMisplaced = "with-nuclear-misplaced".equals(variant);
+            // TASK-38 (Gap Q — IMiningDrill aggregation) — additive variant
+            // dropping a single BlockMiningDrill at (rocketX+1, rocketY+3, z)
+            // where columns above stay air, so getMiningSpeed returns 0.02f
+            // (sky-exposed branch). stats.setDrillingPower(sum) flips to > 0.
+            boolean includeMiningDrill = "with-mining-drill".equals(variant);
+            boolean replaceEnginesWithNuclear = includeNuclearStack || includeNuclearMisplaced;
 
             net.minecraft.world.WorldServer world = server.getWorld(dim);
             if (world == null) {
@@ -5782,6 +6020,14 @@ public class TestProbeCommand extends CommandBase {
                     ForgeRegistries.BLOCKS.getValue(new ResourceLocation("libvulpes", "advStructureMachine"));
             net.minecraft.block.Block liquidTank =
                     ForgeRegistries.BLOCKS.getValue(new ResourceLocation("advancedrocketry", "liquidTank"));
+            net.minecraft.block.Block nuclearMotor =
+                    ForgeRegistries.BLOCKS.getValue(new ResourceLocation("advancedrocketry", "nuclearrocketmotor"));
+            net.minecraft.block.Block nuclearCore =
+                    ForgeRegistries.BLOCKS.getValue(new ResourceLocation("advancedrocketry", "nuclearcore"));
+            net.minecraft.block.Block nuclearFuelTank =
+                    ForgeRegistries.BLOCKS.getValue(new ResourceLocation("advancedrocketry", "nuclearfueltank"));
+            net.minecraft.block.Block miningDrill =
+                    ForgeRegistries.BLOCKS.getValue(new ResourceLocation("advancedrocketry", "drill"));
 
             if (launchpad == null || rocketBuilder == null || advEngine == null
                     || fuelTank == null || guidanceComputer == null || seat == null) {
@@ -5790,6 +6036,15 @@ public class TestProbeCommand extends CommandBase {
             }
             if (includeFluidCargo && liquidTank == null) {
                 send(sender, "{\"error\":\"missing liquidTank block (advancedrocketry:liquidTank)\"}");
+                return;
+            }
+            if (replaceEnginesWithNuclear && (nuclearMotor == null || nuclearCore == null
+                    || nuclearFuelTank == null)) {
+                send(sender, "{\"error\":\"missing nuclear block(s) (advancedrocketry:nuclearrocketmotor / nuclearcore / nuclearfueltank)\"}");
+                return;
+            }
+            if (includeMiningDrill && miningDrill == null) {
+                send(sender, "{\"error\":\"missing drill block (advancedrocketry:drill)\"}");
                 return;
             }
 
@@ -5829,17 +6084,52 @@ public class TestProbeCommand extends CommandBase {
 
             // Rocket structure (centered around baseX+3, y+1, baseZ+3).
             int rocketX = baseX + 3, rocketY = baseY + 1, rocketZ = baseZ + 3;
+            net.minecraft.block.Block engineBlock = replaceEnginesWithNuclear ? nuclearMotor : advEngine;
             if (includeEngines) {
-                world.setBlockState(new BlockPos(rocketX - 1, rocketY, rocketZ), advEngine.getDefaultState());
-                world.setBlockState(new BlockPos(rocketX + 1, rocketY, rocketZ), advEngine.getDefaultState());
+                world.setBlockState(new BlockPos(rocketX - 1, rocketY, rocketZ), engineBlock.getDefaultState());
+                world.setBlockState(new BlockPos(rocketX + 1, rocketY, rocketZ), engineBlock.getDefaultState());
             }
+            // For nuclear variants we route ALL fuel-tank slots through
+            // BlockNuclearFuelTank so the COMBINEDTHRUST scan gate doesn't
+            // fire (presence of monopropellant capacity alongside nuclear
+            // engines triggers scanRocket's "combined fuel" rejection at
+            // TileRocketAssemblingMachine line 451-454). Core placements
+            // below override two of the y+1 slots back to nuclearCore for
+            // the stack variant.
+            net.minecraft.block.Block fuelTankBlock = replaceEnginesWithNuclear ? nuclearFuelTank : fuelTank;
             if (includeFuelTanks) {
                 for (int dx = -1; dx <= 1; dx++) {
                     for (int dy = 1; dy <= 2; dy++) {
                         world.setBlockState(new BlockPos(rocketX + dx, rocketY + dy, rocketZ),
-                                fuelTank.getDefaultState());
+                                fuelTankBlock.getDefaultState());
                     }
                 }
+            }
+            if (includeNuclearStack) {
+                // Place nuclear cores DIRECTLY above each nuclear motor —
+                // below = IRocketEngine → cohesion check at
+                // StorageChunk:222 passes, reactorLimit > 0.
+                world.setBlockState(new BlockPos(rocketX - 1, rocketY + 1, rocketZ),
+                        nuclearCore.getDefaultState());
+                world.setBlockState(new BlockPos(rocketX + 1, rocketY + 1, rocketZ),
+                        nuclearCore.getDefaultState());
+            }
+            if (includeNuclearMisplaced) {
+                // Place a single nuclear core at the CENTER column (rocketX, …)
+                // where below = (rocketX, rocketY, rocketZ) which the simple
+                // layout leaves AIR (engines occupy ±1 only). Cohesion check
+                // fails → reactorLimit stays 0 → final thrust = 0.
+                world.setBlockState(new BlockPos(rocketX, rocketY + 1, rocketZ),
+                        nuclearCore.getDefaultState());
+            }
+            if (includeMiningDrill) {
+                // Drop a single BlockMiningDrill at (rocketX+1, rocketY+3, z).
+                // The simple layout leaves that cell air (guidance is at the
+                // center column only); columns above stay air, so
+                // BlockMiningDrill.getMiningSpeed sees sky-exposure and
+                // returns 0.02f. stats.drillingPower flips from 0 → 0.02.
+                world.setBlockState(new BlockPos(rocketX + 1, rocketY + 3, rocketZ),
+                        miningDrill.getDefaultState());
             }
             if (includeFluidCargo) {
                 // Swap 2 of the 6 fuel-tank slots for liquidTank (TileFluidTank).
@@ -7400,6 +7690,7 @@ public class TestProbeCommand extends CommandBase {
         if (args.length == 1) {
             return getListOfStringsMatchingLastWord(args,
                     "registry", "dim", "planet", "weather", "rocket", "station", "satellite",
+                    "satellite-terminal",
                     "atmosphere", "oxygen", "machine", "terraforming", "worldgen", "commands",
                     "energy", "infra", "place", "fill", "fixture", "tile", "hatch", "selector");
         }

@@ -14,8 +14,26 @@ Bug-ledger history lives in
 
 ## Current state
 
-- **Pyramid**: 839 (testUnit **288** / testIntegration 81 /
-  testServer **410** / testClient **60**). +1 on 2026-05-27 from
+- **Pyramid**: 843 (testUnit **288** / testIntegration 81 /
+  testServer **414** / testClient **60**). +7 on 2026-05-27 from
+  the TASK-37/38/39 batch (audit Gaps P/Q/R from
+  `.agent/audits/2026-05-27-full-coverage-audit.md`):
+  TASK-37 nuclear engine rocket-assembly (2 server —
+  `NuclearEngineRocketAssemblyTest`: core-above-motor → thrust > 0;
+  misplaced core → scan rejects with NOENGINES). TASK-38 IMiningDrill
+  stat aggregation (1 server — `RocketAssemblerMiningDrillStatTest`:
+  simple → drillingPower=0, with-mining-drill → drillingPower>0).
+  TASK-39 TileSatelliteTerminal chip recognition (4 server —
+  `SatelliteTerminalChipRecognitionTest`: status 0/1/3 ladder +
+  destructive erase button removes satellite from dim + blanks NBT).
+  Probe additions: 3 new fixture rocket variants
+  (`with-nuclear-stack`, `with-nuclear-misplaced`, `with-mining-drill`),
+  `drillingPower` field on `/artest rocket info`, new
+  `/artest satellite-terminal {info|load-chip|press-erase}` subcommand
+  group. Reused TASK-36a TerraformingTerminal probe pattern. Counter
+  regenerated via
+  `grep -rc '@Test$' src/test/java/.../{unit,integration,server,client}/`.
+  +1 earlier on 2026-05-27 from
   TASK-36b deep — full repair cycle with formed PrecisionAssembler
   multiblock (`ServiceStationFullRepairCycleTest`): phase 1
   (consumePartToRepair moves part to partsProcessing), phase 2
@@ -183,6 +201,9 @@ Bug-ledger history lives in
 | [TASK-36b ext](TASK-36-terraforming-and-service-station-depth.md) | Service-station assembler-scan + no-progress-without-assembler — 2 server tests (`ServiceStationAssemblerScanTest`). New `/artest infra service-scan-assemblers` reflection probe (bypasses canPerformFunction's `worldTime % 20 == 0` gate that `tile force-tick` can't satisfy). Full repair-cycle with FORMED PrecisionAssembler multiblock still deferred (requires recipe-fixture infrastructure for wildcard machines — TASK-26 territory). | ✅ partial |
 | [TASK-36b deep](TASK-36-terraforming-and-service-station-depth.md) | Full repair cycle with FORMED PrecisionAssembler multiblock — 1 server test (`ServiceStationFullRepairCycleTest`). Phase 1 pins consumePartToRepair (part moves from partsToRepair to partsProcessing on first powered performFunction); Phase 2 pins processAssemblerResult (with a "rocket"-named item injected into the assembler output port, the part is cleared from partsProcessing and restored at stage 0 in rocket storage). Reuses TASK-26 `/artest fixture machine precision-assembler` wildcard-overlay probe + new `/artest infra service-perform-function` probe; `service-state` extended with `partsProcessingCount`. | ✅ |
 | [TASK-35 ext](TASK-35-ar-fetch-two-bot-harness.md) | Multi-client testClient harness + moderator-fetch — 1 testClient test (`WorldCommandFetchModeratorTest`). ForgeTestFramework `RealClientHarness.start(server, username)` overload + per-username `--username`/`--uuid` propagation (also fixes FG6 legacydev that previously generated random `Player###` names). New AR probes: `player exec-as-named`, `player position-of`, `player op-named`. testClient runs require `-PuseLocalFramework=true` until the framework change is published. | ✅ |
+| [TASK-37](TASK-37-nuclear-engine-rocket-assembly.md) | Nuclear engine rocket-assembly thrust aggregation — 2 server tests (`NuclearEngineRocketAssemblyTest`) pinning IRocketNuclearCore cohesion check (core-above-motor → thrust>0; misplaced → NOENGINES). 2 new `/artest fixture rocket` variants. From audit Gap P. | ✅ |
+| [TASK-38](TASK-38-mining-drill-rocket-assembly.md) | IMiningDrill rocket-assembly stat aggregation — 1 server test (`RocketAssemblerMiningDrillStatTest`) pinning placed drill → `stats.drillingPower > 0` chain. `with-mining-drill` fixture variant + `drillingPower` field on `rocket info`. From audit Gap Q. | ✅ |
+| [TASK-39](TASK-39-satellite-terminal-chip-recognition.md) | TileSatelliteTerminal chip recognition + erase button — 4 server tests (`SatelliteTerminalChipRecognitionTest`) pinning status 0/1/3 ladder + destructive erase removes sat from dim properties + blanks chip NBT. New `/artest satellite-terminal {info\|load-chip\|press-erase}` subcommand group. From audit Gap R. | ✅ |
 
 ## Backlog
 
