@@ -14,8 +14,11 @@ Bug-ledger history lives in
 
 ## Current state
 
-- **Pyramid**: 846 (testUnit **288** / testIntegration 81 /
-  testServer **417** / testClient **60**). +3 on 2026-05-29 from
+- **Pyramid**: 854 (testUnit **288** / testIntegration 81 /
+  testServer **425** / testClient **60**). +8 on 2026-05-29 from
+  TASK-40c Batch 3 (Gaps F.1 + J): CO2ScrubberComparatorOutputTest (2)
+  + ItemUpgradeSlotEligibilityTest (6). +0 testClient effective from
+  TASK-40b (env-blocked harness). +3 on 2026-05-29 from
   TASK-40 Batch 1 (audit Gaps E/A/D from 2026-05-27 audit):
   `RocketItemUnloaderActiveTransferTest` (1) +
   `RailgunCargoReceiveContractTest` (1) +
@@ -211,6 +214,7 @@ Bug-ledger history lives in
 | [TASK-39](TASK-39-satellite-terminal-chip-recognition.md) | TileSatelliteTerminal chip recognition + erase button — 4 server tests (`SatelliteTerminalChipRecognitionTest`) pinning status 0/1/3 ladder + destructive erase removes sat from dim properties + blanks chip NBT. New `/artest satellite-terminal {info\|load-chip\|press-erase}` subcommand group. From audit Gap R. | ✅ |
 | [TASK-40](TASK-40-batch1-rocket-loader-railgun-analyser.md) | Batch 1 of 2026-05-27 audit close-out: Gap E (rocket item unloader active transfer — 1 server) + Gap A (railgun receiver-side cargo contract via `onReceiveCargo` — 1 server) + Gap D (TileAstrobodyDataProcessor chip-data increment from DataBus — 1 server). 7 new probe verbs (`rocket storage-item-fill`, `infra unloader-debug`, `infra railgun-receive-cargo`, `infra astrobody-{set-research\|load-chip\|chip-data}`, `infra databus-set-data`). Reshapes for D (asteroid chip not planet chip) and A (cargo transport not weapon firing) documented in task doc. | ✅ |
 | [TASK-40b](TASK-40b-batch2-gascharge-areagravity.md) | Batch 2 of 2026-05-27 audit close-out: Gap F.2 (TileGasChargePad refills suit air — 1 testClient) + Gap C (TileAreaGravityController resets in-radius player fallDistance — 1 testClient). 2 new probe verbs (`player set-fall-distance`, `player get-fall-distance`). Reshape for Gap C: pin the unconditional fallDistance-reset (player-visible fall-damage immunity) instead of the audit's band-quality motion pin — strictly cheaper, pins the same gate. **testClient runs blocked in dev env** by Xvfb/GL context mismatch (existing testClient tests fail identically); code compiles, follows established pattern. | ✅ authored, harness-blocked |
+| [TASK-40c](TASK-40c-batch3-phase-0-heavy.md) | Batch 3 of 2026-05-27 audit close-out — Phase-0-heavy sweep across 10 gaps. Shipped: Gap F.1 (CO2Scrubber comparator output — 2 server) + Gap J (ItemUpgrade slot eligibility per-meta — 6 server). 2 new probe verbs (`infra comparator-override`, `infra item-armor-slot`). Phase-0 outcomes for the rest: F.4 (TilePump) ⏸ @Ignore pending real-source-water probe; F.3 / H / M / G / I ❌ dropped (impl-only or audit framing off); B / S ❌ deferred to a possible TASK-41 (real contracts but heavy fixture cost). ~28 h saved vs audit estimate via aggressive collapse discipline. | ✅ partial |
 
 ## Backlog
 

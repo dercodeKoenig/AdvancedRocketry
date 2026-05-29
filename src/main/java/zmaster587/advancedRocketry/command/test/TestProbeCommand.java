@@ -5868,6 +5868,72 @@ public class TestProbeCommand extends CommandBase {
             }
             return;
         }
+        if (args.length >= 5 && "comparator-override".equalsIgnoreCase(args[0])) {
+            // TASK-40c Gap F.1 — read IComparatorOverride.getComparatorOverride()
+            // on a placed tile (libVulpes interface). Used for tiles whose
+            // comparator output mirrors an inventory state (e.g. CO2Scrubber
+            // damage → 0..15 bands), without depending on a vanilla
+            // BlockRedstoneEmitter relay.
+            int dim = parseIntOr(args[1], Integer.MIN_VALUE);
+            int x = parseIntOr(args[2], 0);
+            int y = parseIntOr(args[3], 0);
+            int z = parseIntOr(args[4], 0);
+            net.minecraft.world.WorldServer world = server.getWorld(dim);
+            if (world == null) {
+                send(sender, "{\"error\":\"world not loaded\",\"dim\":" + dim + "}");
+                return;
+            }
+            TileEntity tile = world.getTileEntity(new BlockPos(x, y, z));
+            if (!(tile instanceof zmaster587.libVulpes.tile.IComparatorOverride)) {
+                send(sender, "{\"error\":\"tile not IComparatorOverride\",\"tile\":\""
+                        + (tile == null ? "null" : tile.getClass().getName()) + "\"}");
+                return;
+            }
+            int value = ((zmaster587.libVulpes.tile.IComparatorOverride) tile)
+                    .getComparatorOverride();
+            send(sender, "{\"ok\":true,\"value\":" + value + "}");
+            return;
+        }
+        if (args.length >= 4 && "item-armor-slot".equalsIgnoreCase(args[0])) {
+            // TASK-40c Gap J — for an IArmorComponent item, return the four
+            // EntityEquipmentSlot eligibilities for a given (itemId, meta).
+            // Mirrors the data-only-component contract from
+            // ArmorComponentContractTest.
+            String itemId = args[1];
+            int meta = parseIntOr(args[2], 0);
+            int count = parseIntOr(args[3], 1);
+            net.minecraft.item.Item item =
+                    ForgeRegistries.ITEMS.getValue(new ResourceLocation(itemId));
+            if (item == null) {
+                send(sender, "{\"error\":\"unknown item id\",\"id\":\""
+                        + escapeJson(itemId) + "\"}");
+                return;
+            }
+            if (!(item instanceof zmaster587.libVulpes.api.IArmorComponent)) {
+                send(sender, "{\"error\":\"item not IArmorComponent\",\"id\":\""
+                        + escapeJson(itemId) + "\"}");
+                return;
+            }
+            zmaster587.libVulpes.api.IArmorComponent comp =
+                    (zmaster587.libVulpes.api.IArmorComponent) item;
+            net.minecraft.item.ItemStack stack =
+                    new net.minecraft.item.ItemStack(item, count, meta);
+            boolean head = comp.isAllowedInSlot(stack,
+                    net.minecraft.inventory.EntityEquipmentSlot.HEAD);
+            boolean chest = comp.isAllowedInSlot(stack,
+                    net.minecraft.inventory.EntityEquipmentSlot.CHEST);
+            boolean legs = comp.isAllowedInSlot(stack,
+                    net.minecraft.inventory.EntityEquipmentSlot.LEGS);
+            boolean feet = comp.isAllowedInSlot(stack,
+                    net.minecraft.inventory.EntityEquipmentSlot.FEET);
+            send(sender, "{\"ok\":true,\"item\":\"" + escapeJson(itemId)
+                    + "\",\"meta\":" + meta
+                    + ",\"head\":" + head
+                    + ",\"chest\":" + chest
+                    + ",\"legs\":" + legs
+                    + ",\"feet\":" + feet + "}");
+            return;
+        }
         if (args.length >= 5 && "unloader-debug".equalsIgnoreCase(args[0])) {
             // TASK-40 Gap E debug — dumps state inside TileRocketUnloader's
             // `if (!world.isRemote && rocket != null)` body so the test can
