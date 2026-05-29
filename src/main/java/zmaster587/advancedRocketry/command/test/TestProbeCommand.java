@@ -5868,6 +5868,36 @@ public class TestProbeCommand extends CommandBase {
             }
             return;
         }
+        if (args.length >= 5 && "forcefield-tick".equalsIgnoreCase(args[0])) {
+            // TASK-40d Gap L — directly invoke TileForceFieldProjector's
+            // onIntermittentUpdate (the public probe-friendly half of update()
+            // split out by a prior task-driven refactor) so tests can drive
+            // extension / retraction without burning ~250 ms per natural-tick
+            // cycle on the worldTime % 5 == 0 gate.
+            int dim = parseIntOr(args[1], Integer.MIN_VALUE);
+            int x = parseIntOr(args[2], 0);
+            int y = parseIntOr(args[3], 0);
+            int z = parseIntOr(args[4], 0);
+            int ticks = args.length >= 6 ? parseIntOr(args[5], 1) : 1;
+            net.minecraft.world.WorldServer world = server.getWorld(dim);
+            if (world == null) {
+                send(sender, "{\"error\":\"world not loaded\",\"dim\":" + dim + "}");
+                return;
+            }
+            TileEntity tile = world.getTileEntity(new BlockPos(x, y, z));
+            if (!(tile instanceof zmaster587.advancedRocketry.tile.TileForceFieldProjector)) {
+                send(sender, "{\"error\":\"not a TileForceFieldProjector\",\"tile\":\""
+                        + (tile == null ? "null" : tile.getClass().getName()) + "\"}");
+                return;
+            }
+            zmaster587.advancedRocketry.tile.TileForceFieldProjector projector =
+                    (zmaster587.advancedRocketry.tile.TileForceFieldProjector) tile;
+            for (int i = 0; i < ticks; i++) {
+                projector.onIntermittentUpdate();
+            }
+            send(sender, "{\"ok\":true,\"ticked\":" + ticks + "}");
+            return;
+        }
         if (args.length >= 5 && "comparator-override".equalsIgnoreCase(args[0])) {
             // TASK-40c Gap F.1 — read IComparatorOverride.getComparatorOverride()
             // on a placed tile (libVulpes interface). Used for tiles whose
