@@ -532,6 +532,22 @@ fun Test.configureHarnessLayer(enableClient: Boolean) {
             val (clientEnv, clientProps) = resolveFg6RunConfig("runClient")
             clientEnv.forEach { (k, v) -> systemProperty("forge.test.client.env.$k", v) }
             systemProperty("forge.test.client.env.MC_VERSION", mcVersion)
+            // Forward DISPLAY (and optional GL knobs) to the spawned client JVM.
+            // FG6's runClient config doesn't include shell env, so the client
+            // subprocess otherwise sees DISPLAY unset → LWJGL's LinuxDisplay
+            // NPEs in getAvailableDisplayModes (X11 query against null
+            // display name). Surface from the GRADLE-invoking shell to the
+            // CLIENT subprocess via the framework's forge.test.client.env.*
+            // channel. No-op if the parent shell didn't set DISPLAY.
+            System.getenv("DISPLAY")?.let {
+                systemProperty("forge.test.client.env.DISPLAY", it)
+            }
+            System.getenv("XAUTHORITY")?.let {
+                systemProperty("forge.test.client.env.XAUTHORITY", it)
+            }
+            System.getenv("LIBGL_ALWAYS_SOFTWARE")?.let {
+                systemProperty("forge.test.client.env.LIBGL_ALWAYS_SOFTWARE", it)
+            }
             val clientToolOptions = packToolOptions(clientProps)
             if (clientToolOptions.isNotEmpty()) {
                 systemProperty("forge.test.client.env.JAVA_TOOL_OPTIONS", clientToolOptions)

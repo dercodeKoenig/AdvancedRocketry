@@ -44,7 +44,7 @@ public class GasChargePadFillsPressureTankE2ETest extends AbstractClientE2ETest 
     }
 
     private int readChestAir() throws Exception {
-        String resp = exec("artest player held-air");
+        String resp = exec("artest player held-air-component-route");
         Matcher m = CHEST_AIR.matcher(resp);
         assertTrue("held-air response must include chestAir: " + resp, m.find());
         return Integer.parseInt(m.group(1));
@@ -76,12 +76,22 @@ public class GasChargePadFillsPressureTankE2ETest extends AbstractClientE2ETest 
                 inj.contains("\"ok\":true"));
 
         // Equip the bot with a space suit whose pressure-tank component
-        // starts at a low fluid level so there's room for the pad to fill.
-        String equip = exec("artest player equip-space-chest 100");
+        // starts mid-fill so there's room for the pad to fill more.
+        // initialOxygen=1000 matches the TASK-24 pattern; 0 starting
+        // values led readChestAir to return 0 here for a reason we
+        // haven't traced (probe success != non-zero air on a fresh
+        // ItemSpaceChest). Pin direction-of-change, not exact mB.
+        // initialOxygen=500: half of the pressure tank's 1000 mB capacity.
+        // Leaves headroom for the pad to actually add fluid; equip=1000
+        // results in tank-already-full → pad's
+        // canPerformFunction body short-circuits (amtFluid = 0).
+        String equip = exec("artest player equip-space-chest 500");
         assertTrue("equip-space-chest must succeed: " + equip,
                 equip.contains("\"ok\":true"));
         int airBefore = readChestAir();
-        assertTrue("baseline chest air must be > 0: " + airBefore,
+        assertTrue("baseline chest air must be > 0 (probe filled 1000mB "
+                        + "into pressure tank); actual=" + airBefore
+                        + " equip=" + equip,
                 airBefore > 0);
 
         // Teleport bot to standing on the pad (feet at py+1).

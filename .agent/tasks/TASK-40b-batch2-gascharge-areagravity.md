@@ -1,6 +1,6 @@
 # TASK-40b — Batch 2: Gap F.2 + Gap C (testClient)
 
-**Status: ✅ Authored 2026-05-29 (testClient harness validation deferred — env blocker)**
+**Status: ✅ Gap F.2 shipped (testClient PASSED); Gap C @Ignore — design needs revisit (2026-05-29)**
 
 ## Ticket
 
@@ -77,7 +77,32 @@ existing `multiblock gravity-controller` fixture.
 - [x] `GasChargePadFillsPressureTankE2ETest.standingOnPoweredPadRefillsSuitAir`
 - [x] `AreaGravityControllerResetsFallDistanceE2ETest.poweredControllerResetsFallDistanceOfNearbyPlayer`
 
-### Phase 3: Validation ⛔ env-blocked
+### Phase 3: Validation — partial
+
+**Harness fix (2026-05-29)**: build.gradle.kts now forwards
+`DISPLAY`, `XAUTHORITY`, and `LIBGL_ALWAYS_SOFTWARE` env vars from
+the parent shell to the spawned client subprocess via the
+framework's `forge.test.client.env.*` channel. Without this,
+the client JVM had no DISPLAY and LWJGL's LinuxDisplay NPE'd in
+`getAvailableDisplayModes` during the static `Display.<clinit>`.
+
+**Phase 0 finding (2026-05-29)**: the dev-box's running Xorg at
+`:99` (amdgpu DDX) is incompatible with LWJGL 2.9.4's old XRandR
+query path. Standalone LWJGL test against `:99` NPE's even with
+DISPLAY set. Workaround: start a fresh Xvfb at `:100` with
+`+extension GLX +extension RANDR +render`; LWJGL works fine there.
+Run testClient with `DISPLAY=:100 ./gradlew testClient -PuseLocalFramework=true`.
+
+**Validation results**:
+
+- `GasChargePadFillsPressureTankE2ETest` ✅ PASSED on `DISPLAY=:100`.
+- `AreaGravityControllerResetsFallDistanceE2ETest` ⏸ now @Ignore —
+  the test set fallDistance > 0 then read it back as 0 because
+  vanilla MC's `EntityLivingBase.updateFallState` resets a grounded
+  bot's fallDistance to 0 every tick. The controller's reset is
+  indistinguishable from the vanilla reset on a grounded bot. To
+  un-ignore: rewrite around a falling EntityItem (no
+  onGround/motionY=0 vanilla-reset path) — see test class docstring.
 
 - [x] Tests compile (verified via `./gradlew compileTestJava -PuseLocalFramework=true`).
 - [ ] **testClient run blocked in this dev environment** by OpenGL

@@ -1,6 +1,7 @@
 package zmaster587.advancedRocketry.test.client;
 
 import com.github.stannismod.forge.testing.junit.AbstractClientE2ETest;
+import org.junit.Ignore;
 import org.junit.Test;
 
 import java.util.regex.Matcher;
@@ -46,6 +47,12 @@ public class AreaGravityControllerResetsFallDistanceE2ETest extends AbstractClie
         return String.join("\n", serverClient().execute(cmd));
     }
 
+    private void ok(String cmd) throws Exception {
+        String resp = exec(cmd);
+        assertTrue("probe must succeed: cmd='" + cmd + "' resp=" + resp,
+                resp.contains("\"ok\":true"));
+    }
+
     private double readFallDistance() throws Exception {
         String resp = exec("artest player get-fall-distance");
         Matcher m = FALL_DIST.matcher(resp);
@@ -64,6 +71,28 @@ public class AreaGravityControllerResetsFallDistanceE2ETest extends AbstractClie
      *       fallDistance is 0 (the controller reset it).</li>
      * </ol>
      */
+    /**
+     * NOTE: currently @Ignore — test design needs revisit.
+     *
+     * <p>A grounded bot has its {@code fallDistance} forcibly reset to 0
+     * by vanilla MC every server tick via {@code EntityLivingBase.updateFallState}
+     * — the controller's reset is indistinguishable from the vanilla
+     * reset. Result: the contract is technically pinned (reset is 0
+     * after force-tick) but trivially so — the test cannot distinguish
+     * controller behaviour from vanilla physics.</p>
+     *
+     * <p>To un-ignore: rewrite around a falling {@link
+     * net.minecraft.entity.item.EntityItem} (predictable physics, no
+     * onGround/motionY=0 vanilla-reset path) — spawn at projection
+     * centre + elevated y, bot.waitTicks to accumulate non-zero
+     * fallDistance, force-tick controller, assert reset. Needs
+     * extending the existing {@code entity info} probe to surface
+     * {@code fallDistance}, OR a dedicated
+     * {@code entity fall-distance <dim> <entityId>} verb.</p>
+     */
+    @Ignore("TASK-40b Gap C — grounded bot fallDistance reset is "
+            + "indistinguishable from vanilla physics reset. Re-design "
+            + "around a falling EntityItem; see class docstring.")
     @Test
     public void poweredControllerResetsFallDistanceOfNearbyPlayer() throws Exception {
         bot().waitForWorld();
@@ -102,25 +131,20 @@ public class AreaGravityControllerResetsFallDistanceE2ETest extends AbstractClie
                         + "actual=" + baseline + " set=" + set,
                 baseline > 0.5);
 
-        // 4) Let natural ticks run — controller.update() fires every
-        // server tick and resets fallDistance for in-AABB entities.
-        bot().waitTicks(30);
-
-        // Re-set in case any natural fall reset it between assertion
-        // and wait; the contract is "controller reset it to 0".
-        // Actually do the inverse: set non-zero, then wait the smallest
-        // window in which AT LEAST ONE controller tick must have fired.
-        exec("artest player set-fall-distance 5.5");
-        // Sanity: probe set 5.5 succeeded.
+        // 4) Set fallDistance baseline, then deterministically tick the
+        // controller via `tile force-tick`. Earlier natural-tick approach
+        // (bot().waitTicks) was flaky — isRunning may not be true within
+        // the wait window. force-tick bypasses the natural-tick scheduler
+        // and synchronously invokes the controller's update() N times.
         double afterSet = readFallDistance();
-        assertTrue("post-probe-set fallDistance must be > 0 to be "
-                        + "meaningful; actual=" + afterSet,
-                afterSet >= 5.0);
+        assertTrue("baseline fallDistance must be > 0 (probe sanity); "
+                        + "actual=" + afterSet,
+                afterSet > 0.5);
 
-        // Wait 5 ticks — 5 ticks of controller update() is enough.
-        // 1 tick = 1 update() call = 1 fallDistance reset on every entity
-        // in range.
-        bot().waitTicks(5);
+        // Drive controller update() directly. Each call enters
+        // `if (isRunning()) { ... e.fallDistance = 0; ... }` if power
+        // and complete-structure gates pass.
+        ok("artest tile force-tick 0 " + CX + " " + CY + " " + CZ + " 5");
 
         double afterTick = readFallDistance();
         assertTrue("controller must reset bot fallDistance to 0 when "
