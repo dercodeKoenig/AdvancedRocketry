@@ -1,0 +1,3992 @@
+{
+  "version": "1.0.0",
+  "last_updated": "2026-05-27T11:55:42.929808Z",
+  "stats": {
+    "total_nodes": 111,
+    "total_edges": 363,
+    "memory_count": 8
+  },
+  "nodes": {
+    "tasks": {
+      "TASK-09": {
+        "id": "TASK-09",
+        "path": ".agent/tasks/TASK-09-satellite-type-depth.md",
+        "title": "TASK-09: Per-satellite-type behavioural depth",
+        "status": "completed",
+        "concepts": [
+          "context",
+          "knowledge",
+          "workflow",
+          "testing",
+          "backend",
+          "database",
+          "markers"
+        ]
+      },
+      "TASK-10": {
+        "id": "TASK-10",
+        "path": ".agent/tasks/TASK-10-fakeplayer-and-task03-tail.md",
+        "title": "TASK-10: TASK-03 deferred tail \u2014 A2 remainder + B3 suite-grouping",
+        "status": "completed",
+        "concepts": [
+          "markers",
+          "testing",
+          "context",
+          "backend"
+        ]
+      },
+      "TASK-01": {
+        "id": "TASK-01",
+        "path": ".agent/tasks/TASK-01-smart-depth-coverage.md",
+        "title": "TASK-01: SMART per-scenario depth coverage",
+        "status": "completed",
+        "concepts": [
+          "context",
+          "session",
+          "testing",
+          "backend",
+          "markers"
+        ]
+      },
+      "TASK-11": {
+        "id": "TASK-11",
+        "path": ".agent/tasks/TASK-11-world-command-coverage.md",
+        "title": "TASK-11: `/advancedrocketry` (`/ar`) WorldCommand coverage",
+        "status": "completed",
+        "concepts": [
+          "context",
+          "skills",
+          "testing",
+          "api",
+          "backend",
+          "markers"
+        ]
+      },
+      "TASK-03": {
+        "id": "TASK-03",
+        "path": ".agent/tasks/TASK-03-test-depth-and-harness-consolidation.md",
+        "title": "TASK-03: Test-depth deepening + harness consolidation",
+        "status": "completed",
+        "concepts": [
+          "context",
+          "deployment",
+          "frontend",
+          "skills",
+          "session",
+          "testing",
+          "api",
+          "backend",
+          "database",
+          "markers"
+        ]
+      },
+      "TASK-26": {
+        "id": "TASK-26",
+        "path": ".agent/tasks/TASK-26-wildcard-based-machine-coverage.md",
+        "title": "TASK-26: Wildcard-based machine recipe coverage (ArcFurnace + PrecisionAssembler)",
+        "status": "completed",
+        "concepts": [
+          "context",
+          "workflow",
+          "session",
+          "testing",
+          "backend",
+          "markers"
+        ]
+      },
+      "TASK-25": {
+        "id": "TASK-25",
+        "path": ".agent/tasks/TASK-25-plate-press-coverage.md",
+        "title": "TASK-25: PlatePress recipe coverage (single-block redstone-triggered)",
+        "status": "completed",
+        "concepts": [
+          "context",
+          "session",
+          "testing",
+          "backend",
+          "markers"
+        ]
+      },
+      "TASK-16": {
+        "path": "/workspace/AdvancedRocketry/.agent/tasks/TASK-16-test-stability-flake-watch.md",
+        "title": "Test-stability flake watch \u2014 parallel-fork contention",
+        "status": "unknown",
+        "concepts": [
+          "api",
+          "testing",
+          "context",
+          "markers",
+          "deployment"
+        ]
+      },
+      "TASK-04": {
+        "id": "TASK-04",
+        "path": ".agent/tasks/TASK-04-multiblock-machine-depth.md",
+        "title": "TASK-04: Multiblock machine depth (Warp / Laser Drill / Elevator / Black Hole / Space Laser)",
+        "status": "completed",
+        "concepts": [
+          "context",
+          "workflow",
+          "session",
+          "testing",
+          "backend",
+          "markers"
+        ]
+      },
+      "TASK-23": {
+        "path": "/workspace/AdvancedRocketry/.agent/tasks/TASK-23-sealdetector-remaining-branches.md",
+        "title": "ItemSealDetector remaining branch matrix",
+        "status": "unknown",
+        "concepts": [
+          "context",
+          "deployment",
+          "api",
+          "testing"
+        ]
+      },
+      "TASK-05": {
+        "id": "TASK-05",
+        "path": ".agent/tasks/TASK-05-item-behaviour-suite.md",
+        "title": "TASK-05: Item-behaviour suite (hovercraft / jackhammer / suit / scanners / chips)",
+        "status": "completed",
+        "concepts": [
+          "context",
+          "knowledge",
+          "frontend",
+          "testing",
+          "backend",
+          "markers"
+        ]
+      },
+      "TASK-19": {
+        "path": "/workspace/AdvancedRocketry/.agent/tasks/TASK-19-multiblock-powered-cycle-trio.md",
+        "title": "Multiblock powered-cycle (Terraformer / BHG / Beacon enable)",
+        "status": "unknown",
+        "concepts": [
+          "workflow",
+          "api",
+          "context",
+          "testing",
+          "deployment"
+        ]
+      },
+      "TASK-24": {
+        "path": "/workspace/AdvancedRocketry/.agent/tasks/TASK-24-spacearmor-chest-route.md",
+        "title": "SpaceArmor chest sub-inventory drain route",
+        "status": "unknown",
+        "concepts": [
+          "frontend",
+          "deployment",
+          "testing",
+          "context"
+        ]
+      },
+      "TASK-21": {
+        "path": "/workspace/AdvancedRocketry/.agent/tasks/TASK-21-ar-player-equipped-positives.md",
+        "title": "/ar player-equipped positive paths (testClient)",
+        "status": "unknown",
+        "concepts": [
+          "api",
+          "testing",
+          "deployment",
+          "context",
+          "tom"
+        ]
+      },
+      "TASK-02": {
+        "id": "TASK-02",
+        "path": ".agent/tasks/TASK-02-functional-coverage-expansion.md",
+        "title": "TASK-02: Functional coverage expansion",
+        "status": "completed",
+        "concepts": [
+          "context",
+          "deployment",
+          "knowledge",
+          "frontend",
+          "session",
+          "testing",
+          "api",
+          "backend",
+          "database",
+          "markers"
+        ]
+      },
+      "TASK-22": {
+        "path": "/workspace/AdvancedRocketry/.agent/tasks/TASK-22-uv-assembler-full-delta.md",
+        "title": "UV-assembler full behavioural delta from RocketAssembler",
+        "status": "unknown",
+        "concepts": [
+          "deployment",
+          "testing",
+          "context",
+          "api",
+          "frontend"
+        ]
+      },
+      "TASK-13": {
+        "id": "TASK-13",
+        "path": ".agent/tasks/TASK-13-wireless-transceiver-coverage.md",
+        "title": "TASK-13: Wireless transceiver E2E coverage",
+        "status": "completed",
+        "concepts": [
+          "context",
+          "session",
+          "testing",
+          "api",
+          "backend",
+          "markers"
+        ]
+      },
+      "README": {
+        "id": "README",
+        "path": ".agent/tasks/README.md",
+        "title": "Test-coverage tasks \u2014 roadmap and dependency graph",
+        "status": "completed",
+        "concepts": [
+          "context",
+          "knowledge",
+          "skills",
+          "session",
+          "testing",
+          "backend",
+          "markers"
+        ]
+      },
+      "TASK-14": {
+        "id": "TASK-14",
+        "path": ".agent/tasks/TASK-14-companion-mod-integration-coverage.md",
+        "title": "TASK-14: Companion-mod integration coverage (JEI / GalacticCraft / MatterOverdrive)",
+        "status": "backlog",
+        "concepts": [
+          "context",
+          "deployment",
+          "session",
+          "testing",
+          "api",
+          "backend",
+          "theory of mind"
+        ]
+      },
+      "TASK-20": {
+        "path": "/workspace/AdvancedRocketry/.agent/tasks/TASK-20-hovercraft-ride-coverage.md",
+        "title": "Hovercraft ride / throttle / fuel-drain coverage",
+        "status": "unknown",
+        "concepts": [
+          "testing",
+          "markers",
+          "context",
+          "deployment"
+        ]
+      },
+      "TASK-17": {
+        "id": "TASK-17",
+        "path": ".agent/tasks/TASK-17-ssot-integrity-followups.md",
+        "title": "TASK-17: SSOT integrity follow-ups from 2026-05-23 audit",
+        "status": "completed",
+        "concepts": [
+          "context",
+          "skills",
+          "session",
+          "testing",
+          "backend"
+        ]
+      },
+      "TASK-07": {
+        "id": "TASK-07",
+        "path": ".agent/tasks/TASK-07-rocket-flight-cycle-beyond-launch.md",
+        "title": "TASK-07: Rocket flight cycle beyond launch (orbit reached / descent / landing / dismantle)",
+        "status": "completed",
+        "concepts": [
+          "context",
+          "workflow",
+          "testing",
+          "backend",
+          "markers"
+        ]
+      },
+      "TASK-06": {
+        "id": "TASK-06",
+        "path": ".agent/tasks/TASK-06-mission-system-depth.md",
+        "title": "TASK-06: Mission-system behavioural depth",
+        "status": "completed",
+        "concepts": [
+          "context",
+          "workflow",
+          "session",
+          "testing",
+          "backend",
+          "markers"
+        ]
+      },
+      "TASK-18": {
+        "id": "TASK-18",
+        "path": ".agent/tasks/TASK-18-industrial-machine-powered-cycle.md",
+        "title": "TASK-18: Industrial machine powered-cycle coverage (\u00d79 multiblock machines)",
+        "status": "completed",
+        "concepts": [
+          "testing",
+          "context",
+          "backend"
+        ]
+      },
+      "TASK-27": {
+        "path": "/workspace/AdvancedRocketry/.agent/tasks/TASK-27-flake-fix-port-and-tick-races.md",
+        "title": "Flake fix \u2014 port-bind retry + tick-timing-race per-test polling",
+        "status": "unknown",
+        "concepts": [
+          "deployment",
+          "markers",
+          "workflow",
+          "context",
+          "api",
+          "testing",
+          "tom"
+        ]
+      },
+      "TASK-08": {
+        "id": "TASK-08",
+        "path": ".agent/tasks/TASK-08-mixin-rewrite.md",
+        "title": "TASK-08-mixin: Rewrite ASM coremod transformations to Mixin",
+        "status": "completed",
+        "concepts": [
+          "context",
+          "deployment",
+          "testing",
+          "backend",
+          "markers"
+        ]
+      },
+      "TASK-12": {
+        "id": "TASK-12",
+        "path": ".agent/tasks/TASK-12-bug-fix-pass.md",
+        "title": "TASK-12: Production bug-fix pass \u2014 flip the `_documentsKnownBug` ledger",
+        "status": "completed",
+        "concepts": [
+          "context",
+          "skills",
+          "testing",
+          "api",
+          "backend",
+          "database",
+          "markers"
+        ]
+      },
+      "TASK-15": {
+        "id": "TASK-15",
+        "path": ".agent/tasks/TASK-15-visual-regression.md",
+        "title": "TASK-15: Visual regression infrastructure for Minecraft client",
+        "status": "in-progress",
+        "concepts": [
+          "context",
+          "deployment",
+          "frontend",
+          "skills",
+          "session",
+          "testing",
+          "theory of mind",
+          "markers"
+        ]
+      },
+      "TASK-28": {
+        "path": "/workspace/AdvancedRocketry/.agent/tasks/TASK-28-residual-test-flakes.md",
+        "title": "Residual test flakes from TASK-27 10\u00d7 verification",
+        "status": "unknown",
+        "concepts": [
+          "workflow",
+          "testing",
+          "deployment"
+        ]
+      },
+      "TASK-29": {
+        "path": "/workspace/AdvancedRocketry/.agent/tasks/TASK-29-scanning-satellite-tick-contracts.md",
+        "title": "Scanning satellite tick behaviour contracts",
+        "status": "completed",
+        "concepts": [
+          "deployment",
+          "context",
+          "workflow",
+          "testing"
+        ]
+      },
+      "TASK-30": {
+        "path": "/workspace/AdvancedRocketry/.agent/tasks/TASK-30-station-controller-tick-contracts.md",
+        "title": "Station controller tick contracts (Altitude / Gravity / Orientation)",
+        "status": "completed",
+        "concepts": [
+          "context",
+          "tom",
+          "testing",
+          "deployment",
+          "workflow"
+        ]
+      },
+      "TASK-31": {
+        "path": "/workspace/AdvancedRocketry/.agent/tasks/TASK-31-rocket-event-payload-contracts.md",
+        "title": "External-subscriber payload contracts for RocketLanded / RocketDismantle / RocketDeOrbiting events",
+        "status": "completed",
+        "concepts": [
+          "context",
+          "testing",
+          "deployment",
+          "api",
+          "frontend"
+        ]
+      },
+      "TASK-32": {
+        "path": "/workspace/AdvancedRocketry/.agent/tasks/TASK-32-tier3-misc-coverage.md",
+        "title": "Tier 3 misc coverage \u2014 ItemPackedStructure deploy + atmosphereType NBT + MonitoringStation comparatorOverride",
+        "status": "completed",
+        "concepts": [
+          "testing",
+          "tom",
+          "api",
+          "context",
+          "workflow",
+          "deployment"
+        ]
+      },
+      "TASK-33": {
+        "path": "/workspace/AdvancedRocketry/.agent/tasks/TASK-33-satellitebuilder-real-construction.md",
+        "title": "SatelliteBuilder real-construction coverage",
+        "status": "unknown",
+        "concepts": [
+          "frontend",
+          "tom",
+          "context",
+          "workflow",
+          "testing",
+          "deployment"
+        ]
+      },
+      "TASK-34": {
+        "path": "/workspace/AdvancedRocketry/.agent/tasks/TASK-34-fuel-loader-active-transfer.md",
+        "title": "Fuel loader active fluid transfer",
+        "status": "completed",
+        "concepts": [
+          "tom",
+          "testing",
+          "context",
+          "deployment",
+          "api"
+        ]
+      },
+      "TASK-35": {
+        "path": "/workspace/AdvancedRocketry/.agent/tasks/TASK-35-ar-fetch-two-bot-harness.md",
+        "title": "/ar fetch positive coverage",
+        "status": "completed",
+        "concepts": [
+          "context",
+          "authentication",
+          "deployment",
+          "testing",
+          "tom",
+          "api"
+        ]
+      },
+      "TASK-36": {
+        "path": "/workspace/AdvancedRocketry/.agent/tasks/TASK-36-terraforming-and-service-station-depth.md",
+        "title": "Deeper contracts \u2014 TerraformingTerminal biome-mutation + ServiceStation repair cycle",
+        "status": "completed",
+        "concepts": [
+          "testing",
+          "deployment",
+          "context",
+          "workflow"
+        ]
+      },
+      "TASK-37": {
+        "path": "/workspace/AdvancedRocketry/.agent/tasks/TASK-37-nuclear-engine-rocket-assembly.md",
+        "title": "Nuclear engine rocket-assembly thrust aggregation",
+        "status": "completed",
+        "concepts": [
+          "deployment",
+          "testing",
+          "frontend",
+          "context",
+          "markers"
+        ]
+      },
+      "TASK-38": {
+        "path": "/workspace/AdvancedRocketry/.agent/tasks/TASK-38-mining-drill-rocket-assembly.md",
+        "title": "IMiningDrill rocket-assembly stat aggregation",
+        "status": "completed",
+        "concepts": [
+          "workflow",
+          "api",
+          "deployment",
+          "testing",
+          "context"
+        ]
+      },
+      "TASK-39": {
+        "path": "/workspace/AdvancedRocketry/.agent/tasks/TASK-39-satellite-terminal-chip-recognition.md",
+        "title": "TileSatelliteTerminal chip recognition + erase button",
+        "status": "completed",
+        "concepts": [
+          "workflow",
+          "context",
+          "deployment",
+          "testing"
+        ]
+      }
+    },
+    "system": {},
+    "sops": {
+      "SOP-client_tests_on_linux": {
+        "id": "SOP-client_tests_on_linux",
+        "path": ".agent/sops/development/client-tests-on-linux.md",
+        "title": "SOP: Run testClient on a headless Linux sandbox",
+        "category": "development",
+        "concepts": [
+          "deployment",
+          "markers",
+          "testing",
+          "context"
+        ]
+      },
+      "SOP-sharing_client_harness": {
+        "id": "SOP-sharing_client_harness",
+        "path": ".agent/sops/development/sharing-client-harness.md",
+        "title": "SOP: Sharing the client harness across test methods",
+        "category": "development",
+        "concepts": [
+          "theory of mind",
+          "testing",
+          "context",
+          "backend"
+        ]
+      },
+      "SOP-testing_principles": {
+        "id": "SOP-testing_principles",
+        "path": ".agent/sops/development/testing-principles.md",
+        "title": "SOP: Testing Principles \u2014 what tests should verify",
+        "category": "development",
+        "concepts": [
+          "context",
+          "workflow",
+          "testing",
+          "api",
+          "backend",
+          "database",
+          "markers"
+        ]
+      },
+      "SOP-task_lifecycle": {
+        "id": "SOP-task_lifecycle",
+        "path": ".agent/sops/development/task-lifecycle.md",
+        "title": "SOP: Task lifecycle \u2014 single source of truth discipline",
+        "category": "development",
+        "concepts": [
+          "context",
+          "skills",
+          "session",
+          "testing",
+          "api",
+          "backend",
+          "markers"
+        ]
+      }
+    },
+    "markers": {
+      "2026-05-20-2350_task10b-closed": {
+        "id": "2026-05-20-2350_task10b-closed",
+        "path": ".agent/.context-markers/2026-05-20-2350_task10b-closed.md",
+        "title": "TASK-10b closed \u2014 testClient e2e player-event coverage",
+        "concepts": [
+          "testing"
+        ]
+      },
+      "2026-05-19-0600_task02-round2-tile-rocket-eod": {
+        "id": "2026-05-19-0600_task02-round2-tile-rocket-eod",
+        "path": ".agent/.context-markers/2026-05-19-0600_task02-round2-tile-rocket-eod.md",
+        "title": "Context Marker: task02-round2-tile-rocket-eod",
+        "concepts": [
+          "context",
+          "session",
+          "testing",
+          "backend",
+          "markers"
+        ]
+      },
+      "2026-05-22_task06-shipped": {
+        "id": "2026-05-22_task06-shipped",
+        "path": ".agent/.context-markers/2026-05-22_task06-shipped.md",
+        "title": "Context marker \u2014 2026-05-22 (TASK-06 closed)",
+        "concepts": [
+          "context",
+          "skills",
+          "session",
+          "testing",
+          "backend",
+          "markers"
+        ]
+      },
+      "2026-05-21_task05-closed-task10b-phase7-reopened": {
+        "id": "2026-05-21_task05-closed-task10b-phase7-reopened",
+        "path": ".agent/.context-markers/2026-05-21_task05-closed-task10b-phase7-reopened.md",
+        "title": "Context marker \u2014 2026-05-21",
+        "concepts": [
+          "context",
+          "skills",
+          "session",
+          "testing",
+          "backend",
+          "markers"
+        ]
+      },
+      "2026-05-23_task11-world-command-shipped": {
+        "id": "2026-05-23_task11-world-command-shipped",
+        "path": ".agent/.context-markers/2026-05-23_task11-world-command-shipped.md",
+        "title": "Context marker \u2014 2026-05-23 (TASK-11 closed)",
+        "concepts": [
+          "context",
+          "skills",
+          "session",
+          "testing",
+          "backend",
+          "markers"
+        ]
+      },
+      "2026-05-12-1847_test-suite-junit-migration-eod": {
+        "id": "2026-05-12-1847_test-suite-junit-migration-eod",
+        "path": ".agent/.context-markers/2026-05-12-1847_test-suite-junit-migration-eod.md",
+        "title": "Context Marker: test-suite-junit-migration-eod",
+        "concepts": [
+          "context",
+          "workflow",
+          "skills",
+          "session",
+          "testing",
+          "backend",
+          "theory of mind",
+          "database",
+          "markers"
+        ]
+      },
+      "2026-05-18-2300_task02-autonomous-execution-eod": {
+        "id": "2026-05-18-2300_task02-autonomous-execution-eod",
+        "path": ".agent/.context-markers/2026-05-18-2300_task02-autonomous-execution-eod.md",
+        "title": "Context Marker: task02-autonomous-execution-eod",
+        "concepts": [
+          "context",
+          "session",
+          "testing",
+          "backend",
+          "markers"
+        ]
+      },
+      "2026-05-22_task06-phases-1-4-shipped": {
+        "id": "2026-05-22_task06-phases-1-4-shipped",
+        "path": ".agent/.context-markers/2026-05-22_task06-phases-1-4-shipped.md",
+        "title": "Context marker \u2014 2026-05-22 (later)",
+        "concepts": [
+          "context",
+          "workflow",
+          "skills",
+          "session",
+          "testing",
+          "backend",
+          "markers"
+        ]
+      },
+      "2026-05-22_task10b-phase7-closeout": {
+        "id": "2026-05-22_task10b-phase7-closeout",
+        "path": ".agent/.context-markers/2026-05-22_task10b-phase7-closeout.md",
+        "title": "Context marker \u2014 2026-05-22",
+        "concepts": [
+          "context",
+          "workflow",
+          "skills",
+          "session",
+          "testing",
+          "markers"
+        ]
+      },
+      "2026-05-21-1430_task09-closed": {
+        "id": "2026-05-21-1430_task09-closed",
+        "path": ".agent/.context-markers/2026-05-21-1430_task09-closed.md",
+        "title": "TASK-09 closed \u2014 per-satellite-type behavioural depth",
+        "concepts": [
+          "backend"
+        ]
+      },
+      "2026-05-20-1430_task04-observatory-railgun": {
+        "id": "2026-05-20-1430_task04-observatory-railgun",
+        "path": ".agent/.context-markers/2026-05-20-1430_task04-observatory-railgun.md",
+        "title": "Context Marker: TASK-04 multiblock fixtures \u2014 Observatory + Railgun shipped",
+        "concepts": [
+          "context",
+          "workflow",
+          "skills",
+          "session",
+          "testing",
+          "markers"
+        ]
+      },
+      "2026-05-21-1700_task09-phase5-closed": {
+        "id": "2026-05-21-1700_task09-phase5-closed",
+        "path": ".agent/.context-markers/2026-05-21-1700_task09-phase5-closed.md",
+        "title": "TASK-09 Phase 5 \u2014 coverage gaps closed",
+        "concepts": [
+          "testing",
+          "api",
+          "markers",
+          "workflow"
+        ]
+      },
+      "2026-05-20-2330_task07-fully-closed": {
+        "id": "2026-05-20-2330_task07-fully-closed",
+        "path": ".agent/.context-markers/2026-05-20-2330_task07-fully-closed.md",
+        "title": "Context Marker: TASK-07 fully closed \u2014 flight cycle deferred phases shipped",
+        "concepts": [
+          "context",
+          "workflow",
+          "skills",
+          "session",
+          "testing",
+          "api",
+          "backend",
+          "markers"
+        ]
+      },
+      "2026-05-23_task17-ssot-integrity-shipped": {
+        "id": "2026-05-23_task17-ssot-integrity-shipped",
+        "path": ".agent/.context-markers/2026-05-23_task17-ssot-integrity-shipped.md",
+        "title": "Context marker \u2014 2026-05-23 TASK-17 shipped",
+        "concepts": [
+          "context",
+          "skills",
+          "session",
+          "testing",
+          "backend",
+          "markers"
+        ]
+      },
+      "2026-05-23_task12-bugs-drained": {
+        "id": "2026-05-23_task12-bugs-drained",
+        "path": ".agent/.context-markers/2026-05-23_task12-bugs-drained.md",
+        "title": "Context marker \u2014 2026-05-23 (TASK-12 closed \u2014 bug ledger drained)",
+        "concepts": [
+          "context",
+          "skills",
+          "session",
+          "testing",
+          "backend",
+          "database",
+          "markers"
+        ]
+      },
+      "2026-05-19-1230_task03-A-and-B-mostly-done-eod": {
+        "id": "2026-05-19-1230_task03-A-and-B-mostly-done-eod",
+        "path": ".agent/.context-markers/2026-05-19-1230_task03-A-and-B-mostly-done-eod.md",
+        "title": "Context Marker: TASK-03 \u2014 most of Phase A + Phase B (shared harness) shipped",
+        "concepts": [
+          "context",
+          "knowledge",
+          "workflow",
+          "session",
+          "testing",
+          "api",
+          "backend",
+          "database",
+          "markers"
+        ]
+      },
+      "2026-05-23_task18-industrial-machines-shipped": {
+        "id": "2026-05-23_task18-industrial-machines-shipped",
+        "path": ".agent/.context-markers/2026-05-23_task18-industrial-machines-shipped.md",
+        "title": "Context marker \u2014 2026-05-23 TASK-18 shipped (7 of 9 machines)",
+        "concepts": [
+          "context",
+          "workflow",
+          "session",
+          "testing",
+          "backend",
+          "markers"
+        ]
+      },
+      "2026-05-18-1900_merge-fix-weather-into-feature-tests": {
+        "id": "2026-05-18-1900_merge-fix-weather-into-feature-tests",
+        "path": ".agent/.context-markers/2026-05-18-1900_merge-fix-weather-into-feature-tests.md",
+        "title": "Context Marker: merge-fix-weather-into-feature-tests",
+        "concepts": [
+          "context",
+          "workflow",
+          "skills",
+          "testing",
+          "api",
+          "backend",
+          "markers"
+        ]
+      },
+      "2026-05-23_task25-26-16-batch-shipped": {
+        "id": "2026-05-23_task25-26-16-batch-shipped",
+        "path": ".agent/.context-markers/2026-05-23_task25-26-16-batch-shipped.md",
+        "title": "Context marker \u2014 2026-05-23 TASK-25 + TASK-26 + TASK-16 batch shipped",
+        "concepts": [
+          "context",
+          "session",
+          "testing",
+          "backend",
+          "markers"
+        ]
+      },
+      "2026-05-13-1709_smart-8gaps-implemented-eod": {
+        "id": "2026-05-13-1709_smart-8gaps-implemented-eod",
+        "path": ".agent/.context-markers/2026-05-13-1709_smart-8gaps-implemented-eod.md",
+        "title": "Context Marker: smart-8gaps-implemented-eod",
+        "concepts": [
+          "context",
+          "knowledge",
+          "workflow",
+          "skills",
+          "session",
+          "testing",
+          "api",
+          "backend",
+          "theory of mind",
+          "database",
+          "markers"
+        ]
+      },
+      "2026-05-23_task14-obsoleted": {
+        "id": "2026-05-23_task14-obsoleted",
+        "path": ".agent/.context-markers/2026-05-23_task14-obsoleted.md",
+        "title": "Context marker \u2014 2026-05-23 TASK-14 obsoleted",
+        "concepts": [
+          "context",
+          "session",
+          "testing",
+          "markers"
+        ]
+      },
+      "2026-05-20-1700_task08-mixin-shipped": {
+        "id": "2026-05-20-1700_task08-mixin-shipped",
+        "path": ".agent/.context-markers/2026-05-20-1700_task08-mixin-shipped.md",
+        "title": "Context Marker \u2014 TASK-08-mixin shipped 2026-05-20",
+        "concepts": [
+          "context",
+          "knowledge",
+          "workflow",
+          "session",
+          "testing",
+          "backend",
+          "markers"
+        ]
+      },
+      "before-compact-2026-05-23-1230": {
+        "id": "before-compact-2026-05-23-1230",
+        "path": ".agent/.context-markers/before-compact-2026-05-23-1230.md",
+        "title": "Context marker \u2014 2026-05-23 1230 (pre-compact)",
+        "concepts": [
+          "context",
+          "knowledge",
+          "skills",
+          "session",
+          "testing",
+          "backend",
+          "database",
+          "markers"
+        ]
+      },
+      "2026-05-19-1100_task02-phase4r2-phase1-phase7-phase8-eod": {
+        "id": "2026-05-19-1100_task02-phase4r2-phase1-phase7-phase8-eod",
+        "path": ".agent/.context-markers/2026-05-19-1100_task02-phase4r2-phase1-phase7-phase8-eod.md",
+        "title": "Context Marker: task02 round 3 \u2014 Phase 4 r2 + Phase 1 player events + Phase 7 deep + Phase 8 dock/undock",
+        "concepts": [
+          "context",
+          "workflow",
+          "session",
+          "testing",
+          "backend",
+          "database",
+          "markers"
+        ]
+      },
+      "2026-05-18-2050_task02-drafted-gl-fixed": {
+        "id": "2026-05-18-2050_task02-drafted-gl-fixed",
+        "path": ".agent/.context-markers/2026-05-18-2050_task02-drafted-gl-fixed.md",
+        "title": "Context Marker: task02-drafted-gl-fixed",
+        "concepts": [
+          "context",
+          "session",
+          "testing",
+          "markers"
+        ]
+      },
+      "2026-05-15-1610_smart-pyramid-skeleton-complete": {
+        "id": "2026-05-15-1610_smart-pyramid-skeleton-complete",
+        "path": ".agent/.context-markers/2026-05-15-1610_smart-pyramid-skeleton-complete.md",
+        "title": "Context Marker: SMART pyramid SKELETON complete; per-scenario depth gaps remain",
+        "concepts": [
+          "context",
+          "deployment",
+          "knowledge",
+          "workflow",
+          "skills",
+          "session",
+          "testing",
+          "api",
+          "backend",
+          "database",
+          "markers"
+        ]
+      },
+      "before-compact-2026-05-20-1424": {
+        "id": "before-compact-2026-05-20-1424",
+        "path": ".agent/.context-markers/before-compact-2026-05-20-1424.md",
+        "title": "Context Marker: before-compact 2026-05-20 14:24 \u2014 TASK-07 shipped, TASK-08-mixin planned",
+        "concepts": [
+          "context",
+          "knowledge",
+          "workflow",
+          "session",
+          "testing",
+          "backend",
+          "markers"
+        ]
+      },
+      "2026-05-19-1830_autonomous-small-remainders": {
+        "id": "2026-05-19-1830_autonomous-small-remainders",
+        "path": ".agent/.context-markers/2026-05-19-1830_autonomous-small-remainders.md",
+        "title": "Context Marker: autonomous small-remainders batch",
+        "concepts": [
+          "context",
+          "session",
+          "testing",
+          "backend",
+          "markers"
+        ]
+      },
+      "2026-05-20-1730_task04-warp-gravity-planet-elevator": {
+        "id": "2026-05-20-1730_task04-warp-gravity-planet-elevator",
+        "path": ".agent/.context-markers/2026-05-20-1730_task04-warp-gravity-planet-elevator.md",
+        "title": "Context Marker: TASK-04 \u2014 WarpCore + GravityController + PlanetAnalyser + SpaceElevator",
+        "concepts": [
+          "context",
+          "skills",
+          "session",
+          "testing",
+          "markers"
+        ]
+      },
+      "2026-05-15-1805_weather-b1-impl-and-client-e2e-debug": {
+        "id": "2026-05-15-1805_weather-b1-impl-and-client-e2e-debug",
+        "path": ".agent/.context-markers/2026-05-15-1805_weather-b1-impl-and-client-e2e-debug.md",
+        "title": "Context Marker: weather-b1-impl-and-client-e2e-debug",
+        "concepts": [
+          "authentication",
+          "context",
+          "workflow",
+          "skills",
+          "session",
+          "testing",
+          "api",
+          "backend",
+          "markers"
+        ]
+      },
+      "before-compact-2026-05-20-2310": {
+        "id": "before-compact-2026-05-20-2310",
+        "path": ".agent/.context-markers/before-compact-2026-05-20-2310.md",
+        "title": "Context Marker: TASK-04 fully closed (before-compact 2026-05-20 23:10)",
+        "concepts": [
+          "context",
+          "knowledge",
+          "skills",
+          "session",
+          "testing",
+          "backend",
+          "markers"
+        ]
+      },
+      "2026-05-15-1650_task01-session1-phase0-f1f2-and-2a": {
+        "id": "2026-05-15-1650_task01-session1-phase0-f1f2-and-2a",
+        "path": ".agent/.context-markers/2026-05-15-1650_task01-session1-phase0-f1f2-and-2a.md",
+        "title": "TASK-01 Session 1 \u2014 Phase 0 (F1 + F2) + Phase 2a (Commands depth)",
+        "concepts": [
+          "session",
+          "testing",
+          "markers",
+          "backend"
+        ]
+      },
+      "2026-05-23_task26-wildcard-machines-shipped": {
+        "id": "2026-05-23_task26-wildcard-machines-shipped",
+        "path": ".agent/.context-markers/2026-05-23_task26-wildcard-machines-shipped.md",
+        "title": "Context marker \u2014 2026-05-23 TASK-26 shipped",
+        "concepts": [
+          "context",
+          "session",
+          "testing",
+          "backend",
+          "markers"
+        ]
+      },
+      "2026-05-23_task13-wireless-transceiver-shipped": {
+        "id": "2026-05-23_task13-wireless-transceiver-shipped",
+        "path": ".agent/.context-markers/2026-05-23_task13-wireless-transceiver-shipped.md",
+        "title": "Context marker \u2014 2026-05-23 TASK-13 wireless transceiver",
+        "concepts": [
+          "context",
+          "workflow",
+          "session",
+          "testing",
+          "backend",
+          "markers"
+        ]
+      },
+      "2026-05-14-1150_client-e2e-fg6-harness": {
+        "id": "2026-05-14-1150_client-e2e-fg6-harness",
+        "path": ".agent/.context-markers/2026-05-14-1150_client-e2e-fg6-harness.md",
+        "title": "Context Marker: client-e2e-fg6-harness",
+        "concepts": [
+          "context",
+          "knowledge",
+          "workflow",
+          "skills",
+          "session",
+          "testing",
+          "backend",
+          "theory of mind",
+          "database",
+          "markers"
+        ]
+      },
+      "2026-05-18-1745_weather-b1-shipped-eod": {
+        "id": "2026-05-18-1745_weather-b1-shipped-eod",
+        "path": ".agent/.context-markers/2026-05-18-1745_weather-b1-shipped-eod.md",
+        "title": "Context Marker: weather-b1-shipped-eod",
+        "concepts": [
+          "context",
+          "workflow",
+          "skills",
+          "testing",
+          "backend",
+          "markers"
+        ]
+      },
+      "2026-05-20-2030_task04-terraformer-orbitallaser": {
+        "id": "2026-05-20-2030_task04-terraformer-orbitallaser",
+        "path": ".agent/.context-markers/2026-05-20-2030_task04-terraformer-orbitallaser.md",
+        "title": "Context Marker: TASK-04 \u2014 Terraformer + OrbitalLaserDrill (final massive multiblocks)",
+        "concepts": [
+          "context",
+          "skills",
+          "session",
+          "testing",
+          "database",
+          "markers"
+        ]
+      },
+      "2026-05-18-1530_task01-phase4-pyramid-complete": {
+        "id": "2026-05-18-1530_task01-phase4-pyramid-complete",
+        "path": ".agent/.context-markers/2026-05-18-1530_task01-phase4-pyramid-complete.md",
+        "title": "TASK-01 Phase 4 \u2014 SMART pyramid DEPTH-complete",
+        "concepts": [
+          "frontend",
+          "workflow",
+          "skills",
+          "session",
+          "testing",
+          "backend",
+          "markers"
+        ]
+      },
+      "2026-05-19-1530_task07-rocket-flight-cycle-eod": {
+        "id": "2026-05-19-1530_task07-rocket-flight-cycle-eod",
+        "path": ".agent/.context-markers/2026-05-19-1530_task07-rocket-flight-cycle-eod.md",
+        "title": "Context Marker: TASK-07 \u2014 Rocket flight cycle beyond launch (Phases 1, 2, 3-5 subset)",
+        "concepts": [
+          "context",
+          "workflow",
+          "testing",
+          "backend",
+          "markers"
+        ]
+      },
+      "2026-05-22_task10b-phase7-spacearmor-shipped": {
+        "id": "2026-05-22_task10b-phase7-spacearmor-shipped",
+        "path": ".agent/.context-markers/2026-05-22_task10b-phase7-spacearmor-shipped.md",
+        "title": "Context marker \u2014 2026-05-22 (TASK-10b Phase 7 fully closed)",
+        "concepts": [
+          "context",
+          "frontend",
+          "skills",
+          "session",
+          "testing",
+          "markers"
+        ]
+      },
+      "2026-05-20-2300_task04-deferred-followups-closed": {
+        "id": "2026-05-20-2300_task04-deferred-followups-closed",
+        "path": ".agent/.context-markers/2026-05-20-2300_task04-deferred-followups-closed.md",
+        "title": "Context Marker: TASK-04 deferred follow-ups closed",
+        "concepts": [
+          "context",
+          "skills",
+          "session",
+          "testing",
+          "backend",
+          "markers"
+        ]
+      },
+      "2026-05-19-1430_task04-multiblock-partial-eod": {
+        "id": "2026-05-19-1430_task04-multiblock-partial-eod",
+        "path": ".agent/.context-markers/2026-05-19-1430_task04-multiblock-partial-eod.md",
+        "title": "Context Marker: TASK-04 Phase 1 + Phases 2-5 consolidated (pre-assembly contract)",
+        "concepts": [
+          "context",
+          "workflow",
+          "session",
+          "testing",
+          "backend",
+          "markers"
+        ]
+      },
+      "2026-05-19-1745_task10-redone-without-fakeplayer": {
+        "id": "2026-05-19-1745_task10-redone-without-fakeplayer",
+        "path": ".agent/.context-markers/2026-05-19-1745_task10-redone-without-fakeplayer.md",
+        "title": "Context Marker: TASK-10 re-done without FakePlayer (Phase 2 \u2705, Phase 1 partial)",
+        "concepts": [
+          "context",
+          "frontend",
+          "workflow",
+          "session",
+          "testing",
+          "backend",
+          "markers"
+        ]
+      },
+      "2026-05-15-1733_task01-session2-phase1-planet-depth": {
+        "id": "2026-05-15-1733_task01-session2-phase1-planet-depth",
+        "path": ".agent/.context-markers/2026-05-15-1733_task01-session2-phase1-planet-depth.md",
+        "title": "TASK-01 Session 2 \u2014 Phase 1 (PlanetDimensionLoad depth, P0)",
+        "concepts": [
+          "skills",
+          "session",
+          "testing",
+          "backend",
+          "markers"
+        ]
+      },
+      "2026-05-19-2030_multiblock-fixtures-bhg-beacon": {
+        "id": "2026-05-19-2030_multiblock-fixtures-bhg-beacon",
+        "path": ".agent/.context-markers/2026-05-19-2030_multiblock-fixtures-bhg-beacon.md",
+        "title": "Context Marker: TASK-04 multiblock fixtures \u2014 BHG + Beacon shipped",
+        "concepts": [
+          "context",
+          "skills",
+          "session",
+          "testing",
+          "markers"
+        ]
+      }
+    },
+    "concepts": {
+      "authentication": {
+        "name": "Authentication",
+        "aliases": [
+          "auth",
+          "login",
+          "OAuth",
+          "JWT"
+        ],
+        "domain": "backend"
+      },
+      "context": {
+        "name": "Context Management",
+        "aliases": [
+          "token",
+          "efficiency"
+        ],
+        "domain": "navigator"
+      },
+      "deployment": {
+        "name": "Deployment",
+        "aliases": [
+          "deploy",
+          "CI",
+          "CD"
+        ],
+        "domain": "devops"
+      },
+      "knowledge": {
+        "name": "Knowledge Graph",
+        "aliases": [
+          "memory",
+          "graph",
+          "learning"
+        ],
+        "domain": "navigator"
+      },
+      "frontend": {
+        "name": "Frontend",
+        "aliases": [
+          "component",
+          "React",
+          "Vue"
+        ],
+        "domain": "frontend"
+      },
+      "workflow": {
+        "name": "Workflow",
+        "aliases": [
+          "loop",
+          "task mode",
+          "orchestration"
+        ],
+        "domain": "navigator"
+      },
+      "skills": {
+        "name": "Skills",
+        "aliases": [
+          "skill",
+          "command",
+          "plugin"
+        ],
+        "domain": "navigator"
+      },
+      "session": {
+        "name": "Session",
+        "aliases": [
+          "start",
+          "workflow"
+        ],
+        "domain": "navigator"
+      },
+      "testing": {
+        "name": "Testing",
+        "aliases": [
+          "test",
+          "unit",
+          "integration",
+          "e2e"
+        ],
+        "domain": "quality"
+      },
+      "api": {
+        "name": "API",
+        "aliases": [
+          "endpoint",
+          "REST",
+          "GraphQL"
+        ],
+        "domain": "backend"
+      },
+      "backend": {
+        "name": "Backend",
+        "aliases": [
+          "server",
+          "Node",
+          "Express"
+        ],
+        "domain": "backend"
+      },
+      "theory of mind": {
+        "name": "Theory of Mind",
+        "aliases": [
+          "tom",
+          "ToM",
+          "profile",
+          "bilateral"
+        ],
+        "domain": "navigator"
+      },
+      "database": {
+        "name": "Database",
+        "aliases": [
+          "db",
+          "migration",
+          "schema"
+        ],
+        "domain": "backend"
+      },
+      "markers": {
+        "name": "Context Markers",
+        "aliases": [
+          "marker",
+          "compact"
+        ],
+        "domain": "navigator"
+      }
+    },
+    "memories": {
+      "mem-001": {
+        "type": "pattern",
+        "summary": "Tests verify contracts (player-visible behaviour, public API, NBT/wire/registry formats), NOT impl details. Litmus before every assertion: 'this test fails if production breaks the contract that ____' \u2014 if the blank is impl detail, redesign. Re-read .agent/sops/development/testing-principles.md each session.",
+        "path": "memories/patterns/mem-001.md",
+        "confidence": 0.95,
+        "concepts": [
+          "testing",
+          "contracts",
+          "sop"
+        ],
+        "created": "2026-05-23",
+        "last_validated": "2026-05-23"
+      },
+      "mem-002": {
+        "type": "pitfall",
+        "summary": "Port-bind TOCTOU in RealDedicatedServerHarness.reservePort(): parent JVM opens ServerSocket(0), closes it, then child JVM tries to bind same port \u2014 race window lets another process grab it. Observed in BeaconMultiblockTest, WarpControllerDepthTest. Lives in ForgeTestFramework. Tracked in TASK-27.",
+        "path": "memories/pitfalls/mem-002.md",
+        "confidence": 0.9,
+        "concepts": [
+          "testing",
+          "flake",
+          "harness",
+          "ports"
+        ],
+        "created": "2026-05-23",
+        "last_validated": "2026-05-23"
+      },
+      "mem-003": {
+        "type": "pitfall",
+        "summary": "Tick-timing race: tests that 'force-tick N + immediate-read' assert on eventually-true state synchronously and flake under load. Fix: use tick-until polling. Observed in MachineRecipeIntegrationTest.cuttingMachineRunsFirstRegisteredRecipe, MissionLifecyclePyramidTest.completionPrunesMissionFromSatelliteRegistry.",
+        "path": "memories/pitfalls/mem-003.md",
+        "confidence": 0.9,
+        "concepts": [
+          "testing",
+          "flake",
+          "tick"
+        ],
+        "created": "2026-05-23",
+        "last_validated": "2026-05-23"
+      },
+      "mem-004": {
+        "type": "pattern",
+        "summary": "Bug ledger discipline: when uncovering a real production bug during any activity, log it IMMEDIATELY in .agent/tasks/README.md under 'Notes on _documentsKnownBug' before moving on. Entry = file+line, wrong behaviour, player-visible consequence, whether pinned by _documentsKnownBug test. Update the running counter at top of README.",
+        "path": "memories/patterns/mem-004.md",
+        "confidence": 0.95,
+        "concepts": [
+          "bugs",
+          "ledger",
+          "sop",
+          "workflow"
+        ],
+        "created": "2026-05-23",
+        "last_validated": "2026-05-23"
+      },
+      "mem-005": {
+        "type": "decision",
+        "summary": "ASM coremod (IClassTransformer) rewritten to Mixin (MixinBooter). AdvancedRocketryPlugin only bootstraps Mixin now \u2014 no IClassTransformer left. Mixins in zmaster587.advancedRocketry.mixin, registered via mixins.advancedrocketry.json. TASK-08 obsolete (the now-deleted code). See TASK-08-mixin.",
+        "path": "memories/decisions/mem-005.md",
+        "confidence": 0.95,
+        "concepts": [
+          "architecture",
+          "mixin",
+          "coremod"
+        ],
+        "created": "2026-05-23",
+        "last_validated": "2026-05-23"
+      },
+      "mem-006": {
+        "type": "pattern",
+        "summary": "Flake diagnosis: failure DISTRIBUTION across runs tells you the mode. Same N tests every run (100% reliable) \u2192 regression in recent diff (revert + git diff). Sparse non-deterministic set \u2192 race (find non-time variable: chunk-load, populate, tick-gate, recipe order). Alternating outputs on same test \u2192 test-design (loosen, don't tighten). See .agent/sops/development/flake-diagnosis.md.",
+        "path": "memories/patterns/mem-006.md",
+        "confidence": 0.95,
+        "concepts": [
+          "testing",
+          "flake",
+          "diagnosis",
+          "sop"
+        ],
+        "created": "2026-05-25",
+        "last_validated": "2026-05-25"
+      },
+      "mem-007": {
+        "type": "pitfall",
+        "summary": "Probe author safety: Thread.sleep / chunk-gen in probes blocks server thread; post-unblock natural-tick burst races-clears state that the test JUST wrote. Bound waits to \u226412s. Pre-load only the chunks the op needs (5\u00d75 broke 3 rocket-launch tests in TASK-28 v6 \u2014 25-chunk gen took ~2s, post-block tick burst reset isInFlight). Skip pre-load for rocket fixtures entirely.",
+        "path": "memories/pitfalls/mem-007.md",
+        "confidence": 0.95,
+        "concepts": [
+          "probe",
+          "server-thread",
+          "chunk-load",
+          "flake"
+        ],
+        "created": "2026-05-25",
+        "last_validated": "2026-05-25"
+      },
+      "mem-008": {
+        "type": "pitfall",
+        "summary": "Gradle UP-TO-DATE cache silently makes 10\u00d7 test loops do nothing on iterations 2-10. BUILD SUCCESSFUL + rc=0 but :testServer is UP-TO-DATE = 0 tests ran. Cache-bust each iteration: rm -rf build/{reports,test-results,tmp}/testServer. Always grep per-run 'PASSED' count and assert it matches expected pyramid (~336 server-tier).",
+        "path": "memories/pitfalls/mem-008.md",
+        "confidence": 0.95,
+        "concepts": [
+          "gradle",
+          "testing",
+          "cache",
+          "verification"
+        ],
+        "created": "2026-05-25",
+        "last_validated": "2026-05-25"
+      }
+    },
+    "files": {}
+  },
+  "edges": [
+    {
+      "from": "SOP-client_tests_on_linux",
+      "to": "TASK-09",
+      "type": "relates-to",
+      "weight": 0.6000000000000001
+    },
+    {
+      "from": "SOP-client_tests_on_linux",
+      "to": "TASK-10",
+      "type": "relates-to",
+      "weight": 0.6000000000000001
+    },
+    {
+      "from": "SOP-client_tests_on_linux",
+      "to": "TASK-01",
+      "type": "relates-to",
+      "weight": 0.6000000000000001
+    },
+    {
+      "from": "SOP-client_tests_on_linux",
+      "to": "TASK-11",
+      "type": "relates-to",
+      "weight": 0.6000000000000001
+    },
+    {
+      "from": "SOP-client_tests_on_linux",
+      "to": "TASK-03",
+      "type": "relates-to",
+      "weight": 0.8
+    },
+    {
+      "from": "SOP-client_tests_on_linux",
+      "to": "TASK-26",
+      "type": "relates-to",
+      "weight": 0.6000000000000001
+    },
+    {
+      "from": "SOP-client_tests_on_linux",
+      "to": "TASK-25",
+      "type": "relates-to",
+      "weight": 0.6000000000000001
+    },
+    {
+      "from": "SOP-client_tests_on_linux",
+      "to": "TASK-16",
+      "type": "relates-to",
+      "weight": 0.6000000000000001
+    },
+    {
+      "from": "SOP-client_tests_on_linux",
+      "to": "TASK-04",
+      "type": "relates-to",
+      "weight": 0.6000000000000001
+    },
+    {
+      "from": "SOP-client_tests_on_linux",
+      "to": "TASK-23",
+      "type": "relates-to",
+      "weight": 0.4
+    },
+    {
+      "from": "SOP-client_tests_on_linux",
+      "to": "TASK-05",
+      "type": "relates-to",
+      "weight": 0.6000000000000001
+    },
+    {
+      "from": "SOP-client_tests_on_linux",
+      "to": "TASK-19",
+      "type": "relates-to",
+      "weight": 0.4
+    },
+    {
+      "from": "SOP-client_tests_on_linux",
+      "to": "TASK-24",
+      "type": "relates-to",
+      "weight": 0.4
+    },
+    {
+      "from": "SOP-client_tests_on_linux",
+      "to": "TASK-21",
+      "type": "relates-to",
+      "weight": 0.4
+    },
+    {
+      "from": "SOP-client_tests_on_linux",
+      "to": "TASK-02",
+      "type": "relates-to",
+      "weight": 0.8
+    },
+    {
+      "from": "SOP-client_tests_on_linux",
+      "to": "TASK-22",
+      "type": "relates-to",
+      "weight": 0.4
+    },
+    {
+      "from": "SOP-client_tests_on_linux",
+      "to": "TASK-13",
+      "type": "relates-to",
+      "weight": 0.6000000000000001
+    },
+    {
+      "from": "SOP-client_tests_on_linux",
+      "to": "TASK-10",
+      "type": "relates-to",
+      "weight": 0.6000000000000001
+    },
+    {
+      "from": "SOP-client_tests_on_linux",
+      "to": "README",
+      "type": "relates-to",
+      "weight": 0.6000000000000001
+    },
+    {
+      "from": "SOP-client_tests_on_linux",
+      "to": "TASK-14",
+      "type": "relates-to",
+      "weight": 0.6000000000000001
+    },
+    {
+      "from": "SOP-client_tests_on_linux",
+      "to": "TASK-20",
+      "type": "relates-to",
+      "weight": 0.6000000000000001
+    },
+    {
+      "from": "SOP-client_tests_on_linux",
+      "to": "TASK-17",
+      "type": "relates-to",
+      "weight": 0.4
+    },
+    {
+      "from": "SOP-client_tests_on_linux",
+      "to": "TASK-07",
+      "type": "relates-to",
+      "weight": 0.6000000000000001
+    },
+    {
+      "from": "SOP-client_tests_on_linux",
+      "to": "TASK-06",
+      "type": "relates-to",
+      "weight": 0.6000000000000001
+    },
+    {
+      "from": "SOP-client_tests_on_linux",
+      "to": "TASK-18",
+      "type": "relates-to",
+      "weight": 0.4
+    },
+    {
+      "from": "SOP-client_tests_on_linux",
+      "to": "TASK-27",
+      "type": "relates-to",
+      "weight": 0.8
+    },
+    {
+      "from": "SOP-client_tests_on_linux",
+      "to": "TASK-08",
+      "type": "relates-to",
+      "weight": 0.8
+    },
+    {
+      "from": "SOP-client_tests_on_linux",
+      "to": "TASK-12",
+      "type": "relates-to",
+      "weight": 0.6000000000000001
+    },
+    {
+      "from": "SOP-client_tests_on_linux",
+      "to": "TASK-15",
+      "type": "relates-to",
+      "weight": 0.8
+    },
+    {
+      "from": "SOP-client_tests_on_linux",
+      "to": "TASK-08",
+      "type": "relates-to",
+      "weight": 0.8
+    },
+    {
+      "from": "SOP-sharing_client_harness",
+      "to": "TASK-09",
+      "type": "relates-to",
+      "weight": 0.6000000000000001
+    },
+    {
+      "from": "SOP-sharing_client_harness",
+      "to": "TASK-10",
+      "type": "relates-to",
+      "weight": 0.6000000000000001
+    },
+    {
+      "from": "SOP-sharing_client_harness",
+      "to": "TASK-01",
+      "type": "relates-to",
+      "weight": 0.6000000000000001
+    },
+    {
+      "from": "SOP-sharing_client_harness",
+      "to": "TASK-11",
+      "type": "relates-to",
+      "weight": 0.6000000000000001
+    },
+    {
+      "from": "SOP-sharing_client_harness",
+      "to": "TASK-03",
+      "type": "relates-to",
+      "weight": 0.6000000000000001
+    },
+    {
+      "from": "SOP-sharing_client_harness",
+      "to": "TASK-26",
+      "type": "relates-to",
+      "weight": 0.6000000000000001
+    },
+    {
+      "from": "SOP-sharing_client_harness",
+      "to": "TASK-25",
+      "type": "relates-to",
+      "weight": 0.6000000000000001
+    },
+    {
+      "from": "SOP-sharing_client_harness",
+      "to": "TASK-16",
+      "type": "relates-to",
+      "weight": 0.6000000000000001
+    },
+    {
+      "from": "SOP-sharing_client_harness",
+      "to": "TASK-04",
+      "type": "relates-to",
+      "weight": 0.6000000000000001
+    },
+    {
+      "from": "SOP-sharing_client_harness",
+      "to": "TASK-23",
+      "type": "relates-to",
+      "weight": 0.6000000000000001
+    },
+    {
+      "from": "SOP-sharing_client_harness",
+      "to": "TASK-05",
+      "type": "relates-to",
+      "weight": 0.6000000000000001
+    },
+    {
+      "from": "SOP-sharing_client_harness",
+      "to": "TASK-19",
+      "type": "relates-to",
+      "weight": 0.4
+    },
+    {
+      "from": "SOP-sharing_client_harness",
+      "to": "TASK-24",
+      "type": "relates-to",
+      "weight": 0.4
+    },
+    {
+      "from": "SOP-sharing_client_harness",
+      "to": "TASK-21",
+      "type": "relates-to",
+      "weight": 0.6000000000000001
+    },
+    {
+      "from": "SOP-sharing_client_harness",
+      "to": "TASK-02",
+      "type": "relates-to",
+      "weight": 0.6000000000000001
+    },
+    {
+      "from": "SOP-sharing_client_harness",
+      "to": "TASK-22",
+      "type": "relates-to",
+      "weight": 0.6000000000000001
+    },
+    {
+      "from": "SOP-sharing_client_harness",
+      "to": "TASK-13",
+      "type": "relates-to",
+      "weight": 0.6000000000000001
+    },
+    {
+      "from": "SOP-sharing_client_harness",
+      "to": "TASK-10",
+      "type": "relates-to",
+      "weight": 0.6000000000000001
+    },
+    {
+      "from": "SOP-sharing_client_harness",
+      "to": "README",
+      "type": "relates-to",
+      "weight": 0.6000000000000001
+    },
+    {
+      "from": "SOP-sharing_client_harness",
+      "to": "TASK-14",
+      "type": "relates-to",
+      "weight": 0.8
+    },
+    {
+      "from": "SOP-sharing_client_harness",
+      "to": "TASK-20",
+      "type": "relates-to",
+      "weight": 0.6000000000000001
+    },
+    {
+      "from": "SOP-sharing_client_harness",
+      "to": "TASK-17",
+      "type": "relates-to",
+      "weight": 0.6000000000000001
+    },
+    {
+      "from": "SOP-sharing_client_harness",
+      "to": "TASK-07",
+      "type": "relates-to",
+      "weight": 0.6000000000000001
+    },
+    {
+      "from": "SOP-sharing_client_harness",
+      "to": "TASK-06",
+      "type": "relates-to",
+      "weight": 0.6000000000000001
+    },
+    {
+      "from": "SOP-sharing_client_harness",
+      "to": "TASK-18",
+      "type": "relates-to",
+      "weight": 0.6000000000000001
+    },
+    {
+      "from": "SOP-sharing_client_harness",
+      "to": "TASK-27",
+      "type": "relates-to",
+      "weight": 0.6000000000000001
+    },
+    {
+      "from": "SOP-sharing_client_harness",
+      "to": "TASK-08",
+      "type": "relates-to",
+      "weight": 0.4
+    },
+    {
+      "from": "SOP-sharing_client_harness",
+      "to": "TASK-12",
+      "type": "relates-to",
+      "weight": 0.6000000000000001
+    },
+    {
+      "from": "SOP-sharing_client_harness",
+      "to": "TASK-15",
+      "type": "relates-to",
+      "weight": 0.6000000000000001
+    },
+    {
+      "from": "SOP-sharing_client_harness",
+      "to": "TASK-08",
+      "type": "relates-to",
+      "weight": 0.6000000000000001
+    },
+    {
+      "from": "SOP-testing_principles",
+      "to": "TASK-09",
+      "type": "relates-to",
+      "weight": 1.0
+    },
+    {
+      "from": "SOP-testing_principles",
+      "to": "TASK-10",
+      "type": "relates-to",
+      "weight": 1.0
+    },
+    {
+      "from": "SOP-testing_principles",
+      "to": "TASK-01",
+      "type": "relates-to",
+      "weight": 0.8
+    },
+    {
+      "from": "SOP-testing_principles",
+      "to": "TASK-11",
+      "type": "relates-to",
+      "weight": 1.0
+    },
+    {
+      "from": "SOP-testing_principles",
+      "to": "TASK-03",
+      "type": "relates-to",
+      "weight": 1.0
+    },
+    {
+      "from": "SOP-testing_principles",
+      "to": "TASK-26",
+      "type": "relates-to",
+      "weight": 1.0
+    },
+    {
+      "from": "SOP-testing_principles",
+      "to": "TASK-25",
+      "type": "relates-to",
+      "weight": 0.8
+    },
+    {
+      "from": "SOP-testing_principles",
+      "to": "TASK-16",
+      "type": "relates-to",
+      "weight": 1.0
+    },
+    {
+      "from": "SOP-testing_principles",
+      "to": "TASK-04",
+      "type": "relates-to",
+      "weight": 1.0
+    },
+    {
+      "from": "SOP-testing_principles",
+      "to": "TASK-23",
+      "type": "relates-to",
+      "weight": 0.6000000000000001
+    },
+    {
+      "from": "SOP-testing_principles",
+      "to": "TASK-05",
+      "type": "relates-to",
+      "weight": 0.8
+    },
+    {
+      "from": "SOP-testing_principles",
+      "to": "TASK-19",
+      "type": "relates-to",
+      "weight": 0.4
+    },
+    {
+      "from": "SOP-testing_principles",
+      "to": "TASK-24",
+      "type": "relates-to",
+      "weight": 0.4
+    },
+    {
+      "from": "SOP-testing_principles",
+      "to": "TASK-21",
+      "type": "relates-to",
+      "weight": 0.6000000000000001
+    },
+    {
+      "from": "SOP-testing_principles",
+      "to": "TASK-02",
+      "type": "relates-to",
+      "weight": 1.0
+    },
+    {
+      "from": "SOP-testing_principles",
+      "to": "TASK-22",
+      "type": "relates-to",
+      "weight": 0.6000000000000001
+    },
+    {
+      "from": "SOP-testing_principles",
+      "to": "TASK-13",
+      "type": "relates-to",
+      "weight": 1.0
+    },
+    {
+      "from": "SOP-testing_principles",
+      "to": "TASK-10",
+      "type": "relates-to",
+      "weight": 0.8
+    },
+    {
+      "from": "SOP-testing_principles",
+      "to": "README",
+      "type": "relates-to",
+      "weight": 0.8
+    },
+    {
+      "from": "SOP-testing_principles",
+      "to": "TASK-14",
+      "type": "relates-to",
+      "weight": 0.8
+    },
+    {
+      "from": "SOP-testing_principles",
+      "to": "TASK-20",
+      "type": "relates-to",
+      "weight": 0.8
+    },
+    {
+      "from": "SOP-testing_principles",
+      "to": "TASK-17",
+      "type": "relates-to",
+      "weight": 0.6000000000000001
+    },
+    {
+      "from": "SOP-testing_principles",
+      "to": "TASK-07",
+      "type": "relates-to",
+      "weight": 1.0
+    },
+    {
+      "from": "SOP-testing_principles",
+      "to": "TASK-06",
+      "type": "relates-to",
+      "weight": 1.0
+    },
+    {
+      "from": "SOP-testing_principles",
+      "to": "TASK-18",
+      "type": "relates-to",
+      "weight": 0.6000000000000001
+    },
+    {
+      "from": "SOP-testing_principles",
+      "to": "TASK-27",
+      "type": "relates-to",
+      "weight": 1.0
+    },
+    {
+      "from": "SOP-testing_principles",
+      "to": "TASK-08",
+      "type": "relates-to",
+      "weight": 0.8
+    },
+    {
+      "from": "SOP-testing_principles",
+      "to": "TASK-12",
+      "type": "relates-to",
+      "weight": 1.0
+    },
+    {
+      "from": "SOP-testing_principles",
+      "to": "TASK-15",
+      "type": "relates-to",
+      "weight": 0.6000000000000001
+    },
+    {
+      "from": "SOP-testing_principles",
+      "to": "TASK-08",
+      "type": "relates-to",
+      "weight": 0.8
+    },
+    {
+      "from": "SOP-task_lifecycle",
+      "to": "TASK-09",
+      "type": "relates-to",
+      "weight": 0.8
+    },
+    {
+      "from": "SOP-task_lifecycle",
+      "to": "TASK-10",
+      "type": "relates-to",
+      "weight": 1.0
+    },
+    {
+      "from": "SOP-task_lifecycle",
+      "to": "TASK-01",
+      "type": "relates-to",
+      "weight": 1.0
+    },
+    {
+      "from": "SOP-task_lifecycle",
+      "to": "TASK-11",
+      "type": "relates-to",
+      "weight": 1.0
+    },
+    {
+      "from": "SOP-task_lifecycle",
+      "to": "TASK-03",
+      "type": "relates-to",
+      "weight": 1.0
+    },
+    {
+      "from": "SOP-task_lifecycle",
+      "to": "TASK-26",
+      "type": "relates-to",
+      "weight": 1.0
+    },
+    {
+      "from": "SOP-task_lifecycle",
+      "to": "TASK-25",
+      "type": "relates-to",
+      "weight": 1.0
+    },
+    {
+      "from": "SOP-task_lifecycle",
+      "to": "TASK-16",
+      "type": "relates-to",
+      "weight": 1.0
+    },
+    {
+      "from": "SOP-task_lifecycle",
+      "to": "TASK-04",
+      "type": "relates-to",
+      "weight": 1.0
+    },
+    {
+      "from": "SOP-task_lifecycle",
+      "to": "TASK-23",
+      "type": "relates-to",
+      "weight": 0.6000000000000001
+    },
+    {
+      "from": "SOP-task_lifecycle",
+      "to": "TASK-05",
+      "type": "relates-to",
+      "weight": 0.8
+    },
+    {
+      "from": "SOP-task_lifecycle",
+      "to": "TASK-19",
+      "type": "relates-to",
+      "weight": 0.4
+    },
+    {
+      "from": "SOP-task_lifecycle",
+      "to": "TASK-24",
+      "type": "relates-to",
+      "weight": 0.4
+    },
+    {
+      "from": "SOP-task_lifecycle",
+      "to": "TASK-21",
+      "type": "relates-to",
+      "weight": 0.6000000000000001
+    },
+    {
+      "from": "SOP-task_lifecycle",
+      "to": "TASK-02",
+      "type": "relates-to",
+      "weight": 1.0
+    },
+    {
+      "from": "SOP-task_lifecycle",
+      "to": "TASK-22",
+      "type": "relates-to",
+      "weight": 0.6000000000000001
+    },
+    {
+      "from": "SOP-task_lifecycle",
+      "to": "TASK-13",
+      "type": "relates-to",
+      "weight": 1.0
+    },
+    {
+      "from": "SOP-task_lifecycle",
+      "to": "TASK-10",
+      "type": "relates-to",
+      "weight": 0.8
+    },
+    {
+      "from": "SOP-task_lifecycle",
+      "to": "README",
+      "type": "relates-to",
+      "weight": 1.0
+    },
+    {
+      "from": "SOP-task_lifecycle",
+      "to": "TASK-14",
+      "type": "relates-to",
+      "weight": 1.0
+    },
+    {
+      "from": "SOP-task_lifecycle",
+      "to": "TASK-20",
+      "type": "relates-to",
+      "weight": 0.8
+    },
+    {
+      "from": "SOP-task_lifecycle",
+      "to": "TASK-17",
+      "type": "relates-to",
+      "weight": 1.0
+    },
+    {
+      "from": "SOP-task_lifecycle",
+      "to": "TASK-07",
+      "type": "relates-to",
+      "weight": 0.8
+    },
+    {
+      "from": "SOP-task_lifecycle",
+      "to": "TASK-06",
+      "type": "relates-to",
+      "weight": 1.0
+    },
+    {
+      "from": "SOP-task_lifecycle",
+      "to": "TASK-18",
+      "type": "relates-to",
+      "weight": 0.6000000000000001
+    },
+    {
+      "from": "SOP-task_lifecycle",
+      "to": "TASK-27",
+      "type": "relates-to",
+      "weight": 1.0
+    },
+    {
+      "from": "SOP-task_lifecycle",
+      "to": "TASK-08",
+      "type": "relates-to",
+      "weight": 0.8
+    },
+    {
+      "from": "SOP-task_lifecycle",
+      "to": "TASK-12",
+      "type": "relates-to",
+      "weight": 1.0
+    },
+    {
+      "from": "SOP-task_lifecycle",
+      "to": "TASK-15",
+      "type": "relates-to",
+      "weight": 1.0
+    },
+    {
+      "from": "SOP-task_lifecycle",
+      "to": "TASK-08",
+      "type": "relates-to",
+      "weight": 0.8
+    },
+    {
+      "from": "TASK-09",
+      "to": "context",
+      "type": "implements"
+    },
+    {
+      "from": "TASK-09",
+      "to": "knowledge",
+      "type": "implements"
+    },
+    {
+      "from": "TASK-09",
+      "to": "workflow",
+      "type": "implements"
+    },
+    {
+      "from": "TASK-09",
+      "to": "testing",
+      "type": "implements"
+    },
+    {
+      "from": "TASK-09",
+      "to": "backend",
+      "type": "implements"
+    },
+    {
+      "from": "TASK-09",
+      "to": "database",
+      "type": "implements"
+    },
+    {
+      "from": "TASK-09",
+      "to": "markers",
+      "type": "implements"
+    },
+    {
+      "from": "TASK-10",
+      "to": "context",
+      "type": "implements"
+    },
+    {
+      "from": "TASK-10",
+      "to": "knowledge",
+      "type": "implements"
+    },
+    {
+      "from": "TASK-10",
+      "to": "frontend",
+      "type": "implements"
+    },
+    {
+      "from": "TASK-10",
+      "to": "workflow",
+      "type": "implements"
+    },
+    {
+      "from": "TASK-10",
+      "to": "testing",
+      "type": "implements"
+    },
+    {
+      "from": "TASK-10",
+      "to": "api",
+      "type": "implements"
+    },
+    {
+      "from": "TASK-10",
+      "to": "backend",
+      "type": "implements"
+    },
+    {
+      "from": "TASK-10",
+      "to": "markers",
+      "type": "implements"
+    },
+    {
+      "from": "TASK-01",
+      "to": "context",
+      "type": "implements"
+    },
+    {
+      "from": "TASK-01",
+      "to": "session",
+      "type": "implements"
+    },
+    {
+      "from": "TASK-01",
+      "to": "testing",
+      "type": "implements"
+    },
+    {
+      "from": "TASK-01",
+      "to": "backend",
+      "type": "implements"
+    },
+    {
+      "from": "TASK-01",
+      "to": "markers",
+      "type": "implements"
+    },
+    {
+      "from": "TASK-11",
+      "to": "context",
+      "type": "implements"
+    },
+    {
+      "from": "TASK-11",
+      "to": "skills",
+      "type": "implements"
+    },
+    {
+      "from": "TASK-11",
+      "to": "testing",
+      "type": "implements"
+    },
+    {
+      "from": "TASK-11",
+      "to": "api",
+      "type": "implements"
+    },
+    {
+      "from": "TASK-11",
+      "to": "backend",
+      "type": "implements"
+    },
+    {
+      "from": "TASK-11",
+      "to": "markers",
+      "type": "implements"
+    },
+    {
+      "from": "TASK-03",
+      "to": "context",
+      "type": "implements"
+    },
+    {
+      "from": "TASK-03",
+      "to": "deployment",
+      "type": "implements"
+    },
+    {
+      "from": "TASK-03",
+      "to": "frontend",
+      "type": "implements"
+    },
+    {
+      "from": "TASK-03",
+      "to": "skills",
+      "type": "implements"
+    },
+    {
+      "from": "TASK-03",
+      "to": "session",
+      "type": "implements"
+    },
+    {
+      "from": "TASK-03",
+      "to": "testing",
+      "type": "implements"
+    },
+    {
+      "from": "TASK-03",
+      "to": "api",
+      "type": "implements"
+    },
+    {
+      "from": "TASK-03",
+      "to": "backend",
+      "type": "implements"
+    },
+    {
+      "from": "TASK-03",
+      "to": "database",
+      "type": "implements"
+    },
+    {
+      "from": "TASK-03",
+      "to": "markers",
+      "type": "implements"
+    },
+    {
+      "from": "TASK-26",
+      "to": "context",
+      "type": "implements"
+    },
+    {
+      "from": "TASK-26",
+      "to": "workflow",
+      "type": "implements"
+    },
+    {
+      "from": "TASK-26",
+      "to": "session",
+      "type": "implements"
+    },
+    {
+      "from": "TASK-26",
+      "to": "testing",
+      "type": "implements"
+    },
+    {
+      "from": "TASK-26",
+      "to": "backend",
+      "type": "implements"
+    },
+    {
+      "from": "TASK-26",
+      "to": "markers",
+      "type": "implements"
+    },
+    {
+      "from": "TASK-25",
+      "to": "context",
+      "type": "implements"
+    },
+    {
+      "from": "TASK-25",
+      "to": "session",
+      "type": "implements"
+    },
+    {
+      "from": "TASK-25",
+      "to": "testing",
+      "type": "implements"
+    },
+    {
+      "from": "TASK-25",
+      "to": "backend",
+      "type": "implements"
+    },
+    {
+      "from": "TASK-25",
+      "to": "markers",
+      "type": "implements"
+    },
+    {
+      "from": "TASK-16",
+      "to": "context",
+      "type": "implements"
+    },
+    {
+      "from": "TASK-16",
+      "to": "session",
+      "type": "implements"
+    },
+    {
+      "from": "TASK-16",
+      "to": "testing",
+      "type": "implements"
+    },
+    {
+      "from": "TASK-16",
+      "to": "api",
+      "type": "implements"
+    },
+    {
+      "from": "TASK-16",
+      "to": "backend",
+      "type": "implements"
+    },
+    {
+      "from": "TASK-16",
+      "to": "markers",
+      "type": "implements"
+    },
+    {
+      "from": "TASK-04",
+      "to": "context",
+      "type": "implements"
+    },
+    {
+      "from": "TASK-04",
+      "to": "workflow",
+      "type": "implements"
+    },
+    {
+      "from": "TASK-04",
+      "to": "session",
+      "type": "implements"
+    },
+    {
+      "from": "TASK-04",
+      "to": "testing",
+      "type": "implements"
+    },
+    {
+      "from": "TASK-04",
+      "to": "backend",
+      "type": "implements"
+    },
+    {
+      "from": "TASK-04",
+      "to": "markers",
+      "type": "implements"
+    },
+    {
+      "from": "TASK-23",
+      "to": "testing",
+      "type": "implements"
+    },
+    {
+      "from": "TASK-23",
+      "to": "context",
+      "type": "implements"
+    },
+    {
+      "from": "TASK-23",
+      "to": "backend",
+      "type": "implements"
+    },
+    {
+      "from": "TASK-05",
+      "to": "context",
+      "type": "implements"
+    },
+    {
+      "from": "TASK-05",
+      "to": "knowledge",
+      "type": "implements"
+    },
+    {
+      "from": "TASK-05",
+      "to": "frontend",
+      "type": "implements"
+    },
+    {
+      "from": "TASK-05",
+      "to": "testing",
+      "type": "implements"
+    },
+    {
+      "from": "TASK-05",
+      "to": "backend",
+      "type": "implements"
+    },
+    {
+      "from": "TASK-05",
+      "to": "markers",
+      "type": "implements"
+    },
+    {
+      "from": "TASK-19",
+      "to": "testing",
+      "type": "implements"
+    },
+    {
+      "from": "TASK-19",
+      "to": "context",
+      "type": "implements"
+    },
+    {
+      "from": "TASK-24",
+      "to": "testing",
+      "type": "implements"
+    },
+    {
+      "from": "TASK-24",
+      "to": "frontend",
+      "type": "implements"
+    },
+    {
+      "from": "TASK-24",
+      "to": "context",
+      "type": "implements"
+    },
+    {
+      "from": "TASK-21",
+      "to": "testing",
+      "type": "implements"
+    },
+    {
+      "from": "TASK-21",
+      "to": "context",
+      "type": "implements"
+    },
+    {
+      "from": "TASK-21",
+      "to": "backend",
+      "type": "implements"
+    },
+    {
+      "from": "TASK-02",
+      "to": "context",
+      "type": "implements"
+    },
+    {
+      "from": "TASK-02",
+      "to": "deployment",
+      "type": "implements"
+    },
+    {
+      "from": "TASK-02",
+      "to": "knowledge",
+      "type": "implements"
+    },
+    {
+      "from": "TASK-02",
+      "to": "frontend",
+      "type": "implements"
+    },
+    {
+      "from": "TASK-02",
+      "to": "session",
+      "type": "implements"
+    },
+    {
+      "from": "TASK-02",
+      "to": "testing",
+      "type": "implements"
+    },
+    {
+      "from": "TASK-02",
+      "to": "api",
+      "type": "implements"
+    },
+    {
+      "from": "TASK-02",
+      "to": "backend",
+      "type": "implements"
+    },
+    {
+      "from": "TASK-02",
+      "to": "database",
+      "type": "implements"
+    },
+    {
+      "from": "TASK-02",
+      "to": "markers",
+      "type": "implements"
+    },
+    {
+      "from": "TASK-22",
+      "to": "testing",
+      "type": "implements"
+    },
+    {
+      "from": "TASK-22",
+      "to": "context",
+      "type": "implements"
+    },
+    {
+      "from": "TASK-22",
+      "to": "backend",
+      "type": "implements"
+    },
+    {
+      "from": "TASK-13",
+      "to": "context",
+      "type": "implements"
+    },
+    {
+      "from": "TASK-13",
+      "to": "session",
+      "type": "implements"
+    },
+    {
+      "from": "TASK-13",
+      "to": "testing",
+      "type": "implements"
+    },
+    {
+      "from": "TASK-13",
+      "to": "api",
+      "type": "implements"
+    },
+    {
+      "from": "TASK-13",
+      "to": "backend",
+      "type": "implements"
+    },
+    {
+      "from": "TASK-13",
+      "to": "markers",
+      "type": "implements"
+    },
+    {
+      "from": "TASK-10",
+      "to": "markers",
+      "type": "implements"
+    },
+    {
+      "from": "TASK-10",
+      "to": "testing",
+      "type": "implements"
+    },
+    {
+      "from": "TASK-10",
+      "to": "context",
+      "type": "implements"
+    },
+    {
+      "from": "TASK-10",
+      "to": "backend",
+      "type": "implements"
+    },
+    {
+      "from": "README",
+      "to": "context",
+      "type": "implements"
+    },
+    {
+      "from": "README",
+      "to": "knowledge",
+      "type": "implements"
+    },
+    {
+      "from": "README",
+      "to": "skills",
+      "type": "implements"
+    },
+    {
+      "from": "README",
+      "to": "session",
+      "type": "implements"
+    },
+    {
+      "from": "README",
+      "to": "testing",
+      "type": "implements"
+    },
+    {
+      "from": "README",
+      "to": "backend",
+      "type": "implements"
+    },
+    {
+      "from": "README",
+      "to": "markers",
+      "type": "implements"
+    },
+    {
+      "from": "TASK-14",
+      "to": "context",
+      "type": "implements"
+    },
+    {
+      "from": "TASK-14",
+      "to": "deployment",
+      "type": "implements"
+    },
+    {
+      "from": "TASK-14",
+      "to": "session",
+      "type": "implements"
+    },
+    {
+      "from": "TASK-14",
+      "to": "testing",
+      "type": "implements"
+    },
+    {
+      "from": "TASK-14",
+      "to": "api",
+      "type": "implements"
+    },
+    {
+      "from": "TASK-14",
+      "to": "backend",
+      "type": "implements"
+    },
+    {
+      "from": "TASK-14",
+      "to": "theory of mind",
+      "type": "implements"
+    },
+    {
+      "from": "TASK-20",
+      "to": "markers",
+      "type": "implements"
+    },
+    {
+      "from": "TASK-20",
+      "to": "testing",
+      "type": "implements"
+    },
+    {
+      "from": "TASK-20",
+      "to": "context",
+      "type": "implements"
+    },
+    {
+      "from": "TASK-20",
+      "to": "backend",
+      "type": "implements"
+    },
+    {
+      "from": "TASK-17",
+      "to": "context",
+      "type": "implements"
+    },
+    {
+      "from": "TASK-17",
+      "to": "skills",
+      "type": "implements"
+    },
+    {
+      "from": "TASK-17",
+      "to": "session",
+      "type": "implements"
+    },
+    {
+      "from": "TASK-17",
+      "to": "testing",
+      "type": "implements"
+    },
+    {
+      "from": "TASK-17",
+      "to": "backend",
+      "type": "implements"
+    },
+    {
+      "from": "TASK-07",
+      "to": "context",
+      "type": "implements"
+    },
+    {
+      "from": "TASK-07",
+      "to": "workflow",
+      "type": "implements"
+    },
+    {
+      "from": "TASK-07",
+      "to": "testing",
+      "type": "implements"
+    },
+    {
+      "from": "TASK-07",
+      "to": "backend",
+      "type": "implements"
+    },
+    {
+      "from": "TASK-07",
+      "to": "markers",
+      "type": "implements"
+    },
+    {
+      "from": "TASK-06",
+      "to": "context",
+      "type": "implements"
+    },
+    {
+      "from": "TASK-06",
+      "to": "workflow",
+      "type": "implements"
+    },
+    {
+      "from": "TASK-06",
+      "to": "session",
+      "type": "implements"
+    },
+    {
+      "from": "TASK-06",
+      "to": "testing",
+      "type": "implements"
+    },
+    {
+      "from": "TASK-06",
+      "to": "backend",
+      "type": "implements"
+    },
+    {
+      "from": "TASK-06",
+      "to": "markers",
+      "type": "implements"
+    },
+    {
+      "from": "TASK-18",
+      "to": "testing",
+      "type": "implements"
+    },
+    {
+      "from": "TASK-18",
+      "to": "context",
+      "type": "implements"
+    },
+    {
+      "from": "TASK-18",
+      "to": "backend",
+      "type": "implements"
+    },
+    {
+      "from": "TASK-27",
+      "to": "context",
+      "type": "implements"
+    },
+    {
+      "from": "TASK-27",
+      "to": "deployment",
+      "type": "implements"
+    },
+    {
+      "from": "TASK-27",
+      "to": "session",
+      "type": "implements"
+    },
+    {
+      "from": "TASK-27",
+      "to": "testing",
+      "type": "implements"
+    },
+    {
+      "from": "TASK-27",
+      "to": "api",
+      "type": "implements"
+    },
+    {
+      "from": "TASK-27",
+      "to": "backend",
+      "type": "implements"
+    },
+    {
+      "from": "TASK-27",
+      "to": "markers",
+      "type": "implements"
+    },
+    {
+      "from": "TASK-08",
+      "to": "context",
+      "type": "implements"
+    },
+    {
+      "from": "TASK-08",
+      "to": "deployment",
+      "type": "implements"
+    },
+    {
+      "from": "TASK-08",
+      "to": "testing",
+      "type": "implements"
+    },
+    {
+      "from": "TASK-08",
+      "to": "api",
+      "type": "implements"
+    },
+    {
+      "from": "TASK-08",
+      "to": "markers",
+      "type": "implements"
+    },
+    {
+      "from": "TASK-12",
+      "to": "context",
+      "type": "implements"
+    },
+    {
+      "from": "TASK-12",
+      "to": "skills",
+      "type": "implements"
+    },
+    {
+      "from": "TASK-12",
+      "to": "testing",
+      "type": "implements"
+    },
+    {
+      "from": "TASK-12",
+      "to": "api",
+      "type": "implements"
+    },
+    {
+      "from": "TASK-12",
+      "to": "backend",
+      "type": "implements"
+    },
+    {
+      "from": "TASK-12",
+      "to": "database",
+      "type": "implements"
+    },
+    {
+      "from": "TASK-12",
+      "to": "markers",
+      "type": "implements"
+    },
+    {
+      "from": "TASK-15",
+      "to": "context",
+      "type": "implements"
+    },
+    {
+      "from": "TASK-15",
+      "to": "deployment",
+      "type": "implements"
+    },
+    {
+      "from": "TASK-15",
+      "to": "frontend",
+      "type": "implements"
+    },
+    {
+      "from": "TASK-15",
+      "to": "skills",
+      "type": "implements"
+    },
+    {
+      "from": "TASK-15",
+      "to": "session",
+      "type": "implements"
+    },
+    {
+      "from": "TASK-15",
+      "to": "testing",
+      "type": "implements"
+    },
+    {
+      "from": "TASK-15",
+      "to": "theory of mind",
+      "type": "implements"
+    },
+    {
+      "from": "TASK-15",
+      "to": "markers",
+      "type": "implements"
+    },
+    {
+      "from": "TASK-08",
+      "to": "context",
+      "type": "implements"
+    },
+    {
+      "from": "TASK-08",
+      "to": "deployment",
+      "type": "implements"
+    },
+    {
+      "from": "TASK-08",
+      "to": "testing",
+      "type": "implements"
+    },
+    {
+      "from": "TASK-08",
+      "to": "backend",
+      "type": "implements"
+    },
+    {
+      "from": "TASK-08",
+      "to": "markers",
+      "type": "implements"
+    },
+    {
+      "from": "TASK-27",
+      "to": "tom",
+      "type": "implements"
+    },
+    {
+      "from": "TASK-27",
+      "to": "workflow",
+      "type": "implements"
+    },
+    {
+      "from": "TASK-28",
+      "to": "testing",
+      "type": "implements"
+    },
+    {
+      "from": "TASK-28",
+      "to": "deployment",
+      "type": "implements"
+    },
+    {
+      "from": "TASK-28",
+      "to": "workflow",
+      "type": "implements"
+    },
+    {
+      "from": "TASK-19",
+      "to": "deployment",
+      "type": "implements"
+    },
+    {
+      "from": "TASK-19",
+      "to": "api",
+      "type": "implements"
+    },
+    {
+      "from": "TASK-19",
+      "to": "workflow",
+      "type": "implements"
+    },
+    {
+      "from": "TASK-23",
+      "to": "deployment",
+      "type": "implements"
+    },
+    {
+      "from": "TASK-23",
+      "to": "api",
+      "type": "implements"
+    },
+    {
+      "from": "TASK-22",
+      "to": "deployment",
+      "type": "implements"
+    },
+    {
+      "from": "TASK-22",
+      "to": "api",
+      "type": "implements"
+    },
+    {
+      "from": "TASK-22",
+      "to": "frontend",
+      "type": "implements"
+    },
+    {
+      "from": "TASK-24",
+      "to": "deployment",
+      "type": "implements"
+    },
+    {
+      "from": "TASK-20",
+      "to": "deployment",
+      "type": "implements"
+    },
+    {
+      "from": "TASK-21",
+      "to": "api",
+      "type": "implements"
+    },
+    {
+      "from": "TASK-21",
+      "to": "deployment",
+      "type": "implements"
+    },
+    {
+      "from": "TASK-21",
+      "to": "tom",
+      "type": "implements"
+    },
+    {
+      "from": "TASK-29",
+      "to": "deployment",
+      "type": "implements"
+    },
+    {
+      "from": "TASK-29",
+      "to": "workflow",
+      "type": "implements"
+    },
+    {
+      "from": "TASK-29",
+      "to": "context",
+      "type": "implements"
+    },
+    {
+      "from": "TASK-29",
+      "to": "testing",
+      "type": "implements"
+    },
+    {
+      "from": "TASK-30",
+      "to": "testing",
+      "type": "implements"
+    },
+    {
+      "from": "TASK-30",
+      "to": "workflow",
+      "type": "implements"
+    },
+    {
+      "from": "TASK-30",
+      "to": "tom",
+      "type": "implements"
+    },
+    {
+      "from": "TASK-30",
+      "to": "context",
+      "type": "implements"
+    },
+    {
+      "from": "TASK-30",
+      "to": "deployment",
+      "type": "implements"
+    },
+    {
+      "from": "TASK-31",
+      "to": "frontend",
+      "type": "implements"
+    },
+    {
+      "from": "TASK-31",
+      "to": "api",
+      "type": "implements"
+    },
+    {
+      "from": "TASK-31",
+      "to": "testing",
+      "type": "implements"
+    },
+    {
+      "from": "TASK-31",
+      "to": "deployment",
+      "type": "implements"
+    },
+    {
+      "from": "TASK-31",
+      "to": "context",
+      "type": "implements"
+    },
+    {
+      "from": "TASK-32",
+      "to": "context",
+      "type": "implements"
+    },
+    {
+      "from": "TASK-32",
+      "to": "deployment",
+      "type": "implements"
+    },
+    {
+      "from": "TASK-32",
+      "to": "api",
+      "type": "implements"
+    },
+    {
+      "from": "TASK-32",
+      "to": "testing",
+      "type": "implements"
+    },
+    {
+      "from": "TASK-32",
+      "to": "tom",
+      "type": "implements"
+    },
+    {
+      "from": "TASK-33",
+      "to": "deployment",
+      "type": "implements"
+    },
+    {
+      "from": "TASK-33",
+      "to": "context",
+      "type": "implements"
+    },
+    {
+      "from": "TASK-33",
+      "to": "workflow",
+      "type": "implements"
+    },
+    {
+      "from": "TASK-33",
+      "to": "testing",
+      "type": "implements"
+    },
+    {
+      "from": "TASK-33",
+      "to": "frontend",
+      "type": "implements"
+    },
+    {
+      "from": "TASK-33",
+      "to": "tom",
+      "type": "implements"
+    },
+    {
+      "from": "TASK-34",
+      "to": "api",
+      "type": "implements"
+    },
+    {
+      "from": "TASK-34",
+      "to": "deployment",
+      "type": "implements"
+    },
+    {
+      "from": "TASK-34",
+      "to": "context",
+      "type": "implements"
+    },
+    {
+      "from": "TASK-34",
+      "to": "tom",
+      "type": "implements"
+    },
+    {
+      "from": "TASK-34",
+      "to": "testing",
+      "type": "implements"
+    },
+    {
+      "from": "TASK-35",
+      "to": "testing",
+      "type": "implements"
+    },
+    {
+      "from": "TASK-35",
+      "to": "api",
+      "type": "implements"
+    },
+    {
+      "from": "TASK-35",
+      "to": "authentication",
+      "type": "implements"
+    },
+    {
+      "from": "TASK-35",
+      "to": "context",
+      "type": "implements"
+    },
+    {
+      "from": "TASK-35",
+      "to": "deployment",
+      "type": "implements"
+    },
+    {
+      "from": "TASK-36",
+      "to": "deployment",
+      "type": "implements"
+    },
+    {
+      "from": "TASK-36",
+      "to": "context",
+      "type": "implements"
+    },
+    {
+      "from": "TASK-36",
+      "to": "workflow",
+      "type": "implements"
+    },
+    {
+      "from": "TASK-36",
+      "to": "testing",
+      "type": "implements"
+    },
+    {
+      "from": "TASK-32",
+      "to": "workflow",
+      "type": "implements"
+    },
+    {
+      "from": "TASK-16",
+      "to": "deployment",
+      "type": "implements"
+    },
+    {
+      "from": "TASK-35",
+      "to": "tom",
+      "type": "implements"
+    },
+    {
+      "from": "TASK-36",
+      "to": "api",
+      "type": "implements"
+    },
+    {
+      "from": "TASK-37",
+      "to": "deployment",
+      "type": "implements"
+    },
+    {
+      "from": "TASK-37",
+      "to": "testing",
+      "type": "implements"
+    },
+    {
+      "from": "TASK-37",
+      "to": "frontend",
+      "type": "implements"
+    },
+    {
+      "from": "TASK-37",
+      "to": "context",
+      "type": "implements"
+    },
+    {
+      "from": "TASK-37",
+      "to": "markers",
+      "type": "implements"
+    },
+    {
+      "from": "TASK-38",
+      "to": "workflow",
+      "type": "implements"
+    },
+    {
+      "from": "TASK-38",
+      "to": "api",
+      "type": "implements"
+    },
+    {
+      "from": "TASK-38",
+      "to": "deployment",
+      "type": "implements"
+    },
+    {
+      "from": "TASK-38",
+      "to": "testing",
+      "type": "implements"
+    },
+    {
+      "from": "TASK-38",
+      "to": "context",
+      "type": "implements"
+    },
+    {
+      "from": "TASK-39",
+      "to": "workflow",
+      "type": "implements"
+    },
+    {
+      "from": "TASK-39",
+      "to": "context",
+      "type": "implements"
+    },
+    {
+      "from": "TASK-39",
+      "to": "deployment",
+      "type": "implements"
+    },
+    {
+      "from": "TASK-39",
+      "to": "testing",
+      "type": "implements"
+    }
+  ],
+  "concept_index": {
+    "context": [
+      "TASK-09",
+      "TASK-10",
+      "TASK-01",
+      "TASK-11",
+      "TASK-03",
+      "TASK-26",
+      "TASK-25",
+      "TASK-16",
+      "TASK-04",
+      "TASK-23",
+      "TASK-05",
+      "TASK-19",
+      "TASK-24",
+      "TASK-21",
+      "TASK-02",
+      "TASK-22",
+      "TASK-13",
+      "README",
+      "TASK-14",
+      "TASK-20",
+      "TASK-17",
+      "TASK-07",
+      "TASK-06",
+      "TASK-18",
+      "TASK-27",
+      "TASK-08",
+      "TASK-12",
+      "TASK-15",
+      "SOP-client_tests_on_linux",
+      "SOP-sharing_client_harness",
+      "SOP-testing_principles",
+      "SOP-task_lifecycle",
+      "2026-05-19-0600_task02-round2-tile-rocket-eod",
+      "2026-05-22_task06-shipped",
+      "2026-05-21_task05-closed-task10b-phase7-reopened",
+      "2026-05-23_task11-world-command-shipped",
+      "2026-05-12-1847_test-suite-junit-migration-eod",
+      "2026-05-18-2300_task02-autonomous-execution-eod",
+      "2026-05-22_task06-phases-1-4-shipped",
+      "2026-05-22_task10b-phase7-closeout",
+      "2026-05-20-1430_task04-observatory-railgun",
+      "2026-05-20-2330_task07-fully-closed",
+      "2026-05-23_task17-ssot-integrity-shipped",
+      "2026-05-23_task12-bugs-drained",
+      "2026-05-19-1230_task03-A-and-B-mostly-done-eod",
+      "2026-05-23_task18-industrial-machines-shipped",
+      "2026-05-18-1900_merge-fix-weather-into-feature-tests",
+      "2026-05-23_task25-26-16-batch-shipped",
+      "2026-05-13-1709_smart-8gaps-implemented-eod",
+      "2026-05-23_task14-obsoleted",
+      "2026-05-20-1700_task08-mixin-shipped",
+      "before-compact-2026-05-23-1230",
+      "2026-05-19-1100_task02-phase4r2-phase1-phase7-phase8-eod",
+      "2026-05-18-2050_task02-drafted-gl-fixed",
+      "2026-05-15-1610_smart-pyramid-skeleton-complete",
+      "before-compact-2026-05-20-1424",
+      "2026-05-19-1830_autonomous-small-remainders",
+      "2026-05-20-1730_task04-warp-gravity-planet-elevator",
+      "2026-05-15-1805_weather-b1-impl-and-client-e2e-debug",
+      "before-compact-2026-05-20-2310",
+      "2026-05-23_task26-wildcard-machines-shipped",
+      "2026-05-23_task13-wireless-transceiver-shipped",
+      "2026-05-14-1150_client-e2e-fg6-harness",
+      "2026-05-18-1745_weather-b1-shipped-eod",
+      "2026-05-20-2030_task04-terraformer-orbitallaser",
+      "2026-05-19-1530_task07-rocket-flight-cycle-eod",
+      "2026-05-22_task10b-phase7-spacearmor-shipped",
+      "2026-05-20-2300_task04-deferred-followups-closed",
+      "2026-05-19-1430_task04-multiblock-partial-eod",
+      "2026-05-19-1745_task10-redone-without-fakeplayer",
+      "2026-05-19-2030_multiblock-fixtures-bhg-beacon",
+      "TASK-29",
+      "TASK-30",
+      "TASK-31",
+      "TASK-32",
+      "TASK-33",
+      "TASK-34",
+      "TASK-35",
+      "TASK-36",
+      "TASK-37",
+      "TASK-38",
+      "TASK-39"
+    ],
+    "knowledge": [
+      "TASK-09",
+      "TASK-05",
+      "TASK-02",
+      "README",
+      "2026-05-19-1230_task03-A-and-B-mostly-done-eod",
+      "2026-05-13-1709_smart-8gaps-implemented-eod",
+      "2026-05-20-1700_task08-mixin-shipped",
+      "before-compact-2026-05-23-1230",
+      "2026-05-15-1610_smart-pyramid-skeleton-complete",
+      "before-compact-2026-05-20-1424",
+      "before-compact-2026-05-20-2310",
+      "2026-05-14-1150_client-e2e-fg6-harness"
+    ],
+    "workflow": [
+      "TASK-09",
+      "TASK-26",
+      "TASK-04",
+      "TASK-07",
+      "TASK-06",
+      "SOP-testing_principles",
+      "2026-05-12-1847_test-suite-junit-migration-eod",
+      "2026-05-22_task06-phases-1-4-shipped",
+      "2026-05-22_task10b-phase7-closeout",
+      "2026-05-20-1430_task04-observatory-railgun",
+      "2026-05-21-1700_task09-phase5-closed",
+      "2026-05-20-2330_task07-fully-closed",
+      "2026-05-19-1230_task03-A-and-B-mostly-done-eod",
+      "2026-05-23_task18-industrial-machines-shipped",
+      "2026-05-18-1900_merge-fix-weather-into-feature-tests",
+      "2026-05-13-1709_smart-8gaps-implemented-eod",
+      "2026-05-20-1700_task08-mixin-shipped",
+      "2026-05-19-1100_task02-phase4r2-phase1-phase7-phase8-eod",
+      "2026-05-15-1610_smart-pyramid-skeleton-complete",
+      "before-compact-2026-05-20-1424",
+      "2026-05-15-1805_weather-b1-impl-and-client-e2e-debug",
+      "2026-05-23_task13-wireless-transceiver-shipped",
+      "2026-05-14-1150_client-e2e-fg6-harness",
+      "2026-05-18-1745_weather-b1-shipped-eod",
+      "2026-05-18-1530_task01-phase4-pyramid-complete",
+      "2026-05-19-1530_task07-rocket-flight-cycle-eod",
+      "2026-05-19-1430_task04-multiblock-partial-eod",
+      "2026-05-19-1745_task10-redone-without-fakeplayer",
+      "mem-004",
+      "TASK-27",
+      "TASK-28",
+      "TASK-19",
+      "TASK-29",
+      "TASK-30",
+      "TASK-33",
+      "TASK-36",
+      "TASK-32",
+      "TASK-38",
+      "TASK-39"
+    ],
+    "testing": [
+      "TASK-09",
+      "TASK-10",
+      "TASK-01",
+      "TASK-11",
+      "TASK-03",
+      "TASK-26",
+      "TASK-25",
+      "TASK-16",
+      "TASK-04",
+      "TASK-23",
+      "TASK-05",
+      "TASK-19",
+      "TASK-24",
+      "TASK-21",
+      "TASK-02",
+      "TASK-22",
+      "TASK-13",
+      "README",
+      "TASK-14",
+      "TASK-20",
+      "TASK-17",
+      "TASK-07",
+      "TASK-06",
+      "TASK-18",
+      "TASK-27",
+      "TASK-08",
+      "TASK-12",
+      "TASK-15",
+      "SOP-client_tests_on_linux",
+      "SOP-sharing_client_harness",
+      "SOP-testing_principles",
+      "SOP-task_lifecycle",
+      "2026-05-20-2350_task10b-closed",
+      "2026-05-19-0600_task02-round2-tile-rocket-eod",
+      "2026-05-22_task06-shipped",
+      "2026-05-21_task05-closed-task10b-phase7-reopened",
+      "2026-05-23_task11-world-command-shipped",
+      "2026-05-12-1847_test-suite-junit-migration-eod",
+      "2026-05-18-2300_task02-autonomous-execution-eod",
+      "2026-05-22_task06-phases-1-4-shipped",
+      "2026-05-22_task10b-phase7-closeout",
+      "2026-05-20-1430_task04-observatory-railgun",
+      "2026-05-21-1700_task09-phase5-closed",
+      "2026-05-20-2330_task07-fully-closed",
+      "2026-05-23_task17-ssot-integrity-shipped",
+      "2026-05-23_task12-bugs-drained",
+      "2026-05-19-1230_task03-A-and-B-mostly-done-eod",
+      "2026-05-23_task18-industrial-machines-shipped",
+      "2026-05-18-1900_merge-fix-weather-into-feature-tests",
+      "2026-05-23_task25-26-16-batch-shipped",
+      "2026-05-13-1709_smart-8gaps-implemented-eod",
+      "2026-05-23_task14-obsoleted",
+      "2026-05-20-1700_task08-mixin-shipped",
+      "before-compact-2026-05-23-1230",
+      "2026-05-19-1100_task02-phase4r2-phase1-phase7-phase8-eod",
+      "2026-05-18-2050_task02-drafted-gl-fixed",
+      "2026-05-15-1610_smart-pyramid-skeleton-complete",
+      "before-compact-2026-05-20-1424",
+      "2026-05-19-1830_autonomous-small-remainders",
+      "2026-05-20-1730_task04-warp-gravity-planet-elevator",
+      "2026-05-15-1805_weather-b1-impl-and-client-e2e-debug",
+      "before-compact-2026-05-20-2310",
+      "2026-05-15-1650_task01-session1-phase0-f1f2-and-2a",
+      "2026-05-23_task26-wildcard-machines-shipped",
+      "2026-05-23_task13-wireless-transceiver-shipped",
+      "2026-05-14-1150_client-e2e-fg6-harness",
+      "2026-05-18-1745_weather-b1-shipped-eod",
+      "2026-05-20-2030_task04-terraformer-orbitallaser",
+      "2026-05-18-1530_task01-phase4-pyramid-complete",
+      "2026-05-19-1530_task07-rocket-flight-cycle-eod",
+      "2026-05-22_task10b-phase7-spacearmor-shipped",
+      "2026-05-20-2300_task04-deferred-followups-closed",
+      "2026-05-19-1430_task04-multiblock-partial-eod",
+      "2026-05-19-1745_task10-redone-without-fakeplayer",
+      "2026-05-15-1733_task01-session2-phase1-planet-depth",
+      "2026-05-19-2030_multiblock-fixtures-bhg-beacon",
+      "mem-001",
+      "mem-002",
+      "mem-003",
+      "TASK-28",
+      "mem-006",
+      "mem-008",
+      "TASK-29",
+      "TASK-30",
+      "TASK-31",
+      "TASK-32",
+      "TASK-33",
+      "TASK-34",
+      "TASK-35",
+      "TASK-36",
+      "TASK-37",
+      "TASK-38",
+      "TASK-39"
+    ],
+    "backend": [
+      "TASK-09",
+      "TASK-10",
+      "TASK-01",
+      "TASK-11",
+      "TASK-03",
+      "TASK-26",
+      "TASK-25",
+      "TASK-16",
+      "TASK-04",
+      "TASK-23",
+      "TASK-05",
+      "TASK-21",
+      "TASK-02",
+      "TASK-22",
+      "TASK-13",
+      "README",
+      "TASK-14",
+      "TASK-20",
+      "TASK-17",
+      "TASK-07",
+      "TASK-06",
+      "TASK-18",
+      "TASK-27",
+      "TASK-08",
+      "TASK-12",
+      "SOP-sharing_client_harness",
+      "SOP-testing_principles",
+      "SOP-task_lifecycle",
+      "2026-05-19-0600_task02-round2-tile-rocket-eod",
+      "2026-05-22_task06-shipped",
+      "2026-05-21_task05-closed-task10b-phase7-reopened",
+      "2026-05-23_task11-world-command-shipped",
+      "2026-05-12-1847_test-suite-junit-migration-eod",
+      "2026-05-18-2300_task02-autonomous-execution-eod",
+      "2026-05-22_task06-phases-1-4-shipped",
+      "2026-05-21-1430_task09-closed",
+      "2026-05-20-2330_task07-fully-closed",
+      "2026-05-23_task17-ssot-integrity-shipped",
+      "2026-05-23_task12-bugs-drained",
+      "2026-05-19-1230_task03-A-and-B-mostly-done-eod",
+      "2026-05-23_task18-industrial-machines-shipped",
+      "2026-05-18-1900_merge-fix-weather-into-feature-tests",
+      "2026-05-23_task25-26-16-batch-shipped",
+      "2026-05-13-1709_smart-8gaps-implemented-eod",
+      "2026-05-20-1700_task08-mixin-shipped",
+      "before-compact-2026-05-23-1230",
+      "2026-05-19-1100_task02-phase4r2-phase1-phase7-phase8-eod",
+      "2026-05-15-1610_smart-pyramid-skeleton-complete",
+      "before-compact-2026-05-20-1424",
+      "2026-05-19-1830_autonomous-small-remainders",
+      "2026-05-15-1805_weather-b1-impl-and-client-e2e-debug",
+      "before-compact-2026-05-20-2310",
+      "2026-05-15-1650_task01-session1-phase0-f1f2-and-2a",
+      "2026-05-23_task26-wildcard-machines-shipped",
+      "2026-05-23_task13-wireless-transceiver-shipped",
+      "2026-05-14-1150_client-e2e-fg6-harness",
+      "2026-05-18-1745_weather-b1-shipped-eod",
+      "2026-05-18-1530_task01-phase4-pyramid-complete",
+      "2026-05-19-1530_task07-rocket-flight-cycle-eod",
+      "2026-05-20-2300_task04-deferred-followups-closed",
+      "2026-05-19-1430_task04-multiblock-partial-eod",
+      "2026-05-19-1745_task10-redone-without-fakeplayer",
+      "2026-05-15-1733_task01-session2-phase1-planet-depth"
+    ],
+    "database": [
+      "TASK-09",
+      "TASK-03",
+      "TASK-02",
+      "TASK-12",
+      "SOP-testing_principles",
+      "2026-05-12-1847_test-suite-junit-migration-eod",
+      "2026-05-23_task12-bugs-drained",
+      "2026-05-19-1230_task03-A-and-B-mostly-done-eod",
+      "2026-05-13-1709_smart-8gaps-implemented-eod",
+      "before-compact-2026-05-23-1230",
+      "2026-05-19-1100_task02-phase4r2-phase1-phase7-phase8-eod",
+      "2026-05-15-1610_smart-pyramid-skeleton-complete",
+      "2026-05-14-1150_client-e2e-fg6-harness",
+      "2026-05-20-2030_task04-terraformer-orbitallaser"
+    ],
+    "markers": [
+      "TASK-09",
+      "TASK-10",
+      "TASK-01",
+      "TASK-11",
+      "TASK-03",
+      "TASK-26",
+      "TASK-25",
+      "TASK-16",
+      "TASK-04",
+      "TASK-05",
+      "TASK-02",
+      "TASK-13",
+      "README",
+      "TASK-20",
+      "TASK-07",
+      "TASK-06",
+      "TASK-27",
+      "TASK-08",
+      "TASK-12",
+      "TASK-15",
+      "SOP-client_tests_on_linux",
+      "SOP-testing_principles",
+      "SOP-task_lifecycle",
+      "2026-05-19-0600_task02-round2-tile-rocket-eod",
+      "2026-05-22_task06-shipped",
+      "2026-05-21_task05-closed-task10b-phase7-reopened",
+      "2026-05-23_task11-world-command-shipped",
+      "2026-05-12-1847_test-suite-junit-migration-eod",
+      "2026-05-18-2300_task02-autonomous-execution-eod",
+      "2026-05-22_task06-phases-1-4-shipped",
+      "2026-05-22_task10b-phase7-closeout",
+      "2026-05-20-1430_task04-observatory-railgun",
+      "2026-05-21-1700_task09-phase5-closed",
+      "2026-05-20-2330_task07-fully-closed",
+      "2026-05-23_task17-ssot-integrity-shipped",
+      "2026-05-23_task12-bugs-drained",
+      "2026-05-19-1230_task03-A-and-B-mostly-done-eod",
+      "2026-05-23_task18-industrial-machines-shipped",
+      "2026-05-18-1900_merge-fix-weather-into-feature-tests",
+      "2026-05-23_task25-26-16-batch-shipped",
+      "2026-05-13-1709_smart-8gaps-implemented-eod",
+      "2026-05-23_task14-obsoleted",
+      "2026-05-20-1700_task08-mixin-shipped",
+      "before-compact-2026-05-23-1230",
+      "2026-05-19-1100_task02-phase4r2-phase1-phase7-phase8-eod",
+      "2026-05-18-2050_task02-drafted-gl-fixed",
+      "2026-05-15-1610_smart-pyramid-skeleton-complete",
+      "before-compact-2026-05-20-1424",
+      "2026-05-19-1830_autonomous-small-remainders",
+      "2026-05-20-1730_task04-warp-gravity-planet-elevator",
+      "2026-05-15-1805_weather-b1-impl-and-client-e2e-debug",
+      "before-compact-2026-05-20-2310",
+      "2026-05-15-1650_task01-session1-phase0-f1f2-and-2a",
+      "2026-05-23_task26-wildcard-machines-shipped",
+      "2026-05-23_task13-wireless-transceiver-shipped",
+      "2026-05-14-1150_client-e2e-fg6-harness",
+      "2026-05-18-1745_weather-b1-shipped-eod",
+      "2026-05-20-2030_task04-terraformer-orbitallaser",
+      "2026-05-18-1530_task01-phase4-pyramid-complete",
+      "2026-05-19-1530_task07-rocket-flight-cycle-eod",
+      "2026-05-22_task10b-phase7-spacearmor-shipped",
+      "2026-05-20-2300_task04-deferred-followups-closed",
+      "2026-05-19-1430_task04-multiblock-partial-eod",
+      "2026-05-19-1745_task10-redone-without-fakeplayer",
+      "2026-05-15-1733_task01-session2-phase1-planet-depth",
+      "2026-05-19-2030_multiblock-fixtures-bhg-beacon",
+      "TASK-37"
+    ],
+    "session": [
+      "TASK-01",
+      "TASK-03",
+      "TASK-26",
+      "TASK-25",
+      "TASK-16",
+      "TASK-04",
+      "TASK-02",
+      "TASK-13",
+      "README",
+      "TASK-14",
+      "TASK-17",
+      "TASK-06",
+      "TASK-27",
+      "TASK-15",
+      "SOP-task_lifecycle",
+      "2026-05-19-0600_task02-round2-tile-rocket-eod",
+      "2026-05-22_task06-shipped",
+      "2026-05-21_task05-closed-task10b-phase7-reopened",
+      "2026-05-23_task11-world-command-shipped",
+      "2026-05-12-1847_test-suite-junit-migration-eod",
+      "2026-05-18-2300_task02-autonomous-execution-eod",
+      "2026-05-22_task06-phases-1-4-shipped",
+      "2026-05-22_task10b-phase7-closeout",
+      "2026-05-20-1430_task04-observatory-railgun",
+      "2026-05-20-2330_task07-fully-closed",
+      "2026-05-23_task17-ssot-integrity-shipped",
+      "2026-05-23_task12-bugs-drained",
+      "2026-05-19-1230_task03-A-and-B-mostly-done-eod",
+      "2026-05-23_task18-industrial-machines-shipped",
+      "2026-05-23_task25-26-16-batch-shipped",
+      "2026-05-13-1709_smart-8gaps-implemented-eod",
+      "2026-05-23_task14-obsoleted",
+      "2026-05-20-1700_task08-mixin-shipped",
+      "before-compact-2026-05-23-1230",
+      "2026-05-19-1100_task02-phase4r2-phase1-phase7-phase8-eod",
+      "2026-05-18-2050_task02-drafted-gl-fixed",
+      "2026-05-15-1610_smart-pyramid-skeleton-complete",
+      "before-compact-2026-05-20-1424",
+      "2026-05-19-1830_autonomous-small-remainders",
+      "2026-05-20-1730_task04-warp-gravity-planet-elevator",
+      "2026-05-15-1805_weather-b1-impl-and-client-e2e-debug",
+      "before-compact-2026-05-20-2310",
+      "2026-05-15-1650_task01-session1-phase0-f1f2-and-2a",
+      "2026-05-23_task26-wildcard-machines-shipped",
+      "2026-05-23_task13-wireless-transceiver-shipped",
+      "2026-05-14-1150_client-e2e-fg6-harness",
+      "2026-05-20-2030_task04-terraformer-orbitallaser",
+      "2026-05-18-1530_task01-phase4-pyramid-complete",
+      "2026-05-22_task10b-phase7-spacearmor-shipped",
+      "2026-05-20-2300_task04-deferred-followups-closed",
+      "2026-05-19-1430_task04-multiblock-partial-eod",
+      "2026-05-19-1745_task10-redone-without-fakeplayer",
+      "2026-05-15-1733_task01-session2-phase1-planet-depth",
+      "2026-05-19-2030_multiblock-fixtures-bhg-beacon"
+    ],
+    "skills": [
+      "TASK-11",
+      "TASK-03",
+      "README",
+      "TASK-17",
+      "TASK-12",
+      "TASK-15",
+      "SOP-task_lifecycle",
+      "2026-05-22_task06-shipped",
+      "2026-05-21_task05-closed-task10b-phase7-reopened",
+      "2026-05-23_task11-world-command-shipped",
+      "2026-05-12-1847_test-suite-junit-migration-eod",
+      "2026-05-22_task06-phases-1-4-shipped",
+      "2026-05-22_task10b-phase7-closeout",
+      "2026-05-20-1430_task04-observatory-railgun",
+      "2026-05-20-2330_task07-fully-closed",
+      "2026-05-23_task17-ssot-integrity-shipped",
+      "2026-05-23_task12-bugs-drained",
+      "2026-05-18-1900_merge-fix-weather-into-feature-tests",
+      "2026-05-13-1709_smart-8gaps-implemented-eod",
+      "before-compact-2026-05-23-1230",
+      "2026-05-15-1610_smart-pyramid-skeleton-complete",
+      "2026-05-20-1730_task04-warp-gravity-planet-elevator",
+      "2026-05-15-1805_weather-b1-impl-and-client-e2e-debug",
+      "before-compact-2026-05-20-2310",
+      "2026-05-14-1150_client-e2e-fg6-harness",
+      "2026-05-18-1745_weather-b1-shipped-eod",
+      "2026-05-20-2030_task04-terraformer-orbitallaser",
+      "2026-05-18-1530_task01-phase4-pyramid-complete",
+      "2026-05-22_task10b-phase7-spacearmor-shipped",
+      "2026-05-20-2300_task04-deferred-followups-closed",
+      "2026-05-15-1733_task01-session2-phase1-planet-depth",
+      "2026-05-19-2030_multiblock-fixtures-bhg-beacon"
+    ],
+    "api": [
+      "TASK-11",
+      "TASK-03",
+      "TASK-16",
+      "TASK-02",
+      "TASK-13",
+      "TASK-14",
+      "TASK-27",
+      "TASK-12",
+      "SOP-testing_principles",
+      "SOP-task_lifecycle",
+      "2026-05-21-1700_task09-phase5-closed",
+      "2026-05-20-2330_task07-fully-closed",
+      "2026-05-19-1230_task03-A-and-B-mostly-done-eod",
+      "2026-05-18-1900_merge-fix-weather-into-feature-tests",
+      "2026-05-13-1709_smart-8gaps-implemented-eod",
+      "2026-05-15-1610_smart-pyramid-skeleton-complete",
+      "2026-05-15-1805_weather-b1-impl-and-client-e2e-debug",
+      "TASK-19",
+      "TASK-23",
+      "TASK-22",
+      "TASK-21",
+      "TASK-31",
+      "TASK-32",
+      "TASK-34",
+      "TASK-35",
+      "TASK-36",
+      "TASK-38"
+    ],
+    "deployment": [
+      "TASK-03",
+      "TASK-02",
+      "TASK-14",
+      "TASK-27",
+      "TASK-08",
+      "TASK-15",
+      "SOP-client_tests_on_linux",
+      "2026-05-15-1610_smart-pyramid-skeleton-complete",
+      "TASK-28",
+      "TASK-19",
+      "TASK-23",
+      "TASK-22",
+      "TASK-24",
+      "TASK-20",
+      "TASK-21",
+      "TASK-29",
+      "TASK-30",
+      "TASK-31",
+      "TASK-32",
+      "TASK-33",
+      "TASK-34",
+      "TASK-35",
+      "TASK-36",
+      "TASK-16",
+      "TASK-37",
+      "TASK-38",
+      "TASK-39"
+    ],
+    "frontend": [
+      "TASK-03",
+      "TASK-05",
+      "TASK-24",
+      "TASK-02",
+      "TASK-15",
+      "2026-05-18-1530_task01-phase4-pyramid-complete",
+      "2026-05-22_task10b-phase7-spacearmor-shipped",
+      "2026-05-19-1745_task10-redone-without-fakeplayer",
+      "TASK-22",
+      "TASK-31",
+      "TASK-33",
+      "TASK-37"
+    ],
+    "theory of mind": [
+      "TASK-14",
+      "TASK-15",
+      "SOP-sharing_client_harness",
+      "2026-05-12-1847_test-suite-junit-migration-eod",
+      "2026-05-13-1709_smart-8gaps-implemented-eod",
+      "2026-05-14-1150_client-e2e-fg6-harness"
+    ],
+    "authentication": [
+      "2026-05-15-1805_weather-b1-impl-and-client-e2e-debug",
+      "TASK-35"
+    ],
+    "contracts": [
+      "mem-001"
+    ],
+    "sop": [
+      "mem-001",
+      "mem-004",
+      "mem-006"
+    ],
+    "flake": [
+      "mem-002",
+      "mem-003",
+      "mem-006",
+      "mem-007"
+    ],
+    "harness": [
+      "mem-002"
+    ],
+    "ports": [
+      "mem-002"
+    ],
+    "tick": [
+      "mem-003"
+    ],
+    "bugs": [
+      "mem-004"
+    ],
+    "ledger": [
+      "mem-004"
+    ],
+    "architecture": [
+      "mem-005"
+    ],
+    "mixin": [
+      "mem-005"
+    ],
+    "coremod": [
+      "mem-005"
+    ],
+    "tom": [
+      "TASK-27",
+      "TASK-21",
+      "TASK-30",
+      "TASK-32",
+      "TASK-33",
+      "TASK-34",
+      "TASK-35"
+    ],
+    "diagnosis": [
+      "mem-006"
+    ],
+    "probe": [
+      "mem-007"
+    ],
+    "server-thread": [
+      "mem-007"
+    ],
+    "chunk-load": [
+      "mem-007"
+    ],
+    "gradle": [
+      "mem-008"
+    ],
+    "cache": [
+      "mem-008"
+    ],
+    "verification": [
+      "mem-008"
+    ]
+  }
+}
