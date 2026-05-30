@@ -228,3 +228,68 @@ behaviour in dev:
 4. For each broken mixin: choose between
    `-Dmixin.env.disableRefMap=true` global toggle or per-mixin
    AT migration (case-by-case).
+
+### Phase 3 attempts so far (2026-05-30)
+
+**Attempt 1 — hypothesis "TASK-41 `stageMixinRefmapForRun` task caused this"**.
+Disabled the staging task, removed refmap from `build/resources/main/`,
+re-ran InventoryBypass test in isolation. **Result**: still 0 fires
+of the `shouldAllowContainerInteract` marker, test still fails at
+line 100. → Hypothesis disproved: refmap reaches the dev classloader
+via the jar (which the harness depends on) even without the staging
+task, so removing only the staged copy changes nothing.
+
+**Attempt 2 — `-Dmixin.env.disableRefMap=true` sysprop**.
+Added `mixin.env.disableRefMap=true` to both the spawned dedicated-server
+JVM's JAVA_TOOL_OPTIONS and the client JVM's
+`forge.test.client.env.JAVA_TOOL_OPTIONS`. Verified the prop reached
+the client subprocess via the client log (`Picked up JAVA_TOOL_OPTIONS:
+... -Dmixin.env.disableRefMap=true`). **Result**: still 0 fires,
+test still fails at line 100. → MixinBooter 7.0 either ignores this
+flag or applies the refmap before it's read.
+
+**Attempt 3 — static-init class-load marker**.
+Added `static { System.out.println("RocketInventoryHelper class
+loaded"); }` to the helper class. Verified the instrumented bytecode
+shipped (`strings ...RocketInventoryHelper.class | grep`). Re-ran.
+**Result on this run**: test PASSED (not failed!), but **0 fires of
+either the static-init marker OR the redirect marker** across the
+entire test JVM, dedicated-server subprocess, and client subprocess
+logs. → Two facts confirmed:
+- `RocketInventoryHelper` is **never even class-loaded** during the
+  test, let alone called.
+- The test still passes occasionally **without the contract under
+  test being exercised at all** — i.e. the test's
+  "chest GUI still open after TP" assertion is satisfied by some
+  factor unrelated to the mixin (client-side GUI state lag,
+  packet-order race, or similar harness artifact).
+
+### Phase 3 interim verdict
+
+**Two interlocking facts**:
+1. The mixin's `@Redirect` target (RocketInventoryHelper) is **truly
+   not wired** at dev runtime — class not loaded, redirect not
+   installed.
+2. The e2e test that pins this mixin is **not actually exercising
+   the contract** — its assertions can be satisfied by harness
+   timing artifacts regardless of mixin state.
+
+This strengthens the TASK-42 `@Ignore` decision: the test is
+double-broken. But the underlying production-vs-dev divergence
+(redirect silently no-ops in dev) remains a real concern.
+
+### Open questions for Phase 3 continuation
+
+- Why does `mixin.env.disableRefMap=true` not affect MixinBooter 7.0's
+  refmap handling? Worth checking MixinBooter's actual sysprop list
+  vs upstream SpongePowered Mixin defaults.
+- Does the same silent-no-op affect the other 5 mixins in the config?
+  Authoring a single diagnostic probe verb (e.g. `/artest mixin
+  status`) that reports per-mixin "installed/not-installed" per-tick
+  would be cheaper than per-mixin instrumentation.
+- Production-vs-dev divergence remediation: install AR's mod via a
+  reobf jar in the testClient harness so the runtime path mirrors
+  production. (Currently the harness loads loose dev classes.)
+
+Phase 3 work suspended pending design decision on which of the
+above to attack first.
