@@ -143,3 +143,88 @@ not a release blocker.
 
 ~4-6 h (Phase 1 lighter — probe verb + kit hook + suite re-runs;
 Phase 2 unknown until instrumentation reveals the bridge-drop tick).
+
+---
+
+## Bonus finding (2026-05-30) — TASK-42 InventoryBypass diagnostic
+
+Although `InventoryBypassRedirectE2ETest` is @Ignore'd via TASK-42,
+a quick diagnostic instrumentation revealed an underlying production
+bug worth ledger-promoting independently of test outcome:
+
+**Instrumentation**: temporarily added a `System.out.println` at the
+top of `RocketInventoryHelper.shouldAllowContainerInteract` (the
+target of `MixinEntityPlayer(MP)InventoryAccess` `@Redirect`),
+un-`@Ignore`'d the test, and ran it in isolation.
+
+**Result**: **0 fires** of the instrumentation across the full test
+run — the helper is NEVER called, even though `EntityPlayerMP.onUpdate`
+ticks ~135 times during the test (visible in the test's
+`reportState ticks` field). The @Redirect is **silently not
+installing** in the dev classloader.
+
+**Smoking-gun connection to TASK-41**: this is the same refmap-vs-MCP
+collision that TASK-41 hit with AccessorWorld, but in the SOFT
+variant. Mixin's refmap translates the redirect target
+`Lnet/minecraft/inventory/Container;canInteractWith(...)` to its
+SRG counterpart `func_75145_c`. In the dev launchwrapper classloader,
+the runtime `Container` class is MCP-named (`canInteractWith` exists,
+`func_75145_c` does not) → the @Redirect target call-site can't be
+located → Mixin silently skips the redirect (whereas @Accessor would
+crash with `InvalidAccessorException`, as TASK-41 demonstrated).
+
+**Production-vs-dev impact**:
+- **Production** (installed mod jar in a real modpack): jar's classes
+  are reobfed to SRG by FG6's `reobfJar`, so `func_75145_c` IS the
+  runtime field name → @Redirect installs correctly → bypass works.
+- **Dev** (`runClient` / `testClient` / `testServer`): classes are
+  MCP-named → @Redirect skips → bypass silently broken. Any player
+  in a dev environment cannot use AR's rocket-inventory cross-distance
+  bypass; vanilla's 8-block reach gate wins.
+
+**Player-visible (dev only)**: AR's "keep rocket inventory open while
+rocket moves away" feature does NOT work in `runClient`. It DOES
+work in installed-mod environments.
+
+**Bug ledger entry candidate**: `MixinEntityPlayerInventoryAccess`
+and `MixinEntityPlayerMPInventoryAccess` `@Redirect` annotations
+silently no-op in dev classloader because the refmap forces an
+SRG-name lookup that doesn't match the MCP-named runtime classes.
+Same root cause family as TASK-41 entry #4; promote to ledger
+once the team confirms the affected mixin list is bounded to these
+two @Redirect targets (other mixins use different `@At` patterns
+that may or may not trip the same).
+
+**Audit candidates for the same shape** (other AR mixins worth
+checking):
+- `MixinEntityGravity` — `@Inject` on `EntityPlayer.onUpdate`
+  (`func_70071_h_`).
+- `MixinPlayerList` — `@Inject` on `PlayerList.updateTimeAndWeatherForPlayer`
+  (`func_72354_b`).
+- `MixinWorldSetBlockState` — `@Inject` on `World.setBlockState`
+  (`func_180501_a`).
+
+All three are likely affected. The AccessorWorld removal in TASK-41
+already eliminated the only @Accessor in the config; the remaining
+mixins are all @Inject / @Redirect with refmap-translated targets.
+
+**Recommendation**: do the same investigation for these three. If
+they also silently no-op in dev, AR's dev-time behaviour diverges
+materially from production. Fix path: either disable refmap in dev
+runs (`-Dmixin.env.disableRefMap=true` via build.gradle.kts test
+JVM args + spawned client/server env forwarding) or migrate the
+refmap-affected mixins to ATs where possible.
+
+## Phase 3 (new) — refmap-vs-MCP dev-classloader audit
+
+Promoted from the InventoryBypass diagnostic. Audit each remaining
+mixin in `mixins.advancedrocketry.json` for the same silent-no-op
+behaviour in dev:
+
+1. Instrument each mixin's redirect/inject target body with a
+   one-line marker print.
+2. Build, run `testClient` / `testServer`.
+3. Grep for the marker. 0 fires = silently broken in dev.
+4. For each broken mixin: choose between
+   `-Dmixin.env.disableRefMap=true` global toggle or per-mixin
+   AT migration (case-by-case).

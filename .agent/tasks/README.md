@@ -142,8 +142,8 @@ Bug-ledger history lives in
   Counter regenerated via
   `grep -rc '@Test$' src/test/java/.../{unit,integration,server,client}/`.
 - **testServer wall time**: 8m 27s (50 % faster than pre-B2).
-- **Bug ledger**: 4 live bugs (Batch #2 opened 2026-05-25; entry #4 fixed by
-  TASK-41 on 2026-05-29; entry #5 added 2026-05-29).
+- **Bug ledger**: 5 live bugs (Batch #2 opened 2026-05-25; entry #4 fixed by
+  TASK-41 on 2026-05-29; entry #5 added 2026-05-29; entry #6 added 2026-05-30).
   Batch #1 fully drained by TASK-12 on 2026-05-23. Entries:
   (1) `SatelliteRegistry.getNewSatellite` returns `null` for unknown
   types instead of the documented `SatelliteDefunct` fallback —
@@ -228,6 +228,27 @@ Bug-ledger history lives in
     Shape B with a per-step instrumentation plan.
   Ledger #5 stays open and tracks the 4 deferred tests via TASK-43.
   Found during TASK-41 validation sweep.
+  (6) `MixinEntityPlayerInventoryAccess` / `MixinEntityPlayerMPInventoryAccess`
+  `@Redirect` annotations silently no-op in dev classloader. Same
+  root-cause family as entry #4 (TASK-41 AccessorWorld), but the
+  SOFT variant — @Redirect skips silently when target not found,
+  whereas @Accessor crashes with InvalidAccessorException. Mixin's
+  refmap translates the redirect target `Container.canInteractWith`
+  to SRG `func_75145_c`; in dev (MCP-named runtime), that name
+  doesn't exist on `Container` → Mixin can't locate the call site
+  → @Redirect skipped. Verified 2026-05-30 by instrumenting
+  `RocketInventoryHelper.shouldAllowContainerInteract` with a print
+  marker and running InventoryBypassRedirectE2ETest in isolation:
+  0 fires of the marker across ~135 ticks of `EntityPlayerMP.onUpdate`
+  during the test. Player-visible (dev only): AR's "keep rocket
+  inventory open while moving away" feature does NOT work in
+  `runClient`. WORKS in installed-mod environments (SRG-reobf jar)
+  because the refmap translation matches the runtime field name there.
+  Audit candidates with the same shape: `MixinEntityGravity` (@Inject
+  on `EntityPlayer.onUpdate`), `MixinPlayerList` (@Inject on
+  `updateTimeAndWeatherForPlayer`), `MixinWorldSetBlockState`
+  (@Inject on `World.setBlockState`). Audit promoted to TASK-43
+  Phase 3. Found during TASK-42/43 InventoryBypass diagnostic.
   See `.agent/history/known-bugs-ledger.md` Batch #2.
 
 ## Done
