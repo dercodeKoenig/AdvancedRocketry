@@ -228,7 +228,39 @@ Bug-ledger history lives in
     Shape B with a per-step instrumentation plan.
   Ledger #5 stays open and tracks the 4 deferred tests via TASK-43.
   Found during TASK-41 validation sweep.
-  (6) `MixinEntityPlayerInventoryAccess` / `MixinEntityPlayerMPInventoryAccess`
+  (6) ✅ **FIXED 2026-05-30 by TASK-43 Phase 3** —
+  `-Dmixin.env.disableRefMap=true` added to `runs.client` and
+  `runs.server` FG6 property maps (harness layers inherit
+  automatically via `resolveFg6RunConfig`). The earlier ledger
+  diagnostic only saw the SYMPTOM (helper class never loaded);
+  the real ROOT CAUSE was uncovered with `-Dmixin.debug=true`
+  on `runServer`: `MixinWorldSetBlockState`'s `@Inject` on
+  `World.setBlockState` was the FIRST mixin to fail PREINJECT
+  (refmap translates target to SRG `func_180501_a`, dev classloader
+  has MCP `setBlockState`), triggering `InvalidInjectionException`.
+  Because `mixins.advancedrocketry.json` is `"required": true`,
+  the entire config aborted on that first failure → the OTHER
+  5 mixins (`MixinEntityGravity`, both `MixinEntityPlayer*InventoryAccess`,
+  `MixinPlayerList`, `MixinWorldServerMulti`) never had a chance
+  to apply. Affected ALL 6 mixins in dev since TASK-08-mixin
+  rewrite (commit 3f1607ae); silent because @Inject failures
+  log FATAL but don't crash the JVM (vs @Accessor's
+  InvalidAccessorException, which DID crash and was found by
+  TASK-41). Verified fix via `runServer` instrumentation:
+  `MixinEntityGravity.@Inject` now fires for every spawn-area
+  entity (EntityChicken, EntityRabbit observed); `runServer`
+  boots clean (Done in 1.076s, no FATAL).
+  `InventoryBypassRedirectE2ETest` 10× distribution: **2/10 PASS, 8/10
+  FAIL @ line 99** — down from 10/10 FAIL pre-fix. Phase-1 line-124
+  shape ("chest closes after TP despite bypass") fully resolved
+  (was the mixin-not-firing symptom). The remaining 8/10 line-99
+  failures are a SEPARATE issue: `bot.rightClickBlock` packet drops
+  before chunk/player settle, the 6 × 60-tick retry in
+  `openGuiByRightClick` isn't sufficient. Test re-`@Ignore`'d with
+  the narrower reason; resolving would require a server-side
+  `openGui` probe verb to bypass the bot click harness. Original
+  description below for historical reference:
+  `MixinEntityPlayerInventoryAccess` / `MixinEntityPlayerMPInventoryAccess`
   `@Redirect` annotations silently no-op in dev classloader. Same
   root-cause family as entry #4 (TASK-41 AccessorWorld), but the
   SOFT variant — @Redirect skips silently when target not found,

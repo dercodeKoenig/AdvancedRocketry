@@ -186,7 +186,18 @@ minecraft {
             properties(
                 mapOf(
                     "forge.logging.markers" to "SCAN,REGISTRIES,REGISTRYDUMP,COREMODLOG",
-                    "forge.logging.console.level" to "info"
+                    "forge.logging.console.level" to "info",
+                    // TASK-43 Phase 3: turn off Mixin's MCP→SRG refmap translation
+                    // in dev. Without this, every @Inject/@Redirect target in
+                    // mixins.advancedrocketry.json gets remapped to its SRG name
+                    // (`func_180501_a` etc.), which DOESN'T exist on the dev
+                    // classloader's MCP-named MC classes — so the entire mixin
+                    // config aborts at PREINJECT with InvalidInjectionException,
+                    // and AR's gravity / inv-bypass / per-dim weather / etc. are
+                    // silently inactive in runClient + testClient harness.
+                    // Production (reobf SRG jar) is unaffected: the runtime
+                    // classes ARE SRG-named there, so refmap translation matches.
+                    "mixin.env.disableRefMap" to "true"
                 )
             )
 
@@ -202,7 +213,10 @@ minecraft {
             properties(
                 mapOf(
                     "forge.logging.markers" to "SCAN,REGISTRIES,REGISTRYDUMP,COREMODLOG",
-                    "forge.logging.console.level" to "info"//, "fml.coreMods.load" to "com.gramdatis.core.setup.GramdatisPlugin"
+                    "forge.logging.console.level" to "info",
+                    // TASK-43 Phase 3: turn off Mixin's MCP→SRG refmap translation
+                    // in dev — see runs.client above for the full rationale.
+                    "mixin.env.disableRefMap" to "true"
                 )
             )
             arg("nogui")

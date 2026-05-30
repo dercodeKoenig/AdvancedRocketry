@@ -264,6 +264,97 @@ logs. → Two facts confirmed:
   factor unrelated to the mixin (client-side GUI state lag,
   packet-order race, or similar harness artifact).
 
+### Phase 3 BREAKTHROUGH (2026-05-30) — root cause + fix
+
+**Method**: enabled `-Dmixin.debug=true -Dmixin.debug.verbose=true`
+on the `runServer` task and ran with a clean world. Server boot
+log now reveals what previously was log-suppressed:
+
+```
+[mixin] Selecting config mixins.advancedrocketry.json
+[mixin] Preparing mixins.advancedrocketry.json (6)
+[mixin] Mixing MixinWorldSetBlockState from mixins.advancedrocketry.json
+        into net.minecraft.world.World
+[MixinProcessor] FATAL Invalid Mixin
+[MixinProcessor] Action: APPLY  Phase: DEFAULT
+[MixinProcessor] org.spongepowered.asm.mixin.injection.throwables.
+                 InvalidInjectionException: Injection validation failed:
+                 @Inject annotation on ar$notifyAtmosphere could not
+                 find any targets matching
+                 'Lnet/minecraft/world/World;func_180501_a(...)' in
+                 net.minecraft.world.World. Using refmap
+                 mixins.advancedrocketry.refmap.json
+```
+
+**Root cause identified**: same refmap-vs-MCP collision as
+TASK-41 AccessorWorld, but via `@Inject` instead of `@Accessor`.
+Refmap translates the target `World.setBlockState` to SRG
+`func_180501_a`. Dev classloader has MCP-named `World` (the
+runtime method is `setBlockState`, not `func_180501_a`). →
+InvalidInjectionException → mixin apply FAILS → because
+`mixins.advancedrocketry.json` has `"required": true`, the
+**entire config aborts**, and the other 5 mixins
+(`MixinEntityGravity`, `MixinEntityPlayerInventoryAccess`,
+`MixinEntityPlayerMPInventoryAccess`, `MixinPlayerList`,
+`MixinWorldServerMulti`) **never apply either**.
+
+This is why TASK-42 saw 0 fires of `RocketInventoryHelper`
+(`MixinEntityPlayer*InventoryAccess` never installed) AND why
+the dev environment had a quiet behavioural divergence from
+production: since the Mixin rewrite (`3f1607ae` TASK-08-mixin),
+NO AR mixin has been active in `runClient` / `runServer` /
+`testClient` / `testServer`.
+
+**The fix**: `-Dmixin.env.disableRefMap=true` on the spawned
+MC JVMs. This makes Mixin skip the SRG translation and use the
+source MCP names directly, which match the dev classloader's
+MCP-named runtime classes.
+
+Verification on `runServer`:
+```
+[STDOUT] [AR-TASK-43-GRAVITY] applyGravity fired n=0 entity=EntityChicken
+[STDOUT] [AR-TASK-43-GRAVITY] applyGravity fired n=1 entity=EntityChicken
+[STDOUT] [AR-TASK-43-GRAVITY] applyGravity fired n=2 entity=EntityRabbit
+[Server thread] Done (1.076s)!
+```
+3/3 instrumentation fires (the test counter was capped at 3);
+no FATAL; clean boot. The `MixinEntityGravity` `@Inject` on
+`Entity.onUpdate` is now ticking for every spawn-area entity.
+
+**Production**: still unverified empirically, but the logical
+path is now consistent — `Mixins.addConfiguration` runs at
+plugin-constructor time, refmap is keyed for SRG, and the
+reobfed jar runtime classes ARE SRG-named, so the SRG translation
+matches there.
+
+**Applied fix in `build.gradle.kts`**: added
+`"mixin.env.disableRefMap" to "true"` to both `runs.client` and
+`runs.server` FG6 property maps. The harness layers
+(`testClient` / `testServer`) automatically inherit it via
+`resolveFg6RunConfig`, so no separate plumbing needed in
+`configureHarnessLayer`.
+
+**Affected tests that should now flip**:
+- `InventoryBypassRedirectE2ETest` — 10× distribution check on
+  HEAD with fix: **2/10 PASS, 8/10 FAIL @ line 99** (down from
+  10/10 FAIL pre-fix). The previous line-124 failure shape
+  ("chest closes after TP despite bypass") is GONE — that was
+  the mixin-not-firing manifestation. The remaining line-99 shape
+  ("chest GUI never opens via right-click") is a separate
+  test-design flake: `bot.rightClickBlock` packet is unreliable
+  even with 6 × 60-tick retry. Resolving requires a server-side
+  `openGui` probe verb (none currently exists). Re-`@Ignore`'d
+  with the updated reason; contract verified by (a) unit-level
+  pin in `testUnit.RocketInventoryHelperRedirectTest`, (b)
+  `runServer` mixin-apply trace showing the redirect installs
+  successfully with `disableRefMap=true`.
+- The 3 recipe tests (Electrolyser / PrecisionAssembler /
+  PrecisionLaserEtcher) — still pass in isolation; full-suite
+  flake may or may not be related to mixin behaviour (separate
+  diagnosis needed).
+- `WorldCommandFetchModeratorTest` — separate stable-fail-in-isolation
+  shape, may also be related now that mixins fire.
+
 ### Phase 3 interim verdict
 
 **Two interlocking facts**:
