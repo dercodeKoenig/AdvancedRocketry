@@ -1,6 +1,6 @@
 # TASK-42 — Investigate 5 pre-existing test failures on feature/tests HEAD
 
-**Status: 🟡 In progress (opened 2026-05-30).**
+**Status: ✅ Completed 2026-05-30 (triage + InventoryBypass @Ignore'd; remaining 4 → [TASK-43](TASK-43-flaky-and-stable-test-failures.md)).**
 
 ## Ticket
 
@@ -216,3 +216,63 @@ and worth ledger-promoting independently of the test outcome.
 
 Phase 1 of this task picks whichever of (1)/(2)/(3) the user
 prioritises. Each is independent.
+
+---
+
+## Phase 1 outcomes (2026-05-30)
+
+### (1) InventoryBypass ✅ DONE
+
+`@Ignore`d at `src/test/java/.../client/InventoryBypassRedirectE2ETest.java`
+with a multi-line reason citing this doc's Phase 0 findings.
+Contract still pinned by `testUnit.RocketInventoryHelperRedirectTest`
+(pure-function level — covers the bypass-set predicate the
+@Redirect calls).
+
+### (2) Recipe tests — picture flipped
+
+The 3 recipe tests were **investigated** rather than fixed directly
+because isolated reruns revealed the assumed root cause was wrong:
+
+```
+./gradlew testServer -PuseLocalFramework=true \
+  --tests ...ElectrolyserRecipeEndToEndTest
+# → PASS in 30 s
+
+./gradlew testServer -PuseLocalFramework=true \
+  --tests ...PrecisionAssemblerRecipeEndToEndTest \
+  --tests ...PrecisionLaserEtcherRecipeEndToEndTest
+# → 4/4 PASS in 32 s
+```
+
+So the tests ARE NOT broken — they only fail when running in the
+full `testServer` suite (parallel-fork contention). This is real
+flake-shape per `flake-diagnosis.md` ("same N tests every run, none
+when isolated → race"). Production code is correct; the failure
+is a harness / registry-timing race that surfaces only at
+suite-scale concurrency. **Promoted to [TASK-43](TASK-43-flaky-and-stable-test-failures.md)
+Shape A** with a Phase 1 plan for a `wait-for-recipe-registry`
+probe verb.
+
+### (3) FetchModerator — picture also flipped (different direction)
+
+Isolated single-test rerun:
+
+```
+./gradlew testClient -PuseLocalFramework=true \
+  --tests ...WorldCommandFetchModeratorTest
+# → FAILED in 3m 10s (same shape as full suite)
+```
+
+NOT a parallel-fork flake — fails stably in isolation. So either a
+real production bug (handler throws mid-fetch, server drops the
+bridge) OR a test-design bug (transition the bot harness can't
+recover from). **Promoted to [TASK-43](TASK-43-flaky-and-stable-test-failures.md)
+Shape B** with a Phase 2 plan for per-step bot instrumentation.
+
+## Closure
+
+This task's role was **triage + low-risk @Ignore close-out** to free
+the test suite from the 5-failure noise floor. The deeper diagnostics
+for the remaining 4 (1 stable, 3 flaky) live in TASK-43. Ledger entry
+#5 stays open and tracks the unified 4-test set via TASK-43.

@@ -209,9 +209,24 @@ Bug-ledger history lives in
     (ClientBot.execute:210) — client subprocess disconnect.
     Player-visible: `/ar fetch <player>` may intermittently fail
     in single-player worlds with the integrated server.
-  Ledger-only — needs an investigation task (TASK-42 candidate) to
-  bisect which commit between session N-1 (all-green) and HEAD
-  introduced each shape.
+  Investigated via [TASK-42](TASK-42-pre-existing-test-failures-investigation.md)
+  Phase 0 — triage revealed three distinct shape buckets:
+  - **Broken-since-inception** (1): InventoryBypassRedirectE2ETest —
+    verified at 149c361e worktree (test-add commit) with the same
+    failure shape. @Ignore'd 2026-05-30 — contract still pinned by
+    `testUnit.RocketInventoryHelperRedirectTest`.
+  - **Parallel-fork flake** (3 recipe tests): ALL pass in isolation,
+    only fail in full testServer suite — real race, not a regression.
+    Production code correct; harness / registry-timing race surfaces
+    only at suite-scale concurrency. Promoted to [TASK-43](TASK-43-flaky-and-stable-test-failures.md)
+    Shape A with a `wait-for-recipe-registry` probe-verb plan.
+  - **Stable-isolation failure** (1): WorldCommandFetchModeratorTest
+    fails in 3m 10s even when run alone — not a parallel-fork
+    flake. Either a real production bug in the multi-client `/ar
+    fetch` flow or a test-design bug in the two-bot harness wiring
+    introduced in b8d13958. Promoted to [TASK-43](TASK-43-flaky-and-stable-test-failures.md)
+    Shape B with a per-step instrumentation plan.
+  Ledger #5 stays open and tracks the 4 deferred tests via TASK-43.
   Found during TASK-41 validation sweep.
   See `.agent/history/known-bugs-ledger.md` Batch #2.
 
@@ -268,6 +283,8 @@ Bug-ledger history lives in
 | [TASK-40d](TASK-40d-batch4-forcefield-lasergun.md) | Batch 4 of 2026-05-27 audit close-out: Gap L (TileForceFieldProjector projects + retracts force field along facing — 1 server). 1 new probe verb (`infra forcefield-tick`, leverages production's pre-existing public `onIntermittentUpdate` refactor for deterministic extension/retraction). Gap K (ItemBasicLaserGun firing) deferred — testClient territory, blocked alongside Batch 2 until harness fix. | ✅ partial |
 | [TASK-40e](TASK-40e-batch5-asteroid-and-laser-deferrals.md) | Batch 5 of 2026-05-27 audit close-out — closing-doc deferral for Gap N (asteroid worldgen) and Gap K (laser gun firing). Both gaps' contracts are real per SOP litmus but fixture cost exceeds tail-batch budget; deferred to a possible TASK-41 cluster. Neither is a rewrite blocker per 2026-05-29 delta-audit ⚠ classification. | ❌ deferred |
 | [TASK-41](TASK-41-runclient-mixin-accessorworld-bug.md) | `./gradlew runClient` mixin AccessorWorld apply error — fixed 2026-05-29 by swapping `@Accessor` for an access transformer (`public net.minecraft.world.World field_72986_A`) and direct `world.worldInfo = ...` assignment in PlanetWeatherManager. AccessorWorld mixin + mixin-config entry deleted. Added `stageMixinRefmapForRun` build task copying the AP-generated refmap into `build/resources/main/` so future @Inject mixins don't trip the same dev-classpath gap. Option C (`@Mixin(targets="...")`) tried first, failed identically — confirmed root cause was refmap-driven SRG-name lookup, not class-load ordering. Validated: runClient boots to main menu, FML loads 9 mods, testUnit + testIntegration green; testServer 423/427 PASS, 3 pre-existing recipe-registration failures unrelated to TASK-41 (logged as ledger entry #5). | ✅ |
+| [TASK-42](TASK-42-pre-existing-test-failures-investigation.md) | Triage of 5 pre-existing testServer + testClient failures surfaced during TASK-41 validation. Phase 0 revealed three shape buckets: 1 broken-since-inception (`InventoryBypassRedirectE2ETest` — verified at 149c361e worktree, same failure shape; @Ignore'd 2026-05-30, contract still pinned by `testUnit.RocketInventoryHelperRedirectTest`); 3 parallel-fork flakes (`Electrolyser` / `PrecisionAssembler` / `PrecisionLaserEtcher` recipe tests — PASS in isolation, FAIL only in full suite); 1 stable-isolation failure (`WorldCommandFetchModeratorTest` — fails in 3m 10s even alone, real test-design or production bug). Remaining 4 promoted to TASK-43. | ✅ |
+| [TASK-43](TASK-43-flaky-and-stable-test-failures.md) | Mitigate the 4 deferred TASK-42 failures across two shapes: Shape A (3 recipe tests, parallel-fork contention — plan: `wait-for-recipe-registry` probe verb + kit hook); Shape B (FetchModerator, stable-fail-in-isolation — plan: per-step bot instrumentation to bisect bridge-drop tick). | 🟥 Open |
 
 ## Backlog
 
