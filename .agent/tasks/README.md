@@ -184,21 +184,34 @@ Bug-ledger history lives in
   Also added `stageMixinRefmapForRun` task copying the refmap into
   `build/resources/main/` so future @Inject mixins against rename'd
   MC methods don't trip the same dev-classpath gap.
-  (5) `testServer` recipe-registration tests fail intermittently on
-  `feature/tests` HEAD: `ElectrolyserRecipeEndToEndTest`,
-  `PrecisionAssemblerRecipeEndToEndTest`, and
-  `PrecisionLaserEtcherRecipeEndToEndTest` all assert
-  `recipe-info errored ... "no recipes registered"` at
-  `MachineRecipeEndToEndKit.resolveFirstRecipe:196`. Verified
-  pre-existing on `HEAD` baseline (without TASK-41 changes) on
-  2026-05-29 — same 3 fail. NOT caused by TASK-41's AT migration.
-  Likely a flake shape similar to TASK-28 F9 (post-load recipe
-  registration race) or a regression introduced between the previous
-  session's all-green run and 2026-05-29 HEAD. Player-visible:
-  these machines may briefly report "no recipes registered" right
-  after a chunk-load tick before the recipe registry settles.
+  (5) **5 pre-existing test failures on `feature/tests` HEAD**
+  (3 testServer + 2 testClient). All verified pre-existing on
+  baseline (TASK-41 reverted) on 2026-05-29 / 2026-05-30 — NOT
+  caused by TASK-41's AT migration. Stable across re-runs, so not
+  classic flake shape either. Likely real regressions introduced
+  between the previous session's all-green run and current HEAD,
+  OR an environmental change on the dev box (Xvfb :100, Xorg :99
+  amdgpu unaffected since LWJGL crashes before tests run).
+  - **testServer**: `ElectrolyserRecipeEndToEndTest`,
+    `PrecisionAssemblerRecipeEndToEndTest`,
+    `PrecisionLaserEtcherRecipeEndToEndTest` — all assert
+    `recipe-info errored ... "no recipes registered"` at
+    `MachineRecipeEndToEndKit.resolveFirstRecipe:196`. Player-visible:
+    machines may briefly report no recipes after chunk-load before
+    the recipe registry settles.
+  - **testClient**: `InventoryBypassRedirectE2ETest.mixinRedirectKeepsContainerOpenAcrossDistance`
+    expects `GuiChest` after right-click, gets `<empty>` (chest GUI
+    never opens) — pins MixinEntityPlayerInventoryAccess redirect
+    that keeps containers open across distance. Player-visible: the
+    "open chest at distance" interaction may not register.
+    `WorldCommandFetchModeratorTest.moderatorFetchTeleportsTargetToSenderPosition`
+    fails with `IOException: Client bridge closed unexpectedly`
+    (ClientBot.execute:210) — client subprocess disconnect.
+    Player-visible: `/ar fetch <player>` may intermittently fail
+    in single-player worlds with the integrated server.
   Ledger-only — needs an investigation task (TASK-42 candidate) to
-  decide between flake mitigation and a registration-order fix.
+  bisect which commit between session N-1 (all-green) and HEAD
+  introduced each shape.
   Found during TASK-41 validation sweep.
   See `.agent/history/known-bugs-ledger.md` Batch #2.
 
