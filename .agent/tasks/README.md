@@ -143,7 +143,8 @@ Bug-ledger history lives in
   `grep -rc '@Test$' src/test/java/.../{unit,integration,server,client}/`.
 - **testServer wall time**: 8m 27s (50 % faster than pre-B2).
 - **Bug ledger**: 5 live bugs (Batch #2 opened 2026-05-25; entry #4 fixed by
-  TASK-41 on 2026-05-29; entry #5 added 2026-05-29; entry #6 added 2026-05-30).
+  TASK-41 on 2026-05-29; entry #5 added 2026-05-29; entry #6 added 2026-05-30;
+  entry #6 fixed 2026-05-30 by TASK-43 Phase 3; entry #7 added 2026-05-31).
   Batch #1 fully drained by TASK-12 on 2026-05-23. Entries:
   (1) `SatelliteRegistry.getNewSatellite` returns `null` for unknown
   types instead of the documented `SatelliteDefunct` fallback —
@@ -258,8 +259,12 @@ Bug-ledger history lives in
   before chunk/player settle, the 6 × 60-tick retry in
   `openGuiByRightClick` isn't sufficient. Test re-`@Ignore`'d with
   the narrower reason; resolving would require a server-side
-  `openGui` probe verb to bypass the bot click harness. Original
-  description below for historical reference:
+  `openGui` probe verb to bypass the bot click harness.
+  ✅ **RESOLVED 2026-05-31 by TASK-44**: added the `/artest player
+  open-chest` probe (`displayGUIChest` direct on the chest TileEntity,
+  bypassing both `bot.rightClickBlock` AND vanilla `BlockChest.isBlocked`)
+  — `InventoryBypassRedirectE2ETest` un-`@Ignore`'d, 4/4 reruns green.
+  Original description below for historical reference:
   `MixinEntityPlayerInventoryAccess` / `MixinEntityPlayerMPInventoryAccess`
   `@Redirect` annotations silently no-op in dev classloader. Same
   root-cause family as entry #4 (TASK-41 AccessorWorld), but the
@@ -282,6 +287,19 @@ Bug-ledger history lives in
   (@Inject on `World.setBlockState`). Audit promoted to TASK-43
   Phase 3. Found during TASK-42/43 InventoryBypass diagnostic.
   See `.agent/history/known-bugs-ledger.md` Batch #2.
+  (7) `TilePump.performFunction` only drains blocks that are
+  `instanceof IFluidBlock` (lines 102 / 120 / 158). Vanilla
+  `Blocks.WATER` is a `BlockLiquid` and does NOT implement Forge's
+  `IFluidBlock`, so a pump placed over a vanilla water source pumps
+  nothing — only Forge/AR fluids (`BlockFluidClassic` subclasses) are
+  drainable. Player-visible: players expecting the pump to lift vanilla
+  water (as most tech-mod pumps do) get an empty tank with no error.
+  May be intended (AR pump is a mod-fluid network device) or a
+  limitation; recorded because the 2026-05-27 audit's Gap F.4 framing
+  assumed water would work. Ledger-only — no `_documentsKnownBug` test;
+  `TilePumpFillsFromAdjacentWaterSourceTest` instead pins the real
+  contract (drains an AR Forge-fluid source) and documents this in its
+  docstring. Found during TASK-44 Gap F.4 un-ignore (2026-05-31).
 
 ## Done
 

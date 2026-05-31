@@ -4768,6 +4768,59 @@ public class TestProbeCommand extends CommandBase {
     // §5.8 Worldgen probe -----------------------------------------------------
 
     private void handleWorldgen(MinecraftServer server, ICommandSender sender, String[] args) {
+        if (args.length >= 3 && "create-asteroid-dim".equalsIgnoreCase(args[0])) {
+            // worldgen create-asteroid-dim <newDimId> <templateDimId>
+            // TASK-44 Gap N — register a brand-new ASTEROID dimension by
+            // cloning an existing AR planet's DimensionProperties (so star /
+            // atmosphere / gravity linkage is inherited, avoiding headless
+            // worldprovider-init NPEs), re-id'ing it, and flipping its
+            // generator type to GENTYPE_ASTEROID. registerDim() then wires it
+            // to AsteroidDimensionType → WorldProviderAsteroid →
+            // ChunkProviderAsteroids on first load. Lets a test load the dim
+            // and ore-stats its fill block to pin "the asteroid dimension
+            // actually generates asteroids".
+            int newId = parseIntOr(args[1], Integer.MIN_VALUE);
+            int templateId = parseIntOr(args[2], Integer.MIN_VALUE);
+            zmaster587.advancedRocketry.dimension.DimensionManager dm =
+                    zmaster587.advancedRocketry.dimension.DimensionManager.getInstance();
+            if (dm.isDimensionCreated(newId)) {
+                send(sender, "{\"ok\":true,\"alreadyExists\":true,\"dim\":" + newId + "}");
+                return;
+            }
+            zmaster587.advancedRocketry.dimension.DimensionProperties template =
+                    dm.getDimensionProperties(templateId);
+            if (template == null) {
+                send(sender, "{\"error\":\"template dim not registered\",\"templateDim\":" + templateId + "}");
+                return;
+            }
+            try {
+                net.minecraft.nbt.NBTTagCompound nbt = new net.minecraft.nbt.NBTTagCompound();
+                template.writeToNBT(nbt);
+                zmaster587.advancedRocketry.dimension.DimensionProperties props =
+                        zmaster587.advancedRocketry.dimension.DimensionProperties.createFromNBT(newId, nbt);
+                props.setId(newId);
+                props.setName("artest-asteroid-" + newId);
+                props.setGenType(zmaster587.advancedRocketry.api.Constants.GENTYPE_ASTEROID);
+                boolean registered = dm.registerDim(props, true);
+                // Belt-and-braces: ensure the dim is actually registered with
+                // Forge under the asteroid provider (registerDim's internal
+                // guard can skip this if AR thinks it's already known).
+                if (!net.minecraftforge.common.DimensionManager.isDimensionRegistered(newId)) {
+                    net.minecraftforge.common.DimensionManager.registerDimension(newId,
+                            zmaster587.advancedRocketry.dimension.DimensionManager.AsteroidDimensionType);
+                }
+                send(sender, "{\"ok\":true,\"dim\":" + newId
+                        + ",\"registered\":" + registered
+                        + ",\"forgeRegistered\":"
+                        + net.minecraftforge.common.DimensionManager.isDimensionRegistered(newId)
+                        + ",\"isAsteroid\":" + props.isAsteroid()
+                        + ",\"hasSurface\":" + props.hasSurface() + "}");
+            } catch (Exception e) {
+                send(sender, "{\"error\":\"create-asteroid-dim failed\",\"msg\":\""
+                        + escapeJson(e.getClass().getSimpleName() + ": " + e.getMessage()) + "\"}");
+            }
+            return;
+        }
         if (args.length >= 4 && "sample".equalsIgnoreCase(args[0])) {
             int dim = parseIntOr(args[1], Integer.MIN_VALUE);
             int chunkX = parseIntOr(args[2], 0);
@@ -5506,6 +5559,82 @@ public class TestProbeCommand extends CommandBase {
                     parseIntOr(args[2], 0),
                     parseIntOr(args[3], 0),
                     parseIntOr(args[4], 0));
+            return;
+        }
+        if (args.length >= 6 && "laserdrill-mine".equalsIgnoreCase(args[0])) {
+            // infra laserdrill-mine <dim> <x> <y> <z> <blockId>
+            // TASK-44 Gap B — deterministically exercises the MINING-mode
+            // dispatch path (MiningDrill.performOperation). Clears the 3x3 at
+            // y to air, places <blockId> at the centre, spawns an
+            // EntityLaserNode at the block's exact position, injects it into a
+            // reflectively-built MiningDrill, and runs ONE performOperation().
+            // Reports the drops produced + whether the centre block was
+            // removed (set to air) — the player-visible "mining drill breaks
+            // its target column and yields the block's drops" contract, without
+            // the full multiblock + energy + spiral machinery. (The audit's
+            // "EntityItemAbducted" framing was off; MiningDrill spawns an
+            // EntityLaserNode visual and the observable is the block-removal +
+            // drop-yield.)
+            int dim = parseIntOr(args[1], Integer.MIN_VALUE);
+            int x = parseIntOr(args[2], 0);
+            int y = parseIntOr(args[3], 0);
+            int z = parseIntOr(args[4], 0);
+            String blockId = args[5];
+            net.minecraft.world.WorldServer world = server.getWorld(dim);
+            if (world == null) {
+                send(sender, "{\"error\":\"world not loaded\",\"dim\":" + dim + "}");
+                return;
+            }
+            net.minecraft.block.Block block = ForgeRegistries.BLOCKS.getValue(new ResourceLocation(blockId));
+            if (block == null) {
+                send(sender, "{\"error\":\"unknown block id\",\"id\":\"" + escapeJson(blockId) + "\"}");
+                return;
+            }
+            BlockPos center = new BlockPos(x, y, z);
+            ensureChunkLoaded(world, x, z);
+            // Clear the 3x3 at y to air so only the centre block yields a drop.
+            for (int dx = -1; dx <= 1; dx++) {
+                for (int dz = -1; dz <= 1; dz++) {
+                    world.setBlockState(new BlockPos(x + dx, y, z + dz),
+                            net.minecraft.init.Blocks.AIR.getDefaultState());
+                }
+            }
+            world.setBlockState(center, block.getDefaultState());
+            try {
+                Class<?> drillCls = Class.forName(
+                        "zmaster587.advancedRocketry.tile.multiblock.orbitallaserdrill.MiningDrill");
+                java.lang.reflect.Constructor<?> ctor = drillCls.getDeclaredConstructor();
+                ctor.setAccessible(true);
+                Object drill = ctor.newInstance();
+                zmaster587.advancedRocketry.entity.EntityLaserNode laserNode =
+                        new zmaster587.advancedRocketry.entity.EntityLaserNode(world, x, y, z);
+                laserNode.markValid();
+                laserNode.forceSpawn = true;
+                world.spawnEntity(laserNode);
+                java.lang.reflect.Field laserF = drillCls.getDeclaredField("laser");
+                laserF.setAccessible(true);
+                laserF.set(drill, laserNode);
+                java.lang.reflect.Method perform = drillCls.getDeclaredMethod("performOperation");
+                perform.setAccessible(true);
+                net.minecraft.item.ItemStack[] drops =
+                        (net.minecraft.item.ItemStack[]) perform.invoke(drill);
+                StringBuilder sb = new StringBuilder();
+                int total = 0;
+                for (net.minecraft.item.ItemStack s : drops) {
+                    if (s == null || s.isEmpty()) continue;
+                    if (sb.length() > 0) sb.append(",");
+                    sb.append("\"").append(escapeJson(s.getItem().getRegistryName() == null
+                            ? "null" : s.getItem().getRegistryName().toString())).append("\"");
+                    total += s.getCount();
+                }
+                boolean centerNowAir = world.isAirBlock(center);
+                send(sender, "{\"ok\":true,\"dropCount\":" + total
+                        + ",\"dropItems\":[" + sb + "]"
+                        + ",\"centerRemoved\":" + centerNowAir + "}");
+            } catch (Exception e) {
+                send(sender, "{\"error\":\"laserdrill-mine failed\",\"msg\":\""
+                        + escapeJson(e.getClass().getSimpleName() + ": " + e.getMessage()) + "\"}");
+            }
             return;
         }
         if (args.length >= 4 && "info".equalsIgnoreCase(args[0])) {
@@ -9648,7 +9777,57 @@ public class TestProbeCommand extends CommandBase {
                     + ",\"motionY\":" + entity.motionY
                     + ",\"motionZ\":" + entity.motionZ
                     + ",\"hasNoGravity\":" + entity.hasNoGravity()
+                    + ",\"fallDistance\":" + entity.fallDistance
                     + ",\"isDead\":" + entity.isDead + "}");
+            return;
+        }
+        if (args.length >= 4 && "set-fall-distance".equalsIgnoreCase(args[0])) {
+            // entity set-fall-distance <dim> <entityId> <amount>
+            // TASK-44 Gap C — set ANY entity's fallDistance (sibling of the
+            // player-only `player set-fall-distance`). Lets the gravity-
+            // controller test seed a non-zero fallDistance on a no-gravity
+            // entity so the controller's in-radius reset is observable.
+            int dim = parseIntOr(args[1], Integer.MIN_VALUE);
+            int id = parseIntOr(args[2], -1);
+            float amt = (float) parseDoubleOr(args[3], 0);
+            net.minecraft.world.WorldServer world = server.getWorld(dim);
+            if (world == null) {
+                send(sender, "{\"error\":\"world not loaded\",\"dim\":" + dim + "}");
+                return;
+            }
+            net.minecraft.entity.Entity entity = world.getEntityByID(id);
+            if (entity == null) {
+                send(sender, "{\"error\":\"entity not found\",\"entityId\":" + id + "}");
+                return;
+            }
+            entity.fallDistance = amt;
+            send(sender, "{\"ok\":true,\"entityId\":" + id
+                    + ",\"fallDistance\":" + entity.fallDistance + "}");
+            return;
+        }
+        if (args.length >= 4 && "set-no-gravity".equalsIgnoreCase(args[0])) {
+            // entity set-no-gravity <dim> <entityId> <true|false>
+            // TASK-44 Gap C — pin an entity in mid-air so neither vanilla
+            // falling physics nor an onGround landing mutates its
+            // fallDistance between probe calls; the only thing that can
+            // zero it is the gravity controller's update() loop.
+            int dim = parseIntOr(args[1], Integer.MIN_VALUE);
+            int id = parseIntOr(args[2], -1);
+            boolean noGravity = Boolean.parseBoolean(args[3]);
+            net.minecraft.world.WorldServer world = server.getWorld(dim);
+            if (world == null) {
+                send(sender, "{\"error\":\"world not loaded\",\"dim\":" + dim + "}");
+                return;
+            }
+            net.minecraft.entity.Entity entity = world.getEntityByID(id);
+            if (entity == null) {
+                send(sender, "{\"error\":\"entity not found\",\"entityId\":" + id + "}");
+                return;
+            }
+            entity.setNoGravity(noGravity);
+            entity.motionX = 0; entity.motionY = 0; entity.motionZ = 0;
+            send(sender, "{\"ok\":true,\"entityId\":" + id
+                    + ",\"hasNoGravity\":" + entity.hasNoGravity() + "}");
             return;
         }
         if (args.length >= 3 && "tick".equalsIgnoreCase(args[0])) {
@@ -10024,6 +10203,43 @@ public class TestProbeCommand extends CommandBase {
                                     .canPlayerBypassInvChecks(player) + "}");
                     return;
             }
+        }
+        if ("open-chest".equals(sub) && args.length >= 5) {
+            // player open-chest <dim> <x> <y> <z>
+            // TASK-44 Gap U — open a chest's container GUI for the player
+            // SERVER-SIDE (mirrors BlockChest.onBlockActivated →
+            // player.displayGUIChest), bypassing the flaky bot.rightClickBlock
+            // packet path that left InventoryBypassRedirectE2ETest @Ignore'd.
+            // Sends the S2C open-window packet so the real client renders
+            // GuiChest; the mixin @Redirect then operates on the resulting
+            // openContainer during EntityPlayerMP.onUpdate.
+            int dim = parseIntOr(args[1], Integer.MIN_VALUE);
+            int x = parseIntOr(args[2], 0);
+            int y = parseIntOr(args[3], 0);
+            int z = parseIntOr(args[4], 0);
+            net.minecraft.world.WorldServer world = server.getWorld(dim);
+            if (world == null) {
+                send(sender, "{\"error\":\"world not loaded\",\"dim\":" + dim + "}");
+                return;
+            }
+            BlockPos pos = new BlockPos(x, y, z);
+            // Use the chest TileEntity directly as the IInventory rather than
+            // BlockChest.getLockableContainer — the latter honours vanilla's
+            // isBlocked() check (solid block above / ocelot), which is
+            // irrelevant to the mixin contract under test and flakes when
+            // chunk-populate drops terrain above the placed chest. displayGUIChest
+            // opens the window regardless of isBlocked.
+            TileEntity tile = world.getTileEntity(pos);
+            if (!(tile instanceof net.minecraft.inventory.IInventory)) {
+                send(sender, "{\"error\":\"tile at pos is not an IInventory chest\",\"tile\":\""
+                        + (tile == null ? "null" : tile.getClass().getName()) + "\"}");
+                return;
+            }
+            player.displayGUIChest((net.minecraft.inventory.IInventory) tile);
+            send(sender, "{\"ok\":true,\"player\":\"" + escapeJson(player.getName()) + "\""
+                    + ",\"openContainerClass\":\""
+                    + escapeJson(player.openContainer.getClass().getName()) + "\"}");
+            return;
         }
         if ("open-container".equals(sub)) {
             boolean isInventoryContainer = player.openContainer == player.inventoryContainer;

@@ -1,14 +1,15 @@
 package zmaster587.advancedRocketry.test.client;
 
+import com.github.stannismod.forge.testing.client.ClientBot;
 import com.github.stannismod.forge.testing.junit.AbstractClientE2ETest;
 import com.google.gson.JsonObject;
-import org.junit.Ignore;
 import org.junit.Test;
+
+import java.io.IOException;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
-import static zmaster587.advancedRocketry.test.client.ClientGuiTestSupport.openGuiByRightClick;
 import static zmaster587.advancedRocketry.test.client.ClientGuiTestSupport.screenOf;
 import static zmaster587.advancedRocketry.test.client.ClientGuiTestSupport.waitForNoScreen;
 
@@ -64,21 +65,6 @@ public class InventoryBypassRedirectE2ETest extends AbstractClientE2ETest {
     private static final String GUI_CHEST = "net.minecraft.client.gui.inventory.GuiChest";
 
     @Test
-    @Ignore("TASK-43 Phase 3 (2026-05-30): mixin @Redirect itself now works in "
-            + "dev (verified via runServer instrumentation — applyGravity fires "
-            + "for spawn entities, InventoryBypass test now reaches Phase 1 "
-            + "successfully in 2/10 isolated runs). The remaining 8/10 failures "
-            + "are a SEPARATE issue: bot.rightClickBlock packet is dropped before "
-            + "the chunk/player is settled, openGuiByRightClick retries 6 × 60 "
-            + "ticks but the click never registers — chest GUI never opens, "
-            + "test fails at line 99 before the bypass-on assertion at line 124 "
-            + "is reached. Resolving requires a server-side `openGui` probe verb "
-            + "(no current probe exists for that) to bypass the bot click "
-            + "harness. Contract under test (RocketInventoryHelper bypass + "
-            + "MixinEntityPlayerMPInventoryAccess @Redirect installation) IS now "
-            + "verified by: (a) testUnit.RocketInventoryHelperRedirectTest "
-            + "pinning the predicate; (b) runServer mixin-apply trace showing "
-            + "the redirect installs successfully with disableRefMap=true.")
     public void mixinRedirectKeepsContainerOpenAcrossDistance() throws Exception {
         // Make sure no leftover bypass / inventory state from earlier tests
         // in this testClient suite interferes.
@@ -110,9 +96,19 @@ public class InventoryBypassRedirectE2ETest extends AbstractClientE2ETest {
                 + " " + (CHEST_Z + 0.5) + " 0 90");
         bot().waitTicks(40);
 
-        // Right-click the chest to open its container GUI.
-        String screen = openGuiByRightClick(bot(), CHEST_X, CHEST_Y, CHEST_Z);
-        assertEquals("chest GUI must open on right-click", GUI_CHEST, screen);
+        // Open the chest container GUI SERVER-SIDE (mirrors
+        // BlockChest.onBlockActivated → player.displayGUIChest) instead of via
+        // bot.rightClickBlock. The right-click packet was dropped before the
+        // chunk/player settled (the prior @Ignore reason — see bug ledger #6),
+        // which is orthogonal to the mixin contract under test. The S2C
+        // open-window packet makes the real client render GuiChest.
+        String open = String.join("\n", serverClient().execute(
+                "artest player open-chest 0 " + CHEST_X + " " + CHEST_Y + " " + CHEST_Z));
+        assertTrue("server-side open-chest must succeed: " + open,
+                open.contains("\"ok\":true"));
+        String screen = waitForScreen(bot(), GUI_CHEST, 100);
+        assertEquals("chest GUI must open after server-side displayGUIChest; "
+                + "openResp=" + open, GUI_CHEST, screen);
 
         // PHASE 1 — bypass on: GUI must survive a long-distance teleport.
         String addResp = String.join("\n", serverClient().execute(
@@ -159,5 +155,17 @@ public class InventoryBypassRedirectE2ETest extends AbstractClientE2ETest {
         assertEquals("after removing inv-bypass, vanilla distance check "
                 + "must close the chest GUI; final screen=" + finalScreen,
                 "", finalScreen);
+    }
+
+    /** Poll the client for up to {@code maxTicks} until the given screen class
+     *  is showing; returns the last-seen screen (empty string if none). */
+    private static String waitForScreen(ClientBot bot, String wantScreen, int maxTicks)
+            throws IOException {
+        String screen = screenOf(bot.reportState());
+        for (int i = 0; i < maxTicks && !wantScreen.equals(screen); i++) {
+            bot.waitTicks(2);
+            screen = screenOf(bot.reportState());
+        }
+        return screen;
     }
 }

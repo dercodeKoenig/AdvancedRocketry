@@ -1,6 +1,5 @@
 package zmaster587.advancedRocketry.test.server;
 
-import org.junit.Ignore;
 import org.junit.Test;
 
 import java.util.regex.Matcher;
@@ -9,20 +8,33 @@ import java.util.regex.Pattern;
 import static org.junit.Assert.assertTrue;
 
 /**
- * TASK-40c (audit Gap F.4) — TilePump drains an adjacent water source
- * block into its internal tank.
+ * TASK-40c / TASK-44 (audit Gap F.4) — TilePump drains an adjacent
+ * Forge-fluid source block into its internal tank.
  *
  * <p>Production:
  * {@link zmaster587.advancedRocketry.tile.TilePump#performFunction} calls
- * {@code getNextBlockLocation} which walks below the pump until it
- * finds a fluid block (line 132-145), then drains it via
- * {@code IFluidBlock.drain} into the tank. The drain frequency depends
- * on stored energy: at &gt;50% energy the pump fires every game tick
- * ({@code getFrequencyFromPower} returns 1).</p>
+ * {@code getNextBlockLocation} which walks straight down from the pump
+ * through air until it hits a non-air block, then — only if that block
+ * {@code instanceof IFluidBlock} — drains it via {@code IFluidBlock.drain}
+ * into the tank. Drain frequency depends on stored energy: at full
+ * energy {@code getFrequencyFromPower} returns 1 (fires every tick).</p>
  *
- * <p>Pinned: a powered pump with a vanilla water source block directly
- * below it has &gt;0 mB of water in its tank after a tick budget.
- * Player-visible: pump's tank GUI fills up.</p>
+ * <p><b>Why an AR fluid, not vanilla water:</b> the pump gates every
+ * drain on {@code worldBlock instanceof IFluidBlock} (TilePump lines
+ * 102 / 120 / 158). Vanilla {@code Blocks.WATER} is a {@code BlockLiquid}
+ * and does NOT implement Forge's {@code IFluidBlock} — so the pump can
+ * never drain vanilla water (this is why the original water-based draft
+ * was @Ignore'd: it misdiagnosed the empty tank as a placement issue
+ * when the block simply isn't an IFluidBlock). AR's own fluids
+ * ({@code advancedrocketry:rocketFuel} etc.) extend
+ * {@code BlockFluidClassic} → ARE {@code IFluidBlock}, and a meta-0
+ * placement is a drainable source ({@code BlockFluidClassic.canDrain}
+ * returns true for LEVEL==0). Logged as ledger observation: pump does
+ * not drain vanilla water — see .agent/tasks/README.md.</p>
+ *
+ * <p>Pinned: a powered pump with an AR Forge-fluid source block below
+ * it has &gt;0 mB in its tank after a tick budget. Player-visible:
+ * pump's tank GUI fills up.</p>
  */
 public class TilePumpFillsFromAdjacentWaterSourceTest extends AbstractSharedServerTest {
 
@@ -30,70 +42,44 @@ public class TilePumpFillsFromAdjacentWaterSourceTest extends AbstractSharedServ
     private static final int PY = 65;
     private static final int PZ = 6300;
 
-    private static final Pattern WATER_AMOUNT =
-            Pattern.compile("\"fluid\":\"water\",\"amount\":(\\d+)");
+    // The pump's fluid-stored probe emits "fluid":"<name>","amount":<n>.
+    // Match the amount on any non-null fluid (band-pin: >0, not an exact
+    // mB count which would be an impl-detail pin).
+    private static final Pattern FLUID_AMOUNT =
+            Pattern.compile("\"fluid\":\"[^\"]+\",\"amount\":(\\d+)");
 
-    /**
-     * NOTE: currently ignored — fixture-setup deferral.
-     *
-     * <p>The test was authored against the audit's Gap F.4 contract and
-     * green-light Phase 0 read of {@link
-     * zmaster587.advancedRocketry.tile.TilePump#performFunction}. On run
-     * the pump's tank stays empty: probe response =
-     * {@code {"tanks":[{"capacity":16000,"fluid":null}]}} after 60
-     * force-ticks. Cause is that {@code world.setBlockState} from the
-     * {@code /artest place} probe places {@code Blocks.WATER}'s default
-     * state but doesn't trigger the neighbor / level propagation that
-     * vanilla world placement does — the resulting block may not pass
-     * {@code BlockDynamicLiquid.canDrain(world, pos)} (which gates the
-     * pump's {@code findFluidAtOrAbove} BFS).</p>
-     *
-     * <p>To un-ignore: either (a) add a {@code /artest place-source-water
-     * <dim> <x> <y> <z>} probe that uses {@code ItemBucket.tryPlaceContainedLiquid}
-     * to place a real source block, or (b) add a {@code pump-debug} probe
-     * exposing pump's private {@code cache} list + energy + tank + down-block
-     * state and trace which of the four gates (canPerformFunction,
-     * hasEnoughEnergy, getNextBlockLocation, canFitFluid) blocks.</p>
-     */
-    @Ignore("TASK-40c Gap F.4 deferred — world.setBlockState-placed water "
-            + "may not pass BlockDynamicLiquid.canDrain; need real source-"
-            + "block placement probe (bucket-style) or pump-debug to trace.")
     @Test
-    public void poweredPumpFillsFromAdjacentWaterSource() throws Exception {
+    public void poweredPumpDrainsAdjacentFluidSource() throws Exception {
         // Place pump.
         ok("artest place 0 " + PX + " " + PY + " " + PZ
                 + " advancedrocketry:blockPump");
 
-        // Place vanilla water source directly below.
+        // Place an AR Forge-fluid source (rocketFuel, non-gaseous) directly
+        // below. meta 0 = source block (LEVEL==0 → canDrain true). Unlike
+        // vanilla water, this IS an IFluidBlock so the pump's drain gate
+        // passes.
         ok("artest place 0 " + PX + " " + (PY - 1) + " " + PZ
-                + " minecraft:water");
+                + " advancedrocketry:rocketFuel");
 
-        // Inject 1000 RF — pump's max energy capacity per constructor
-        // (super(1000)). Storing 1000 keeps the energy ratio at 100%
-        // so getFrequencyFromPower() returns 1 → pump's
-        // canPerformFunction passes the worldTime % freq gate every
-        // tick.
+        // Inject 1000 RF — pump's max energy (constructor super(1000)).
+        // Full energy → getFrequencyFromPower() returns 1 → canPerformFunction
+        // passes the worldTime % freq gate every tick.
         ok("artest energy inject 0 " + PX + " " + PY + " " + PZ + " 1000");
 
-        // Force-tick the pump 60 times. Each tick:
-        //   parent.update() → canPerformFunction (returns true at
-        //   full energy) → performFunction → drains 1 water block →
-        //   tank gains 1000 mB.
+        // Force-tick the pump. Each qualifying tick drains the source into
+        // the tank.
         ok("artest tile force-tick 0 " + PX + " " + PY + " " + PZ + " 60");
 
-        // Read pump's tank state via the standard fluid stored probe
-        // (pump implements IFluidHandler + exposes
-        // FLUID_HANDLER_CAPABILITY).
+        // Read pump's tank state via the standard fluid stored probe.
         String stored = exec("artest fluid stored 0 "
                 + PX + " " + PY + " " + PZ);
-        Matcher m = WATER_AMOUNT.matcher(stored);
-        assertTrue("pump's tank must contain water after 60 ticks "
-                        + "(the player-visible 'pump fills from "
-                        + "adjacent water source' contract); stored="
-                        + stored,
+        Matcher m = FLUID_AMOUNT.matcher(stored);
+        assertTrue("pump's tank must contain fluid after 60 ticks "
+                        + "(the player-visible 'pump fills from adjacent "
+                        + "fluid source' contract); stored=" + stored,
                 m.find());
         int amount = Integer.parseInt(m.group(1));
-        assertTrue("water amount must be > 0; actual=" + amount,
+        assertTrue("fluid amount must be > 0; actual=" + amount,
                 amount > 0);
     }
 
