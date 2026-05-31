@@ -62,8 +62,19 @@ calling agent doesn't pause.
 If EVERY Bash result reports `Exit code 1` regardless of what the
 command did, and a system-reminder mentions
 `nav_commit_reminder.py: No such file or directory`, the cause is a
-stale Navigator hook entry in `.claude/settings.json` pointing at a
-path that no longer exists in the installed plugin.
+stale Navigator hook entry pointing at a path that no longer exists
+in the installed plugin.
+
+**Where it actually lives** (verified 2026-05-31): NOT in
+`.claude/settings.json` — it's the plugin's own
+`.claude-plugin/plugin.json`, under `hooks.PostToolUse`, the entry
+with `"matcher": "Bash"`. `nav_commit_reminder.py` was a v6.12.1
+probe (characterised PostToolUse output channels — see plugin
+`mem-035`/OQ-3); the file was later deleted but its registration was
+left behind. The plugin is installed in two copies that must BOTH be
+fixed:
+- `~/.claude/plugins/marketplaces/navigator-marketplace/.claude-plugin/plugin.json`
+- `~/.claude/plugins/cache/navigator-marketplace/navigator/<ver>/.claude-plugin/plugin.json`
 
 The hook fires AFTER your command and crashes; its non-zero exit
 propagates back to the tool harness, masking your command's actual
@@ -71,10 +82,13 @@ exit code. **Your command still ran correctly.** Read the actual
 stdout/stderr to judge success — ignore the harness exit code in
 this mode.
 
-Fix (when the user OKs settings changes): remove the broken
-PostToolUse hook from `.claude/settings.json` or repoint it to the
-installed plugin path. Until then, treat all "Exit code 1" reports
-as informational.
+Fix (when the user OKs the plugin-config change): delete the orphaned
+`Bash → nav_commit_reminder.py` block from `hooks.PostToolUse` in both
+`plugin.json` copies. Editing the plugin config is gated by the
+auto-mode self-modification classifier, so it needs explicit user
+approval. **The fix only takes effect after a session restart** —
+Claude Code caches the hook config at session start. Until restart,
+treat all "Exit code 1" reports as informational.
 
 ## Reason this SOP exists
 
