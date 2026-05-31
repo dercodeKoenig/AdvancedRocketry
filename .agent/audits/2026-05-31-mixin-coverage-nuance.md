@@ -137,3 +137,50 @@ logic (which is seed-deterministic and 2/2 green in isolation).
 - New gaps T + U join the shallow backlog (A–N + S + T + U).
 - Next planned action (per user 2026-05-31): convert **all shallow
   subsystems to deep in one batch** — see the successor TASK.
+
+## 5. Final audit (2026-05-31, evening) — 4 parallel opus agents
+
+Four independent opus-4.8 agents audited: bug-ledger accuracy, test-suite
+health, coverage completeness, and SSOT/doc integrity. Outcomes:
+
+- **Full suite re-verified green** with `-PuseLocalFramework=true`:
+  `testUnit + testIntegration + testServer` BUILD SUCCESSFUL (19m51s),
+  zero failures (the StationControllers flake did not recur this run).
+  The health agent's "cannot build" finding was an agent-env artefact —
+  it ran without `-PuseLocalFramework=true` and with an empty mavenLocal,
+  so it never resolved `forge-test-framework:0.4.2` (which lives at
+  `/workspace/ForgeTestFramework/build/libs/`, wired via the composite
+  build). Not a project defect.
+- **Bug-ledger accuracy**: all 7 entries' file:line refs verified
+  accurate, no drift, no false pinning-test claims. Two fixes applied:
+  (a) `known-bugs-ledger.md` had a stale "no live bugs" header and was
+  4 entries behind the README — back-ported #4–#7 + corrected the header;
+  (b) entry #2 (EntityElevatorCapsule setStandTime) dropped as impl-trivia
+  per CLAUDE.md ("nothing observable" ≠ bug). Live count 5 → **4**
+  (#1, #3, #5, #7), arithmetic now stated inline.
+- **SSOT fixes**: added the missing TASK-44 row to the README Done table;
+  qualified TASK-43 status to "Phase 3 done; A/B open".
+- **Coverage**: exactly **one** genuine contract gap remained — **Gap S**
+  (oxygen-vent blob cap). Now **CLOSED** — see §6.
+
+## 6. Gap S closed — oxygen-vent blob cap
+
+`OxygenVentBoundedByBlobCapTest` (testServer) pins the player-visible
+contract that a vent **cannot pressurise an arbitrarily large sealed
+space**. Production voids the whole blob (not a partial fill) when the
+seal flood-fill reaches an open cell beyond the cap
+(`AtmosphereBlob.run` lines 142-146). The test pins the fill mode to the
+deterministic synchronous radius-based algorithm
+(`atmosphereHandleBitMask = 0`, a real config option) + a small radius,
+then builds two corridors differing only in length: the within-cap one
+pressurises (`PressurizedAir`), the oversized one does not (stays at the
+dim baseline). It does NOT pin the cap value — the cap is the
+discriminator, not a magic number.
+
+Test-only probe surface added (no production logic changed):
+`oxygenVentSize` and `atmosphereHandleBitMask` added to the
+`/artest config set/get` whitelist (both restored in `@After`).
+Reused existing `artest atmosphere get`. 1/1 + reruns green.
+
+The 2026-05-27 audit's gap backlog (A–N + S + T + U) is now fully
+resolved or consciously dropped. No genuine contract gaps remain.

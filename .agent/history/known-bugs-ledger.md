@@ -1,14 +1,15 @@
-# Historical ledger — `_documentsKnownBug` (frozen)
+# Bug ledger — `_documentsKnownBug` history + live Batch #2
 
-**Status**: frozen historical document. Do not edit except to add a
-pointer to a new bug-batch ledger if a future task ever needs one.
+**Status**: Batch #1 is frozen/historical (drained by TASK-12 on
+2026-05-23). Batch #2 below is **live** and is kept in sync with the
+summary in [`../tasks/README.md`](../tasks/README.md) bug-ledger section.
 
-**Live source of truth for current bugs**: there is none today — the
-last ledger was drained by TASK-12 on 2026-05-23 and the
-`_documentsKnownBug` suffix is no longer used in test-method names.
-If a future production bug is uncovered, follow the rule in
+**Live bug count (as of 2026-05-31)**: 4 live — Batch #2 entries
+#1, #3, #5, #7. Entry #2 dropped as impl-trivia, #4 fixed by TASK-41,
+#6 fixed by TASK-43 Phase 3 (see per-entry notes below).
+When a future production bug is uncovered, follow the rule in
 [`CLAUDE.md`](../../CLAUDE.md#bug-tracking--every-discovered-production-bug-must-be-logged)
-and start a new ledger here under a new "Batch #2" heading.
+and append it to Batch #2 here AND to the README summary.
 
 ---
 
@@ -126,7 +127,12 @@ authoring that have not yet been fixed.
    `getNewSatellite:97`, or null-guard at every caller.
    **Found**: 2026-05-25 during coverage-audit (Gap 4).
 
-2. **`EntityElevatorCapsule.setStandTime(int time)` ignores its
+2. ❌ **DROPPED 2026-05-31 — impl-trivia, not a contract bug.** Per
+   CLAUDE.md, a bug whose consequence is "nothing observable today"
+   is impl trivia and not loggable; this entry's own consequence note
+   reads "invisible today". Retained struck-through to keep #3-#7
+   numbering stable. Original description follows.
+   **`EntityElevatorCapsule.setStandTime(int time)` ignores its
    parameter and writes the `standTime` field instead.**
    File: `src/main/java/zmaster587/advancedRocketry/entity/EntityElevatorCapsule.java:83-85`.
    The body reads
@@ -193,3 +199,59 @@ authoring that have not yet been fixed.
    the constructor at line 45.
    **Found**: 2026-05-26 during TASK-30 station-controller
    tick-contract authoring.
+
+4. ✅ **FIXED 2026-05-29 by TASK-41.**
+   `mixins.advancedrocketry.json:AccessorWorld` mixin apply failed
+   during `./gradlew runClient` with `InvalidAccessorException: No
+   candidates were found matching field_72986_A`. Root cause: the
+   AP-generated refmap was jar-only (not staged into
+   `build/resources/main/`), and even staged the SRG-name lookup is
+   wrong for the MCP-named dev classloader. **Fixed**: swapped
+   `@Accessor` for an access transformer
+   (`public net.minecraft.world.World field_72986_A`);
+   `PlanetWeatherManager` sets `world.worldInfo = wrapped` directly;
+   `AccessorWorld` mixin deleted. Added `stageMixinRefmapForRun` to
+   stage the refmap for future @Inject mixins.
+   **Found**: 2026-05-29 during TASK-41.
+
+5. **5 pre-existing test failures on `feature/tests` HEAD** (tracker
+   entry, not a single production bug). 3 testServer recipe tests
+   (`Electrolyser`/`PrecisionAssembler`/`PrecisionLaserEtcher` —
+   parallel-fork contention, pass in isolation) + 2 testClient
+   (`InventoryBypassRedirectE2ETest` broken-since-inception;
+   `WorldCommandFetchModeratorTest` stable-fail-in-isolation). Triaged
+   by TASK-42, the 4 residuals promoted to TASK-43 (Shape A recipe
+   flakes / Shape B fetch-moderator). Stays open as a tracker for the
+   deferred TASK-43 work.
+   **Found**: 2026-05-29 during TASK-41 validation sweep.
+
+6. ✅ **FIXED 2026-05-30 by TASK-43 Phase 3** (resolved fully by
+   TASK-44 2026-05-31). `MixinEntityPlayer*InventoryAccess` `@Redirect`
+   + `MixinWorldSetBlockState` `@Inject` silently no-op'd in the dev
+   classloader because the refmap translates targets to SRG names the
+   MCP-named dev runtime doesn't have. Because
+   `mixins.advancedrocketry.json` is `"required": true`, the first
+   PREINJECT failure aborted ALL 6 mixins in dev (silent — @Inject
+   FATALs don't crash the JVM). **Fixed**: `mixin.env.disableRefMap=true`
+   added to `runs.client` + `runs.server` FG6 maps. Player-visible
+   (dev only): AR's "keep rocket inventory open across distance"
+   feature didn't work in `runClient` (works in reobf installs).
+   TASK-44 then un-`@Ignore`'d `InventoryBypassRedirectE2ETest` via a
+   server-side `player open-chest` probe (4/4 reruns green).
+   **Found**: 2026-05-30 during TASK-42/43 InventoryBypass diagnostic.
+
+7. **`TilePump.performFunction` only drains `instanceof IFluidBlock`
+   blocks (lines 102 / 120 / 158).** Vanilla `Blocks.WATER` is a
+   `BlockLiquid`, not Forge's `IFluidBlock`, so a pump over a vanilla
+   water source pumps nothing — only Forge/AR fluids
+   (`BlockFluidClassic` subclasses) are drainable.
+   File: `src/main/java/zmaster587/advancedRocketry/tile/multiblock/machine/TilePump.java:102,120,158`.
+   **Consequence**: player-visible — players expecting the pump to lift
+   vanilla water (as most tech-mod pumps do) get an empty tank with no
+   error. May be intended (AR pump is a mod-fluid network device) or a
+   limitation; recorded because the 2026-05-27 audit's Gap F.4 framing
+   assumed water would work.
+   **Pinned by**: ledger-only — no `_documentsKnownBug` test;
+   `TilePumpFillsFromAdjacentWaterSourceTest` pins the real contract
+   (drains an AR Forge-fluid source) and documents this in its docstring.
+   **Found**: 2026-05-31 during TASK-44 Gap F.4 un-ignore.

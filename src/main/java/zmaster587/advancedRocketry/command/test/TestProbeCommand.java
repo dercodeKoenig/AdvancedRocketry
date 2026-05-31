@@ -4461,6 +4461,15 @@ public class TestProbeCommand extends CommandBase {
      *       {@code TileAtmosphereTerraformer.processComplete}.</li>
      *   <li>{@code terraformRequiresFluid} — reserved for future
      *       fluid-bypass tests; not currently used.</li>
+     *   <li>{@code oxygenVentSize} — Gap S, shrink the O2-vent blob cap
+     *       so a sealed space larger than the cap can be built cheaply,
+     *       exercising the max-radius/volume enforcement in
+     *       {@code AtmosphereBlob.fillAtmosphere} ({@code getBlobMaxRadius()}
+     *       is read live, so a runtime flip takes effect on the next seal).</li>
+     *   <li>{@code atmosphereHandleBitMask} — Gap S, pin the fill algorithm
+     *       to a deterministic mode (e.g. {@code 0} = synchronous,
+     *       radius-based) so the cap-enforcement assertion isn't subject to
+     *       the default threaded-volume fill's timing.</li>
      * </ul>
      *
      * <p>Tests MUST restore the original value in {@code @After}, otherwise
@@ -4469,7 +4478,9 @@ public class TestProbeCommand extends CommandBase {
     private static final java.util.Set<String> CONFIG_WHITELIST =
             new java.util.LinkedHashSet<>(java.util.Arrays.asList(
                     "allowTerraformNonAR",
-                    "terraformRequiresFluid"));
+                    "terraformRequiresFluid",
+                    "oxygenVentSize",
+                    "atmosphereHandleBitMask"));
 
     private void handleConfig(ICommandSender sender, String[] args) {
         if (args.length == 0) {

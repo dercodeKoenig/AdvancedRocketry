@@ -142,18 +142,25 @@ Bug-ledger history lives in
   Counter regenerated via
   `grep -rc '@Test$' src/test/java/.../{unit,integration,server,client}/`.
 - **testServer wall time**: 8m 27s (50 % faster than pre-B2).
-- **Bug ledger**: 5 live bugs (Batch #2 opened 2026-05-25; entry #4 fixed by
-  TASK-41 on 2026-05-29; entry #5 added 2026-05-29; entry #6 added 2026-05-30;
-  entry #6 fixed 2026-05-30 by TASK-43 Phase 3; entry #7 added 2026-05-31).
-  Batch #1 fully drained by TASK-12 on 2026-05-23. Entries:
+- **Bug ledger**: 4 live bugs. Arithmetic: 7 entries total minus
+  #4 (fixed by TASK-41 2026-05-29) minus #6 (fixed by TASK-43 Phase 3
+  2026-05-30) minus #2 (dropped 2026-05-31 as impl-trivia — see entry)
+  = 4 live (#1, #3, #5, #7). Batch #2 opened 2026-05-25; entry #5 added
+  2026-05-29; entry #7 added 2026-05-31. Batch #1 fully drained by
+  TASK-12 on 2026-05-23. Entries:
   (1) `SatelliteRegistry.getNewSatellite` returns `null` for unknown
   types instead of the documented `SatelliteDefunct` fallback —
   pinned by `SatelliteRegistryFallbackTest._documentsKnownBug` pair.
   Found during coverage-audit Gap 4.
-  (2) `EntityElevatorCapsule.setStandTime(int)` ignores its
+  (2) ❌ **DROPPED 2026-05-31 as impl-trivia (not a contract bug).**
+  `EntityElevatorCapsule.setStandTime(int)` ignores its
   argument and writes the `standTime` field — masked today because
-  the single caller passes the field value. Ledger-only.
-  Found during TASK-30 Gap 3 authoring (2026-05-26).
+  the single caller passes the field value. Per CLAUDE.md bug-tracking
+  rule, a bug whose consequence is "nothing observable" is impl trivia,
+  not a loggable bug; the ledger entry itself recorded the consequence
+  as "masked / invisible today". Retained as a struck-through entry so
+  the numbering of #3-#7 stays stable. Originally found during TASK-30
+  Gap 3 authoring (2026-05-26).
   (3) `TileStationGravityController` constructor does NOT call
   `redstoneControl.setRedstoneState(OFF)` (its altitude sibling
   does, line 43). `ModuleRedstoneOutputButton`'s default is `ON`,
@@ -355,7 +362,8 @@ Bug-ledger history lives in
 | [TASK-40e](TASK-40e-batch5-asteroid-and-laser-deferrals.md) | Batch 5 of 2026-05-27 audit close-out — closing-doc deferral for Gap N (asteroid worldgen) and Gap K (laser gun firing). Both gaps' contracts are real per SOP litmus but fixture cost exceeds tail-batch budget; deferred to a possible TASK-41 cluster. Neither is a rewrite blocker per 2026-05-29 delta-audit ⚠ classification. | ❌ deferred |
 | [TASK-41](TASK-41-runclient-mixin-accessorworld-bug.md) | `./gradlew runClient` mixin AccessorWorld apply error — fixed 2026-05-29 by swapping `@Accessor` for an access transformer (`public net.minecraft.world.World field_72986_A`) and direct `world.worldInfo = ...` assignment in PlanetWeatherManager. AccessorWorld mixin + mixin-config entry deleted. Added `stageMixinRefmapForRun` build task copying the AP-generated refmap into `build/resources/main/` so future @Inject mixins don't trip the same dev-classpath gap. Option C (`@Mixin(targets="...")`) tried first, failed identically — confirmed root cause was refmap-driven SRG-name lookup, not class-load ordering. Validated: runClient boots to main menu, FML loads 9 mods, testUnit + testIntegration green; testServer 423/427 PASS, 3 pre-existing recipe-registration failures unrelated to TASK-41 (logged as ledger entry #5). | ✅ |
 | [TASK-42](TASK-42-pre-existing-test-failures-investigation.md) | Triage of 5 pre-existing testServer + testClient failures surfaced during TASK-41 validation. Phase 0 revealed three shape buckets: 1 broken-since-inception (`InventoryBypassRedirectE2ETest` — verified at 149c361e worktree, same failure shape; @Ignore'd 2026-05-30, contract still pinned by `testUnit.RocketInventoryHelperRedirectTest`); 3 parallel-fork flakes (`Electrolyser` / `PrecisionAssembler` / `PrecisionLaserEtcher` recipe tests — PASS in isolation, FAIL only in full suite); 1 stable-isolation failure (`WorldCommandFetchModeratorTest` — fails in 3m 10s even alone, real test-design or production bug). Remaining 4 promoted to TASK-43. | ✅ |
-| [TASK-43](TASK-43-flaky-and-stable-test-failures.md) | Mitigate the 4 deferred TASK-42 failures across two shapes: Shape A (3 recipe tests, parallel-fork contention — plan: `wait-for-recipe-registry` probe verb + kit hook); Shape B (FetchModerator, stable-fail-in-isolation — plan: per-step bot instrumentation to bisect bridge-drop tick). | 🟥 Open |
+| [TASK-43](TASK-43-flaky-and-stable-test-failures.md) | Mitigate the 4 deferred TASK-42 failures across two shapes: Shape A (3 recipe tests, parallel-fork contention — plan: `wait-for-recipe-registry` probe verb + kit hook); Shape B (FetchModerator, stable-fail-in-isolation — plan: per-step bot instrumentation to bisect bridge-drop tick). **Phase 3 shipped** (2026-05-30 — `mixin.env.disableRefMap=true` fix, ledger #6 closed); Shapes A/B still open. | 🟡 Phase 3 done; A/B open |
+| [TASK-44](TASK-44-shallow-to-deep-batch.md) | Shallow→deep conversion batch — 4 real contracts + 1 mixin-CI gap shipped: F.4 (TilePump drains Forge IFluidBlock, ledger #7), B (laser-drill MINING dispatch breaks column + drops), C (area-gravity resets fallDistance in-radius only; found controller not machine-enabled by default), N (asteroid worldprovider generates fill blocks), U (un-`@Ignore`'d `InventoryBypassRedirectE2ETest` via server-side `player open-chest` probe, ledger #6 resolved). 5 new probe verbs. Dropped per SOP: G/H/I/K/M/T (impl-only/unwired/wrong-framing). 429/430 full-suite after batch. | ✅ |
 
 ## Backlog
 
